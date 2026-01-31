@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include
+        domain="file"
+        path="address_book/." />
+    <include
+        domain="file"
+        path="metadata/." />
+</full-backup-content>

@@ -1,0 +1,52 @@
+# Commenting this out would improve obfuscation. The wallet is already open source so obfuscation doesn't provide much benefit
+# and makes analyzing the release build of the app more difficult.
+-dontobfuscate
+
+# Ensure that stacktraces are reversible.
+-renamesourcefileattribute SourceFile
+-keepattributes SourceFile,LineNumberTable
+
+# Generate the combined proguard configuration for debugging.
+-printconfiguration build/outputs/proguard-config.txt
+
+# This is generated automatically by the Android Gradle plugin.
+-dontwarn androidx.compose.ui.util.MathHelpersKt
+-dontwarn com.google.common.util.concurrent.ListenableFuture
+-dontwarn com.google.errorprone.annotations.InlineMe
+-dontwarn com.google.errorprone.annotations.MustBeClosed
+-dontwarn com.google.j2objc.annotations.ReflectionSupport
+-dontwarn com.google.j2objc.annotations.ReflectionSupport$Level
+-dontwarn com.google.j2objc.annotations.RetainedWith
+-dontwarn javax.naming.directory.Attribute
+-dontwarn javax.naming.directory.Attributes
+-dontwarn javax.naming.directory.DirContext
+-dontwarn javax.naming.directory.InitialDirContext
+-dontwarn javax.naming.NamingEnumeration
+-dontwarn javax.naming.NamingException
+
+-dontwarn javax.naming.InvalidNameException
+-dontwarn javax.naming.ldap.LdapName
+-dontwarn javax.naming.ldap.Rdn
+-dontwarn org.ietf.jgss.GSSContext
+-dontwarn org.ietf.jgss.GSSCredential
+-dontwarn org.ietf.jgss.GSSException
+-dontwarn org.ietf.jgss.GSSManager
+-dontwarn org.ietf.jgss.GSSName
+-dontwarn org.ietf.jgss.Oid
+
+# kotlinx.datetime supports kotlinx.serialization, but we don't use kotlinx.serialization elsewhere
+# in the projects, so the classes aren't present.  These warnings are safe to suppress.
+-dontwarn kotlinx.serialization.KSerializer
+-dontwarn kotlinx.serialization.Serializable
+-dontwarn kotlinx.serialization.internal.AbstractPolymorphicSerializer
+
+-keepclassmembers class java.util.concurrent.ConcurrentHashMap { *; }
+-keepclassmembers class java.util.IntSummaryStatistics { *; }
+-keepclassmembers class java.util.LongSummaryStatistics { *; }
+-keepclassmembers class java.util.DoubleSummaryStatistics { *; }
+
+# Keystone SDK
+# Note: we should keep only the necessary components
+-keep class com.keystone.module.** { *; }
+-keepnames class **.R$drawable { *; }
+-keepclassmembers class **.R$drawable { *; }

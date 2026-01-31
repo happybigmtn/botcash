@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- For test coverage -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
+
+    <!-- Legacy external storage is for coverage on API 29 -->
+    <application
+        android:label="zcash-ui-test"
+        android:requestLegacyExternalStorage="true" >
+        <activity
+            android:name="co.electriccoin.zcash.ui.common.UiTestingActivity"
+            android:exported="false" />
+
+        <!-- This copies main/AndroidManifest -->
+        <provider
+            android:name="co.electriccoin.zcash.ui.screen.exportdata.util.TestShareFileProvider"
+            android:authorities="co.electriccoin.zcash.provider_test"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_file_provider_paths" />
+        </provider>
+
+    </application>
+
+</manifest>
