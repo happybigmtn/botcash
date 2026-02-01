@@ -29,6 +29,14 @@ use crate::{
 /// This calculation is exact, because COIN is divisible by 2, and the division is done last.
 pub const MAX_BLOCK_SUBSIDY: u64 = ((25 * COIN) / 2) as u64;
 
+/// The Botcash block subsidy before the first halving (3.125 BCASH).
+///
+/// We use `25 / 8` instead of `3.125`, so that we can calculate the correct value without using floating-point.
+/// This calculation is exact, because COIN is divisible by 8, and the division is done last.
+///
+/// Botcash has 100% of block rewards going to miners (no founders reward or funding streams).
+pub const BOTCASH_MAX_BLOCK_SUBSIDY: u64 = ((25 * COIN) / 8) as u64;
+
 /// Used as a multiplier to get the new halving interval after Blossom.
 ///
 /// Calculated as `PRE_BLOSSOM_POW_TARGET_SPACING / POST_BLOSSOM_POW_TARGET_SPACING`
@@ -645,6 +653,17 @@ pub fn height_for_halving(halving: u32, network: &Network) -> Option<Height> {
         return Some(Height(0));
     }
 
+    // Botcash uses a simpler halving model with no slow start or pre-Blossom era
+    if let Network::Botcash = network {
+        // Simple multiplication: height = halving * BOTCASH_HALVING_INTERVAL
+        let height = i64::from(halving)
+            .checked_mul(BOTCASH_HALVING_INTERVAL)
+            .expect("Multiplication overflow: halving index too large");
+        let height = u32::try_from(height).ok()?;
+        return height.try_into().ok();
+    }
+
+    // Zcash networks: use the original calculation
     let slow_start_shift = i64::from(network.slow_start_shift().0);
     let blossom_height = i64::from(
         NetworkUpgrade::Blossom
@@ -755,6 +774,16 @@ pub fn halving_divisor(height: Height, network: &Network) -> Option<u64> {
 ///
 /// [7.8]: https://zips.z.cash/protocol/protocol.pdf#subsidies
 pub fn num_halvings(height: Height, network: &Network) -> u32 {
+    // Botcash uses a simpler halving model with no slow start or pre-Blossom era
+    if let Network::Botcash = network {
+        // Simple division: halving_index = height / BOTCASH_HALVING_INTERVAL
+        let halving_index = HeightDiff::from(height.0) / BOTCASH_HALVING_INTERVAL;
+        return halving_index
+            .try_into()
+            .expect("halving index should fit in u32");
+    }
+
+    // Zcash networks: use the original halving calculation
     let slow_start_shift = network.slow_start_shift();
     let blossom_height = NetworkUpgrade::Blossom
         .activation_height(network)
@@ -787,10 +816,6 @@ pub fn block_subsidy(
     height: Height,
     network: &Network,
 ) -> Result<Amount<NonNegative>, SubsidyError> {
-    let blossom_height = NetworkUpgrade::Blossom
-        .activation_height(network)
-        .expect("blossom activation height should be available");
-
     // If the halving divisor is larger than u64::MAX, the block subsidy is zero,
     // because amounts fit in an i64.
     //
@@ -798,6 +823,18 @@ pub fn block_subsidy(
     let Some(halving_div) = halving_divisor(height, network) else {
         return Ok(Amount::zero());
     };
+
+    // Botcash uses a simpler subsidy model with no pre-Blossom era
+    if let Network::Botcash = network {
+        // Botcash: 3.125 BCASH per block, halving every 840,000 blocks
+        // No slow start, no Blossom scaling ratio
+        return Ok(Amount::try_from(BOTCASH_MAX_BLOCK_SUBSIDY / halving_div)?);
+    }
+
+    // Zcash networks: use the original subsidy calculation
+    let blossom_height = NetworkUpgrade::Blossom
+        .activation_height(network)
+        .expect("blossom activation height should be available");
 
     // Zebra doesn't need to calculate block subsidies for blocks with heights in the slow start
     // interval because it handles those blocks through checkpointing.

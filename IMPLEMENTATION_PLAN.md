@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASE 1 IN PROGRESS
 
-**Last Updated:** 2026-01-31 (Phase 1.6 Complete)
+**Last Updated:** 2026-01-31 (Phase 1.7 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.6 complete (NetworkKind, Network variant, magic bytes, ports, block time).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.7 complete (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -49,7 +49,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P1.4** | Update Network::magic() impl | ✅ DONE | `zebra-chain/src/parameters/network/magic.rs:21-29` | `cargo test -p zebra-chain -- network_magic` |
 | **P1.5** | Set network ports (8533/18533) | ✅ DONE | `zebra-chain/src/parameters/network.rs:251-260` | `cargo test -p zebra-chain -- default_port` |
 | **P1.6** | Set block time (60s) | ✅ DONE | `zebra-chain/src/parameters/network_upgrade.rs:294-296` | `cargo test -p zebra-chain -- block_time` |
-| **P1.7** | Implement block subsidy (3.125 BCASH) | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:30,421-483` | `cargo test -p zebra-chain -- botcash_subsidy` |
+| **P1.7** | Implement block subsidy (3.125 BCASH) | ✅ DONE | `zebra-chain/src/parameters/network/subsidy.rs:30-40,800-815` | `cargo test -p zebra-chain -- botcash_subsidy` |
 | **P1.8** | Disable funding streams for Botcash | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:211-310` | `cargo test -p zebra-chain -- no_funding_stream` |
 | **P1.9** | Add randomx-rs dependency | ⬜ TODO | `Cargo.toml:61` (workspace deps) | `cargo build -p zebra-consensus --features randomx` |
 | **P1.10** | Create RandomX verification module | ⬜ TODO | `zebra-chain/src/work/randomx.rs` (NEW, ~200-300 lines) | `cargo test -p zebra-chain -- randomx` |

@@ -21,6 +21,10 @@ use crate::{
 fn halving_test() -> Result<(), Report> {
     let _init_guard = zebra_test::init();
     for network in Network::iter() {
+        // Skip Botcash - it has different halving parameters (tested in botcash_subsidy_halvings)
+        if matches!(network, Network::Botcash) {
+            continue;
+        }
         halving_for_network(&network)?;
     }
 
@@ -148,6 +152,10 @@ fn block_subsidy_test() -> Result<(), Report> {
     let _init_guard = zebra_test::init();
 
     for network in Network::iter() {
+        // Skip Botcash - it has different subsidy parameters (tested in botcash_subsidy_* tests)
+        if matches!(network, Network::Botcash) {
+            continue;
+        }
         block_subsidy_for_network(&network)?;
     }
 
@@ -545,4 +553,129 @@ fn botcash_averaging_window_timespan() {
         POW_AVERAGING_WINDOW,
         60 * POW_AVERAGING_WINDOW
     );
+}
+
+// ============================================================================
+// P1.7: Botcash block subsidy tests
+// ============================================================================
+
+/// Tests Botcash initial block subsidy is 3.125 BCASH (312,500,000 zatoshis).
+#[test]
+fn botcash_subsidy_initial() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    use crate::parameters::network::subsidy::{block_subsidy, BOTCASH_MAX_BLOCK_SUBSIDY};
+
+    let network = Network::Botcash;
+
+    // Verify the constant is correct: 3.125 BCASH = 312,500,000 zatoshis
+    assert_eq!(
+        BOTCASH_MAX_BLOCK_SUBSIDY, 312_500_000,
+        "Botcash max block subsidy should be 312,500,000 zatoshis (3.125 BCASH)"
+    );
+
+    // Test block subsidy at various heights before first halving
+    let expected = Amount::<NonNegative>::try_from(312_500_000)?;
+    for height in [Height(0), Height(1), Height(1000), Height(839_999)] {
+        let subsidy = block_subsidy(height, &network).expect("subsidy should be calculable");
+        assert_eq!(
+            subsidy,
+            expected,
+            "Botcash subsidy should be 3.125 BCASH at height {} before first halving",
+            height.0
+        );
+    }
+
+    Ok(())
+}
+
+/// Tests Botcash halving schedule (halving every 840,000 blocks).
+#[test]
+fn botcash_subsidy_halvings() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    use crate::parameters::network::subsidy::{block_subsidy, num_halvings};
+
+    let network = Network::Botcash;
+
+    // Test halving index calculations
+    assert_eq!(num_halvings(Height(0), &network), 0, "height 0 should be halving 0");
+    assert_eq!(num_halvings(Height(839_999), &network), 0, "height 839,999 should be halving 0");
+    assert_eq!(num_halvings(Height(840_000), &network), 1, "height 840,000 should be halving 1");
+    assert_eq!(num_halvings(Height(1_680_000), &network), 2, "height 1,680,000 should be halving 2");
+    assert_eq!(num_halvings(Height(2_520_000), &network), 3, "height 2,520,000 should be halving 3");
+
+    // Test subsidy at first halving (should be half of initial: 1.5625 BCASH = 156,250,000 zatoshis)
+    let subsidy_at_halving_1 = block_subsidy(Height(840_000), &network)
+        .expect("subsidy should be calculable");
+    assert_eq!(
+        subsidy_at_halving_1,
+        Amount::<NonNegative>::try_from(156_250_000)?,
+        "Botcash subsidy should be halved at height 840,000"
+    );
+
+    // Test subsidy at second halving (should be 1/4 of initial: 0.78125 BCASH = 78,125,000 zatoshis)
+    let subsidy_at_halving_2 = block_subsidy(Height(1_680_000), &network)
+        .expect("subsidy should be calculable");
+    assert_eq!(
+        subsidy_at_halving_2,
+        Amount::<NonNegative>::try_from(78_125_000)?,
+        "Botcash subsidy should be 1/4 at height 1,680,000"
+    );
+
+    // Test subsidy at third halving (should be 1/8 of initial: 0.390625 BCASH = 39,062,500 zatoshis)
+    let subsidy_at_halving_3 = block_subsidy(Height(2_520_000), &network)
+        .expect("subsidy should be calculable");
+    assert_eq!(
+        subsidy_at_halving_3,
+        Amount::<NonNegative>::try_from(39_062_500)?,
+        "Botcash subsidy should be 1/8 at height 2,520,000"
+    );
+
+    Ok(())
+}
+
+/// Tests Botcash subsidy eventually reaches zero after many halvings.
+#[test]
+fn botcash_subsidy_reaches_zero() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    use crate::parameters::network::subsidy::block_subsidy;
+
+    let network = Network::Botcash;
+
+    // After ~64 halvings (64 * 840,000 = 53,760,000 blocks), subsidy should be 0
+    // because 312,500,000 >> 64 = 0
+    let very_high_height = Height(840_000 * 64);
+    let subsidy = block_subsidy(very_high_height, &network)
+        .expect("subsidy should be calculable");
+    assert_eq!(
+        subsidy,
+        Amount::<NonNegative>::try_from(0)?,
+        "Botcash subsidy should be 0 after 64 halvings"
+    );
+
+    Ok(())
+}
+
+/// Tests Botcash miner subsidy is 100% of block subsidy (no funding streams).
+#[test]
+fn botcash_miner_subsidy_is_full_block_subsidy() {
+    let _init_guard = zebra_test::init();
+
+    use crate::parameters::network::subsidy::{block_subsidy, miner_subsidy};
+
+    let network = Network::Botcash;
+
+    // At various heights, miner subsidy should equal block subsidy
+    for height in [Height(0), Height(1000), Height(840_000), Height(1_000_000)] {
+        let block_sub = block_subsidy(height, &network).expect("subsidy should be calculable");
+        let miner_sub = miner_subsidy(height, &network, block_sub).expect("miner subsidy should be calculable");
+
+        assert_eq!(
+            block_sub, miner_sub,
+            "Botcash miner subsidy should equal block subsidy at height {} (100% to miners)",
+            height.0
+        );
+    }
 }
