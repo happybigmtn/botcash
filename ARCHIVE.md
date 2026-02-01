@@ -43,3 +43,5 @@
 
 |**P0.8**|ExtendSealedContainertraitforBotcash|✅DONE|`librustzcash/components/zcash_address/src/kind/unified.rs:209-236`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
 
+|**P0.9**|UpdateUnifiedAddresscontainer|✅DONE|`librustzcash/components/zcash_address/src/kind/unified/address.rs:137-158`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
+
