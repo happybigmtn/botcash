@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASE 1 IN PROGRESS
 
-**Last Updated:** 2026-01-31 (Phase 1.4 Complete)
+**Last Updated:** 2026-01-31 (Phase 1.6 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.4 complete (NetworkKind, Network variant, magic bytes).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.6 complete (NetworkKind, Network variant, magic bytes, ports, block time).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -47,8 +47,8 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P1.2** | Add `Network::Botcash` variant | ✅ DONE | `zebra-chain/src/parameters/network.rs:53-67` | `cargo test -p zebra-chain -- botcash_network_variant` |
 | **P1.3** | Add BOTCASH magic bytes (0x42434153) | ✅ DONE | `zebra-chain/src/parameters/constants.rs:29-30` | `cargo test -p zebra-chain -- magic` |
 | **P1.4** | Update Network::magic() impl | ✅ DONE | `zebra-chain/src/parameters/network/magic.rs:21-29` | `cargo test -p zebra-chain -- network_magic` |
-| **P1.5** | Set network ports (8533/18533) | ⬜ TODO | `zebra-chain/src/parameters/network.rs:236-241` | `cargo test -p zebra-chain -- default_port` |
-| **P1.6** | Set block time (60s) | ⬜ TODO | `zebra-chain/src/parameters/constants.rs` (NEW const) | `cargo test -p zebra-chain -- block_time` |
+| **P1.5** | Set network ports (8533/18533) | ✅ DONE | `zebra-chain/src/parameters/network.rs:251-260` | `cargo test -p zebra-chain -- default_port` |
+| **P1.6** | Set block time (60s) | ✅ DONE | `zebra-chain/src/parameters/network_upgrade.rs:294-296` | `cargo test -p zebra-chain -- block_time` |
 | **P1.7** | Implement block subsidy (3.125 BCASH) | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:30,421-483` | `cargo test -p zebra-chain -- botcash_subsidy` |
 | **P1.8** | Disable funding streams for Botcash | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:211-310` | `cargo test -p zebra-chain -- no_funding_stream` |
 | **P1.9** | Add randomx-rs dependency | ⬜ TODO | `Cargo.toml:61` (workspace deps) | `cargo build -p zebra-consensus --features randomx` |

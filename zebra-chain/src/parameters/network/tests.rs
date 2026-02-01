@@ -474,3 +474,75 @@ fn botcash_no_lockbox_disbursements() {
         );
     }
 }
+
+// ============================================================================
+// P1.6: Botcash block time tests
+// ============================================================================
+
+/// Tests Botcash block time is 60 seconds.
+#[test]
+fn botcash_block_time_is_60_seconds() {
+    let _init_guard = zebra_test::init();
+
+    use chrono::Duration;
+    use crate::parameters::NetworkUpgrade;
+
+    let network = Network::Botcash;
+
+    // Botcash should use 60-second block time at all heights
+    for height in [Height(0), Height(1), Height(1000), Height(1_000_000)] {
+        let spacing = NetworkUpgrade::target_spacing_for_height(&network, height);
+        assert_eq!(
+            spacing,
+            Duration::seconds(60),
+            "Botcash should have 60-second block time at height {}",
+            height.0
+        );
+    }
+
+    // Verify the constant is correct
+    use crate::parameters::network_upgrade::BOTCASH_POW_TARGET_SPACING;
+    assert_eq!(BOTCASH_POW_TARGET_SPACING, 60);
+}
+
+/// Tests Botcash target_spacings returns 60 seconds from genesis.
+#[test]
+fn botcash_target_spacings() {
+    let _init_guard = zebra_test::init();
+
+    use chrono::Duration;
+    use crate::parameters::NetworkUpgrade;
+
+    let network = Network::Botcash;
+
+    let spacings: Vec<_> = NetworkUpgrade::target_spacings(&network).collect();
+
+    // Botcash should have exactly one spacing entry (60s from genesis)
+    assert_eq!(spacings.len(), 1, "Botcash should have one spacing entry");
+
+    let (height, spacing) = spacings[0];
+    assert_eq!(height, Height(0), "Botcash spacing should start at genesis");
+    assert_eq!(spacing, Duration::seconds(60), "Botcash spacing should be 60 seconds");
+}
+
+/// Tests Botcash averaging window timespan is correct (60s * 17 blocks = 1020s).
+#[test]
+fn botcash_averaging_window_timespan() {
+    let _init_guard = zebra_test::init();
+
+    use chrono::Duration;
+    use crate::parameters::NetworkUpgrade;
+    use crate::parameters::network_upgrade::POW_AVERAGING_WINDOW;
+
+    let network = Network::Botcash;
+
+    // At any height, averaging window should be 60s * 17 = 1020s
+    let timespan = NetworkUpgrade::averaging_window_timespan_for_height(&network, Height(1000));
+    let expected = Duration::seconds(60 * POW_AVERAGING_WINDOW as i64);
+    assert_eq!(
+        timespan, expected,
+        "Botcash averaging window should be 60s * {} = {}s",
+        POW_AVERAGING_WINDOW,
+        60 * POW_AVERAGING_WINDOW
+    );
+}

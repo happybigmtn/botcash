@@ -290,6 +290,12 @@ const PRE_BLOSSOM_POW_TARGET_SPACING: i64 = 150;
 /// The target block spacing after Blossom activation.
 pub const POST_BLOSSOM_POW_TARGET_SPACING: u32 = 75;
 
+/// The target block spacing for Botcash (60 seconds).
+///
+/// Botcash uses a faster block time than Zcash post-Blossom (75s) to enable
+/// more responsive social interactions while maintaining network security.
+pub const BOTCASH_POW_TARGET_SPACING: u32 = 60;
+
 /// The averaging window for difficulty threshold arithmetic mean calculations.
 ///
 /// `PoWAveragingWindow` in the Zcash specification.
@@ -482,28 +488,44 @@ impl NetworkUpgrade {
 
     /// Returns the target block spacing for `network` and `height`.
     ///
-    /// See [`NetworkUpgrade::target_spacing`] for details.
+    /// For Botcash, always returns 60 seconds regardless of network upgrade.
+    /// For Zcash networks, see [`NetworkUpgrade::target_spacing`] for details.
     pub fn target_spacing_for_height(network: &Network, height: block::Height) -> Duration {
-        NetworkUpgrade::current(network, height).target_spacing()
+        match network {
+            // Botcash uses a constant 60-second block time
+            Network::Botcash => Duration::seconds(BOTCASH_POW_TARGET_SPACING.into()),
+            // Zcash networks use upgrade-based spacing
+            _ => NetworkUpgrade::current(network, height).target_spacing(),
+        }
     }
 
     /// Returns all the target block spacings for `network` and the heights where they start.
+    ///
+    /// For Botcash, returns a single 60-second spacing from genesis.
+    /// For Zcash networks, returns pre-Blossom (150s) and post-Blossom (75s) spacings.
     pub fn target_spacings(
         network: &Network,
     ) -> impl Iterator<Item = (block::Height, Duration)> + '_ {
-        [
-            (NetworkUpgrade::Genesis, PRE_BLOSSOM_POW_TARGET_SPACING),
-            (
-                NetworkUpgrade::Blossom,
-                POST_BLOSSOM_POW_TARGET_SPACING.into(),
-            ),
-        ]
-        .into_iter()
-        .filter_map(move |(upgrade, spacing_seconds)| {
-            let activation_height = upgrade.activation_height(network)?;
-            let target_spacing = Duration::seconds(spacing_seconds);
-            Some((activation_height, target_spacing))
-        })
+        // Collect spacings based on network type
+        let spacings: Vec<(NetworkUpgrade, i64)> = match network {
+            // Botcash has a constant 60-second block time from genesis
+            Network::Botcash => vec![
+                (NetworkUpgrade::Genesis, BOTCASH_POW_TARGET_SPACING.into()),
+            ],
+            // Zcash networks have pre-Blossom (150s) and post-Blossom (75s) spacings
+            _ => vec![
+                (NetworkUpgrade::Genesis, PRE_BLOSSOM_POW_TARGET_SPACING),
+                (NetworkUpgrade::Blossom, POST_BLOSSOM_POW_TARGET_SPACING.into()),
+            ],
+        };
+
+        spacings
+            .into_iter()
+            .filter_map(move |(upgrade, spacing_seconds)| {
+                let activation_height = upgrade.activation_height(network)?;
+                let target_spacing = Duration::seconds(spacing_seconds);
+                Some((activation_height, target_spacing))
+            })
     }
 
     /// Returns the minimum difficulty block spacing for `network` and `height`.
@@ -571,12 +593,14 @@ impl NetworkUpgrade {
 
     /// Returns the averaging window timespan for `network` and `height`.
     ///
+    /// For Botcash, uses 60-second target spacing.
     /// See [`NetworkUpgrade::averaging_window_timespan`] for details.
     pub fn averaging_window_timespan_for_height(
         network: &Network,
         height: block::Height,
     ) -> Duration {
-        NetworkUpgrade::current(network, height).averaging_window_timespan()
+        NetworkUpgrade::target_spacing_for_height(network, height)
+            * POW_AVERAGING_WINDOW.try_into().expect("fits in i32")
     }
 
     /// Returns an iterator over [`NetworkUpgrade`] variants.
