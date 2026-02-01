@@ -5,11 +5,11 @@
 
 ---
 
-## 🚦 Current Status: PHASE 1 IN PROGRESS
+## 🚦 Current Status: PHASE 1 COMPLETE
 
-**Last Updated:** 2026-02-01 (Phase 1.13 Complete)
+**Last Updated:** 2026-02-01 (Phase 1.15 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.13 complete (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams, RandomX dependency, verification module, and consensus integration with network-aware PoW dispatch).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams, RandomX dependency, verification module, consensus integration, genesis block, and transparent address encoding).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -39,7 +39,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - `cargo test -p zcash_protocol -- botcash` → 2 tests pass
 - `cargo test -p zcash_address -- botcash` → 4 tests pass
 
-### 🔄 Phase 1: Zebra Full Node (Core Blockchain)
+### ✅ Phase 1: Zebra Full Node (Core Blockchain) — COMPLETE
 
 | Priority | Task | Status | Files (with line numbers) | Test Command |
 |----------|------|--------|---------------------------|--------------|
@@ -56,8 +56,8 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P1.11** | Add `pub mod randomx;` to work.rs | ✅ DONE | `zebra-chain/src/work.rs:5` | `cargo check -p zebra-chain` |
 | **P1.12** | Integrate RandomX in block check | ✅ DONE | `zebra-consensus/src/block/check.rs:141-232` | `cargo test -p zebra-consensus -- pow_solution` |
 | **P1.13** | Update VerifyBlockError enum | ✅ DONE | `zebra-consensus/src/block.rs:69-80,109-128` | `cargo test -p zebra-consensus -- randomx` |
-| **P1.14** | Create genesis block function | ⬜ TODO | `zebra-chain/src/parameters/genesis.rs:7` | `cargo test -p zebra-chain -- genesis_botcash` |
-| **P1.15** | Update transparent address encoding | ⬜ TODO | `zebra-chain/src/transparent/address.rs:190-226` | `cargo test -p zebra-chain -- transparent_address` |
+| **P1.14** | Create genesis block function | ✅ DONE | `zebra-chain/src/block/genesis.rs:24-53` | `cargo test -p zebra-chain -- botcash_genesis` |
+| **P1.15** | Update transparent address encoding | ✅ DONE | `zebra-chain/src/transparent/address.rs:190-245` | `cargo test -p zebra-chain -- transparent_address` |
 
 ### ⬜ Phase 2: lightwalletd (Go Backend)
 

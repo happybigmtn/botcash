@@ -118,18 +118,20 @@ impl std::str::FromStr for Address {
     type Err = SerializationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Try Base58Check (prefixes: t1, t3, tm, t2)
+        use crate::parameters::constants::botcash;
+
+        // Try Base58Check (prefixes: t1, t3, tm, t2, B1, B3)
         if let Ok(data) = bs58::decode(s).with_check(None).into_vec() {
             return Address::zcash_deserialize(&data[..]);
         }
 
-        // Try Bech32 (prefixes: tex, textest)
+        // Try Bech32 (prefixes: tex, textest, btex)
         let (hrp, payload) =
             bech32::decode(s).map_err(|_| SerializationError::Parse("invalid Bech32 encoding"))?;
 
-        // We can’t meaningfully call `Address::zcash_deserialize` for Bech32 addresses, because
+        // We can't meaningfully call `Address::zcash_deserialize` for Bech32 addresses, because
         // that method is explicitly reading two binary prefix bytes (the Base58Check version) + 20 hash bytes.
-        // Bech32 textual addresses carry no such binary "version" on the wire, so there’s nothing in the
+        // Bech32 textual addresses carry no such binary "version" on the wire, so there's nothing in the
         // reader for zcash_deserialize to match.
 
         // Instead, we deserialize the Bech32 address here:
@@ -149,6 +151,12 @@ impl std::str::FromStr for Address {
 
             zcash_primitives::constants::testnet::HRP_TEX_ADDRESS => Ok(Address::Tex {
                 network_kind: NetworkKind::Testnet,
+                validating_key_hash: hash_bytes,
+            }),
+
+            // Botcash TEX addresses (HRP: btex)
+            hrp_str if hrp_str == botcash::HRP_TEX_ADDRESS => Ok(Address::Tex {
+                network_kind: NetworkKind::Botcash,
                 validating_key_hash: hash_bytes,
             }),
 
@@ -189,6 +197,8 @@ impl ZcashSerialize for Address {
 
 impl ZcashDeserialize for Address {
     fn zcash_deserialize<R: io::Read>(mut reader: R) -> Result<Self, SerializationError> {
+        use crate::parameters::constants::botcash;
+
         let mut version_bytes = [0; 2];
         reader.read_exact(&mut version_bytes)?;
 
@@ -218,6 +228,20 @@ impl ZcashDeserialize for Address {
                 Ok(Address::PayToPublicKeyHash {
                     network_kind: NetworkKind::Testnet,
                     pub_key_hash: hash_bytes,
+                })
+            }
+            // Botcash P2PKH addresses (start with "B1")
+            prefix if prefix == botcash::B58_PUBKEY_ADDRESS_PREFIX => {
+                Ok(Address::PayToPublicKeyHash {
+                    network_kind: NetworkKind::Botcash,
+                    pub_key_hash: hash_bytes,
+                })
+            }
+            // Botcash P2SH addresses (start with "B3")
+            prefix if prefix == botcash::B58_SCRIPT_ADDRESS_PREFIX => {
+                Ok(Address::PayToScriptHash {
+                    network_kind: NetworkKind::Botcash,
+                    script_hash: hash_bytes,
                 })
             }
             _ => Err(SerializationError::Parse("bad t-addr version/type")),
@@ -430,6 +454,121 @@ mod tests {
             format!("{t_addr:?}"),
             "TransparentAddress { network_kind: Mainnet, script_hash: \"7d46a730d31f97b1930d3368a967c309bd4d136a\" }"
         );
+    }
+
+    // ============================================================================
+    // Botcash transparent address tests (P1.15)
+    // ============================================================================
+
+    /// Test that Botcash P2PKH addresses start with "B1".
+    #[test]
+    fn botcash_p2pkh_starts_with_b1() {
+        let _init_guard = zebra_test::init();
+
+        let pub_key = PublicKey::from_slice(&[
+            3, 23, 183, 225, 206, 31, 159, 148, 195, 42, 67, 115, 146, 41, 248, 140, 11, 3, 51, 41,
+            111, 180, 110, 143, 114, 134, 88, 73, 198, 174, 52, 184, 78,
+        ])
+        .expect("A PublicKey from slice");
+
+        let addr = pub_key.to_address(NetworkKind::Botcash);
+        let encoded = format!("{addr}");
+
+        assert!(
+            encoded.starts_with("B1"),
+            "Botcash P2PKH address should start with 'B1', got: {encoded}"
+        );
+        assert_eq!(
+            addr.network_kind(),
+            NetworkKind::Botcash,
+            "Address should be on Botcash network"
+        );
+    }
+
+    /// Test that Botcash P2SH addresses start with "B3".
+    #[test]
+    fn botcash_p2sh_starts_with_b3() {
+        let _init_guard = zebra_test::init();
+
+        let script = Script::new(&[0u8; 20]);
+        let addr = script.to_address(NetworkKind::Botcash);
+        let encoded = format!("{addr}");
+
+        assert!(
+            encoded.starts_with("B3"),
+            "Botcash P2SH address should start with 'B3', got: {encoded}"
+        );
+        assert_eq!(
+            addr.network_kind(),
+            NetworkKind::Botcash,
+            "Address should be on Botcash network"
+        );
+    }
+
+    /// Test roundtrip encoding/decoding for Botcash P2PKH addresses.
+    #[test]
+    fn botcash_p2pkh_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let pub_key = PublicKey::from_slice(&[
+            3, 23, 183, 225, 206, 31, 159, 148, 195, 42, 67, 115, 146, 41, 248, 140, 11, 3, 51, 41,
+            111, 180, 110, 143, 114, 134, 88, 73, 198, 174, 52, 184, 78,
+        ])
+        .expect("A PublicKey from slice");
+
+        let original = pub_key.to_address(NetworkKind::Botcash);
+        let encoded = format!("{original}");
+
+        // Parse it back
+        let parsed: Address = encoded.parse().expect("Should parse Botcash P2PKH address");
+
+        assert_eq!(original, parsed);
+        assert_eq!(parsed.network_kind(), NetworkKind::Botcash);
+    }
+
+    /// Test roundtrip encoding/decoding for Botcash P2SH addresses.
+    #[test]
+    fn botcash_p2sh_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let script = Script::new(&[0u8; 20]);
+        let original = script.to_address(NetworkKind::Botcash);
+        let encoded = format!("{original}");
+
+        // Parse it back
+        let parsed: Address = encoded.parse().expect("Should parse Botcash P2SH address");
+
+        assert_eq!(original, parsed);
+        assert_eq!(parsed.network_kind(), NetworkKind::Botcash);
+    }
+
+    /// Test that Botcash addresses are distinct from Zcash mainnet/testnet.
+    #[test]
+    fn botcash_address_distinct_from_zcash() {
+        let _init_guard = zebra_test::init();
+
+        let pub_key = PublicKey::from_slice(&[
+            3, 23, 183, 225, 206, 31, 159, 148, 195, 42, 67, 115, 146, 41, 248, 140, 11, 3, 51, 41,
+            111, 180, 110, 143, 114, 134, 88, 73, 198, 174, 52, 184, 78,
+        ])
+        .expect("A PublicKey from slice");
+
+        let botcash_addr = pub_key.to_address(NetworkKind::Botcash);
+        let mainnet_addr = pub_key.to_address(NetworkKind::Mainnet);
+        let testnet_addr = pub_key.to_address(NetworkKind::Testnet);
+
+        let botcash_encoded = format!("{botcash_addr}");
+        let mainnet_encoded = format!("{mainnet_addr}");
+        let testnet_encoded = format!("{testnet_addr}");
+
+        // All addresses should be different
+        assert_ne!(botcash_encoded, mainnet_encoded);
+        assert_ne!(botcash_encoded, testnet_encoded);
+
+        // Verify correct prefixes
+        assert!(botcash_encoded.starts_with("B1"));
+        assert!(mainnet_encoded.starts_with("t1"));
+        assert!(testnet_encoded.starts_with("tm"));
     }
 }
 
