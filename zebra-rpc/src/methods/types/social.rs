@@ -447,6 +447,308 @@ pub struct EpochStatsResponse {
     is_complete: bool,
 }
 
+// ==================== Governance Types ====================
+
+/// The type of governance proposal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GovernanceProposalType {
+    /// Change a protocol parameter (fees, block size, etc.).
+    Parameter,
+    /// Protocol upgrade (soft fork).
+    Upgrade,
+    /// Treasury spending (if enabled).
+    Spending,
+    /// Other/general proposal.
+    Other,
+}
+
+impl GovernanceProposalType {
+    /// Returns the byte value for encoding.
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            GovernanceProposalType::Parameter => 0x01,
+            GovernanceProposalType::Upgrade => 0x02,
+            GovernanceProposalType::Spending => 0x03,
+            GovernanceProposalType::Other => 0x00,
+        }
+    }
+}
+
+impl Default for GovernanceProposalType {
+    fn default() -> Self {
+        Self::Other
+    }
+}
+
+/// The vote choice for a governance proposal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GovernanceVoteChoice {
+    /// Vote against the proposal.
+    No,
+    /// Vote in favor of the proposal.
+    Yes,
+    /// Abstain from voting (counts towards quorum but not threshold).
+    Abstain,
+}
+
+impl GovernanceVoteChoice {
+    /// Returns the byte value for encoding.
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            GovernanceVoteChoice::No => 0x00,
+            GovernanceVoteChoice::Yes => 0x01,
+            GovernanceVoteChoice::Abstain => 0x02,
+        }
+    }
+}
+
+/// Request for creating a governance proposal.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GovernanceProposalRequest {
+    /// The proposer's address (unified or shielded).
+    pub from: String,
+
+    /// The type of proposal.
+    #[serde(rename = "proposalType", default)]
+    pub proposal_type: GovernanceProposalType,
+
+    /// The title of the proposal (max 255 chars).
+    pub title: String,
+
+    /// The description of the proposal.
+    pub description: String,
+
+    /// Optional parameter changes (for Parameter proposals).
+    /// Format: [{"param": "name", "value": "new_value"}, ...]
+    #[serde(default)]
+    pub parameters: Vec<ParameterChange>,
+
+    /// The deposit amount in zatoshis (returned if >10% support).
+    /// Default is minimum required: 10 BCASH = 1,000,000,000 zatoshis.
+    #[serde(default = "default_proposal_deposit")]
+    pub deposit: u64,
+}
+
+fn default_proposal_deposit() -> u64 {
+    1_000_000_000 // 10 BCASH in zatoshis
+}
+
+/// A parameter change within a governance proposal.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ParameterChange {
+    /// The parameter name to change.
+    pub param: String,
+
+    /// The new value for the parameter.
+    pub value: String,
+}
+
+/// Response for creating a governance proposal.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GovernanceProposalResponse {
+    /// The transaction ID of the proposal.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The unique proposal ID (hex-encoded).
+    #[serde(rename = "proposalId")]
+    proposal_id: String,
+
+    /// The block height when the proposal was created.
+    #[getter(copy)]
+    height: u32,
+
+    /// The block height when voting begins.
+    #[serde(rename = "votingStartsBlock")]
+    #[getter(copy)]
+    voting_starts_block: u32,
+
+    /// The block height when voting ends.
+    #[serde(rename = "votingEndsBlock")]
+    #[getter(copy)]
+    voting_ends_block: u32,
+
+    /// The deposit amount locked (in zatoshis).
+    #[getter(copy)]
+    deposit: u64,
+}
+
+/// Request for voting on a governance proposal.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GovernanceVoteRequest {
+    /// The voter's address (unified or shielded).
+    pub from: String,
+
+    /// The proposal ID to vote on (hex-encoded, 32 bytes).
+    #[serde(rename = "proposalId")]
+    pub proposal_id: String,
+
+    /// The vote choice.
+    pub vote: GovernanceVoteChoice,
+}
+
+/// Response for voting on a governance proposal.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GovernanceVoteResponse {
+    /// The transaction ID of the vote.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The proposal ID that was voted on.
+    #[serde(rename = "proposalId")]
+    proposal_id: String,
+
+    /// The vote that was cast.
+    vote: GovernanceVoteChoice,
+
+    /// The voter's calculated voting power.
+    #[serde(rename = "votingPower")]
+    #[getter(copy)]
+    voting_power: f64,
+}
+
+impl Eq for GovernanceVoteResponse {}
+
+/// Request for getting proposal status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GovernanceProposalStatusRequest {
+    /// The proposal ID to query (hex-encoded, 32 bytes).
+    #[serde(rename = "proposalId")]
+    pub proposal_id: String,
+}
+
+/// Response for getting proposal status.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GovernanceProposalStatusResponse {
+    /// The proposal ID.
+    #[serde(rename = "proposalId")]
+    proposal_id: String,
+
+    /// The proposal title.
+    title: String,
+
+    /// The proposal type.
+    #[serde(rename = "proposalType")]
+    proposal_type: GovernanceProposalType,
+
+    /// Current status: "pending", "voting", "passed", "rejected", "executed".
+    status: String,
+
+    /// Total "yes" voting power.
+    #[serde(rename = "yesVotes")]
+    #[getter(copy)]
+    yes_votes: f64,
+
+    /// Total "no" voting power.
+    #[serde(rename = "noVotes")]
+    #[getter(copy)]
+    no_votes: f64,
+
+    /// Total "abstain" voting power.
+    #[serde(rename = "abstainVotes")]
+    #[getter(copy)]
+    abstain_votes: f64,
+
+    /// Current quorum percentage (votes / circulating supply).
+    #[serde(rename = "quorumPercent")]
+    #[getter(copy)]
+    quorum_percent: f64,
+
+    /// Required quorum percentage (default 20%).
+    #[serde(rename = "quorumRequired")]
+    #[getter(copy)]
+    quorum_required: f64,
+
+    /// Current approval percentage (yes / (yes + no)).
+    #[serde(rename = "approvalPercent")]
+    #[getter(copy)]
+    approval_percent: f64,
+
+    /// Required approval percentage (default 66%).
+    #[serde(rename = "approvalRequired")]
+    #[getter(copy)]
+    approval_required: f64,
+
+    /// Block height when voting ends.
+    #[serde(rename = "votingEndsBlock")]
+    #[getter(copy)]
+    voting_ends_block: u32,
+
+    /// Block height when the proposal executes (if passed).
+    #[serde(rename = "executionBlock", skip_serializing_if = "Option::is_none")]
+    execution_block: Option<u32>,
+}
+
+impl Eq for GovernanceProposalStatusResponse {}
+
+/// Request for listing governance proposals.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GovernanceListRequest {
+    /// Filter by status: "all", "pending", "voting", "passed", "rejected", "executed".
+    #[serde(default = "default_governance_list_status")]
+    pub status: String,
+
+    /// Maximum number of proposals to return.
+    #[serde(default = "default_governance_list_limit")]
+    pub limit: u32,
+
+    /// Offset for pagination.
+    #[serde(default)]
+    pub offset: u32,
+}
+
+fn default_governance_list_status() -> String {
+    "all".to_string()
+}
+
+fn default_governance_list_limit() -> u32 {
+    50
+}
+
+/// Summary of a governance proposal for listing.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GovernanceProposalSummary {
+    /// The proposal ID.
+    #[serde(rename = "proposalId")]
+    proposal_id: String,
+
+    /// The proposal title.
+    title: String,
+
+    /// The proposal type.
+    #[serde(rename = "proposalType")]
+    proposal_type: GovernanceProposalType,
+
+    /// Current status.
+    status: String,
+
+    /// Current approval percentage.
+    #[serde(rename = "approvalPercent")]
+    #[getter(copy)]
+    approval_percent: f64,
+
+    /// Block height when voting ends.
+    #[serde(rename = "votingEndsBlock")]
+    #[getter(copy)]
+    voting_ends_block: u32,
+}
+
+impl Eq for GovernanceProposalSummary {}
+
+/// Response for listing governance proposals.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GovernanceListResponse {
+    /// The proposals matching the query.
+    proposals: Vec<GovernanceProposalSummary>,
+
+    /// Total number of proposals matching the filter.
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
 // ==================== Batch Queue Types ====================
 
 /// Maximum number of actions that can be queued for batching.
@@ -1167,5 +1469,208 @@ mod tests {
     #[test]
     fn max_batch_queue_size_constant() {
         assert_eq!(MAX_BATCH_QUEUE_SIZE, 5);
+    }
+
+    // ==================== Governance Tests ====================
+
+    #[test]
+    fn governance_proposal_type_as_u8() {
+        assert_eq!(GovernanceProposalType::Other.as_u8(), 0x00);
+        assert_eq!(GovernanceProposalType::Parameter.as_u8(), 0x01);
+        assert_eq!(GovernanceProposalType::Upgrade.as_u8(), 0x02);
+        assert_eq!(GovernanceProposalType::Spending.as_u8(), 0x03);
+    }
+
+    #[test]
+    fn governance_vote_choice_as_u8() {
+        assert_eq!(GovernanceVoteChoice::No.as_u8(), 0x00);
+        assert_eq!(GovernanceVoteChoice::Yes.as_u8(), 0x01);
+        assert_eq!(GovernanceVoteChoice::Abstain.as_u8(), 0x02);
+    }
+
+    #[test]
+    fn governance_proposal_request_deserialize() {
+        let json = r#"{
+            "from": "bs1proposer",
+            "proposalType": "parameter",
+            "title": "Increase block size",
+            "description": "Proposal to increase max block size from 2MB to 4MB",
+            "parameters": [{"param": "max_block_size", "value": "4194304"}],
+            "deposit": 1000000000
+        }"#;
+        let req: GovernanceProposalRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1proposer");
+        assert_eq!(req.proposal_type, GovernanceProposalType::Parameter);
+        assert_eq!(req.title, "Increase block size");
+        assert_eq!(req.parameters.len(), 1);
+        assert_eq!(req.parameters[0].param, "max_block_size");
+        assert_eq!(req.deposit, 1_000_000_000);
+    }
+
+    #[test]
+    fn governance_proposal_request_defaults() {
+        let json = r#"{"from":"bs1proposer","title":"Test","description":"Test description"}"#;
+        let req: GovernanceProposalRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.proposal_type, GovernanceProposalType::Other); // default
+        assert!(req.parameters.is_empty()); // default
+        assert_eq!(req.deposit, 1_000_000_000); // default 10 BCASH
+    }
+
+    #[test]
+    fn governance_proposal_response_serialize() {
+        let resp = GovernanceProposalResponse::new(
+            "txid123".to_string(),
+            "abcd1234".to_string(),
+            1000,
+            1000 + 10080, // voting starts after 7 days
+            1000 + 10080 + 20160, // voting lasts 14 days
+            1_000_000_000,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid123\""));
+        assert!(json.contains("\"proposalId\":\"abcd1234\""));
+        assert!(json.contains("\"height\":1000"));
+        assert!(json.contains("\"votingStartsBlock\":11080"));
+        assert!(json.contains("\"votingEndsBlock\":31240"));
+        assert!(json.contains("\"deposit\":1000000000"));
+    }
+
+    #[test]
+    fn governance_vote_request_deserialize() {
+        let json = r#"{"from":"bs1voter","proposalId":"abcd1234567890","vote":"yes"}"#;
+        let req: GovernanceVoteRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1voter");
+        assert_eq!(req.proposal_id, "abcd1234567890");
+        assert_eq!(req.vote, GovernanceVoteChoice::Yes);
+    }
+
+    #[test]
+    fn governance_vote_request_all_choices() {
+        // Test all vote choices deserialize correctly
+        let choices = [("no", GovernanceVoteChoice::No), ("yes", GovernanceVoteChoice::Yes), ("abstain", GovernanceVoteChoice::Abstain)];
+        for (str_choice, enum_choice) in choices {
+            let json = format!(r#"{{"from":"bs1voter","proposalId":"abc","vote":"{}"}}"#, str_choice);
+            let req: GovernanceVoteRequest = serde_json::from_str(&json).unwrap();
+            assert_eq!(req.vote, enum_choice);
+        }
+    }
+
+    #[test]
+    fn governance_vote_response_serialize() {
+        let resp = GovernanceVoteResponse::new(
+            "txid456".to_string(),
+            "proposal123".to_string(),
+            GovernanceVoteChoice::Yes,
+            150.5,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid456\""));
+        assert!(json.contains("\"proposalId\":\"proposal123\""));
+        assert!(json.contains("\"vote\":\"yes\""));
+        assert!(json.contains("\"votingPower\":150.5"));
+    }
+
+    #[test]
+    fn governance_proposal_status_request_deserialize() {
+        let json = r#"{"proposalId":"abcd1234"}"#;
+        let req: GovernanceProposalStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.proposal_id, "abcd1234");
+    }
+
+    #[test]
+    fn governance_proposal_status_response_serialize() {
+        let resp = GovernanceProposalStatusResponse::new(
+            "proposal123".to_string(),
+            "Test Proposal".to_string(),
+            GovernanceProposalType::Parameter,
+            "voting".to_string(),
+            1000.0, // yes votes
+            500.0,  // no votes
+            100.0,  // abstain votes
+            15.5,   // quorum percent
+            20.0,   // quorum required
+            66.7,   // approval percent
+            66.0,   // approval required
+            50000,  // voting ends block
+            Some(80000), // execution block
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"proposalId\":\"proposal123\""));
+        assert!(json.contains("\"title\":\"Test Proposal\""));
+        assert!(json.contains("\"proposalType\":\"parameter\""));
+        assert!(json.contains("\"status\":\"voting\""));
+        assert!(json.contains("\"yesVotes\":1000.0"));
+        assert!(json.contains("\"noVotes\":500.0"));
+        assert!(json.contains("\"abstainVotes\":100.0"));
+        assert!(json.contains("\"quorumPercent\":15.5"));
+        assert!(json.contains("\"approvalPercent\":66.7"));
+        assert!(json.contains("\"executionBlock\":80000"));
+    }
+
+    #[test]
+    fn governance_proposal_status_response_no_execution() {
+        let resp = GovernanceProposalStatusResponse::new(
+            "proposal123".to_string(),
+            "Test".to_string(),
+            GovernanceProposalType::Other,
+            "rejected".to_string(),
+            100.0, 900.0, 0.0,
+            10.0, 20.0, 10.0, 66.0,
+            50000,
+            None, // no execution block for rejected
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(!json.contains("executionBlock"));
+    }
+
+    #[test]
+    fn governance_list_request_deserialize() {
+        let json = r#"{"status":"voting","limit":25,"offset":10}"#;
+        let req: GovernanceListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.status, "voting");
+        assert_eq!(req.limit, 25);
+        assert_eq!(req.offset, 10);
+    }
+
+    #[test]
+    fn governance_list_request_defaults() {
+        let json = r#"{}"#;
+        let req: GovernanceListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.status, "all"); // default
+        assert_eq!(req.limit, 50); // default
+        assert_eq!(req.offset, 0); // default
+    }
+
+    #[test]
+    fn governance_proposal_summary_serialize() {
+        let summary = GovernanceProposalSummary::new(
+            "proposal123".to_string(),
+            "Test Proposal".to_string(),
+            GovernanceProposalType::Upgrade,
+            "voting".to_string(),
+            75.5,
+            50000,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"proposalId\":\"proposal123\""));
+        assert!(json.contains("\"title\":\"Test Proposal\""));
+        assert!(json.contains("\"proposalType\":\"upgrade\""));
+        assert!(json.contains("\"approvalPercent\":75.5"));
+    }
+
+    #[test]
+    fn governance_list_response_serialize() {
+        let summary = GovernanceProposalSummary::new(
+            "p1".to_string(),
+            "Test".to_string(),
+            GovernanceProposalType::Other,
+            "pending".to_string(),
+            0.0,
+            1000,
+        );
+        let resp = GovernanceListResponse::new(vec![summary], 1);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"proposals\":["));
+        assert!(json.contains("\"totalCount\":1"));
     }
 }

@@ -26,6 +26,7 @@
 //! - **Value (0x50-0x54)**: Tips, bounties, attention boosts, and credits
 //! - **Media (0x60)**: Media attachments
 //! - **Polls (0x70-0x71)**: Poll creation and voting
+//! - **Governance (0xE0-0xE1)**: On-chain voting and proposals
 
 use std::fmt;
 
@@ -62,6 +63,7 @@ pub const BATCH_ACTION_LENGTH_SIZE: usize = 2;
 /// - `0x6_`: Media
 /// - `0x7_`: Polls
 /// - `0x8_`: Batching
+/// - `0xE_`: Governance (voting, proposals)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SocialMessageType {
     /// Agent/user profile metadata (0x10).
@@ -150,6 +152,21 @@ pub enum SocialMessageType {
     /// Reduces fees and chain bloat by combining up to 5 actions.
     /// Format: [0x80][version][count][action1_len(2)][action1]...[actionN_len(2)][actionN]
     Batch = 0x80,
+
+    /// Governance vote on a proposal (0xE0).
+    ///
+    /// Cast a vote (yes/no/abstain) on an existing governance proposal.
+    /// Voting power is calculated based on karma and BCASH balance.
+    /// Format: [proposal_id(32)][vote(1)][weight(8)]
+    GovernanceVote = 0xE0,
+
+    /// Governance proposal creation (0xE1).
+    ///
+    /// Create a new governance proposal for community voting.
+    /// Requires a minimum deposit that is returned if the proposal
+    /// receives sufficient support (>10%).
+    /// Format: [proposal_type(1)][title_len(1)][title][description_len(2)][description][params...]
+    GovernanceProposal = 0xE1,
 }
 
 impl SocialMessageType {
@@ -179,6 +196,8 @@ impl SocialMessageType {
             Self::Poll => "Poll",
             Self::Vote => "Vote",
             Self::Batch => "Batch",
+            Self::GovernanceVote => "GovernanceVote",
+            Self::GovernanceProposal => "GovernanceProposal",
         }
     }
 
@@ -207,6 +226,11 @@ impl SocialMessageType {
             Self::AttentionBoost | Self::CreditTip | Self::CreditClaim
         )
     }
+
+    /// Returns true if this is a governance message type.
+    pub const fn is_governance(&self) -> bool {
+        matches!(self, Self::GovernanceVote | Self::GovernanceProposal)
+    }
 }
 
 impl TryFrom<u8> for SocialMessageType {
@@ -231,6 +255,8 @@ impl TryFrom<u8> for SocialMessageType {
             0x70 => Ok(Self::Poll),
             0x71 => Ok(Self::Vote),
             0x80 => Ok(Self::Batch),
+            0xE0 => Ok(Self::GovernanceVote),
+            0xE1 => Ok(Self::GovernanceProposal),
             _ => Err(SocialParseError::UnknownMessageType(value)),
         }
     }
@@ -421,8 +447,10 @@ impl TryFrom<&Memo> for SocialMessage {
         let version = bytes[1];
 
         // Check if this looks like a social message (type in valid range)
-        // Social messages use 0x10-0x7F range
-        if type_byte < 0x10 || type_byte > 0x7F {
+        // Social messages use 0x10-0xEF range:
+        // - 0x10-0x7F: Standard message types
+        // - 0x80-0xEF: Experimental/extended types (batching, governance, etc.)
+        if type_byte < 0x10 || type_byte > 0xEF {
             return Err(SocialParseError::NotSocialMessage);
         }
 
@@ -809,6 +837,8 @@ mod tests {
         assert_eq!(SocialMessageType::Media.as_u8(), 0x60);
         assert_eq!(SocialMessageType::Poll.as_u8(), 0x70);
         assert_eq!(SocialMessageType::Vote.as_u8(), 0x71);
+        assert_eq!(SocialMessageType::GovernanceVote.as_u8(), 0xE0);
+        assert_eq!(SocialMessageType::GovernanceProposal.as_u8(), 0xE1);
     }
 
     #[test]
@@ -832,6 +862,8 @@ mod tests {
             SocialMessageType::Media,
             SocialMessageType::Poll,
             SocialMessageType::Vote,
+            SocialMessageType::GovernanceVote,
+            SocialMessageType::GovernanceProposal,
         ];
 
         for msg_type in types {
@@ -886,6 +918,14 @@ mod tests {
         // Non-attention market types
         assert!(!SocialMessageType::Tip.is_attention_market());
         assert!(!SocialMessageType::Post.is_attention_market());
+
+        // Governance types
+        assert!(SocialMessageType::GovernanceVote.is_governance());
+        assert!(SocialMessageType::GovernanceProposal.is_governance());
+
+        // Non-governance types
+        assert!(!SocialMessageType::Post.is_governance());
+        assert!(!SocialMessageType::Vote.is_governance()); // Poll vote, not governance vote
     }
 
     // Required test: parse post message
@@ -1053,10 +1093,10 @@ mod tests {
     }
 
     #[test]
-    fn all_17_message_types_exist() {
+    fn all_19_message_types_exist() {
         let _init_guard = zebra_test::init();
 
-        // Verify we have exactly 17 message types (16 core + 1 batch)
+        // Verify we have exactly 19 message types (16 core + 1 batch + 2 governance)
         let all_types = [
             SocialMessageType::Profile,
             SocialMessageType::Post,
@@ -1075,9 +1115,11 @@ mod tests {
             SocialMessageType::Poll,
             SocialMessageType::Vote,
             SocialMessageType::Batch,
+            SocialMessageType::GovernanceVote,
+            SocialMessageType::GovernanceProposal,
         ];
 
-        assert_eq!(all_types.len(), 17, "Should have exactly 17 message types");
+        assert_eq!(all_types.len(), 19, "Should have exactly 19 message types");
 
         // Verify each has a unique byte value
         let mut seen_bytes = std::collections::HashSet::new();
@@ -1398,5 +1440,176 @@ mod tests {
         assert!(display.contains("BatchMessage"));
         assert!(display.contains("version: 1"));
         assert!(display.contains("actions: 2"));
+    }
+
+    // ========================================================================
+    // Governance Message Tests (Required for P6.2 On-Chain Voting)
+    // ========================================================================
+
+    #[test]
+    fn governance_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        // Verify governance type byte values match spec
+        assert_eq!(SocialMessageType::GovernanceVote.as_u8(), 0xE0);
+        assert_eq!(SocialMessageType::GovernanceProposal.as_u8(), 0xE1);
+
+        // Verify names
+        assert_eq!(SocialMessageType::GovernanceVote.name(), "GovernanceVote");
+        assert_eq!(
+            SocialMessageType::GovernanceProposal.name(),
+            "GovernanceProposal"
+        );
+    }
+
+    #[test]
+    fn governance_vote_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // GovernanceVote format: [proposal_id(32)][vote(1)][weight(8)]
+        // Use a weight with non-zero high bytes to avoid trailing zero trimming
+        let weight: u64 = 0x0102030405060708;
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&[0xAB; 32]); // proposal_id (32 bytes)
+        payload.push(0x01); // vote: 1 = yes
+        payload.extend_from_slice(&weight.to_le_bytes()); // weight with all non-zero bytes
+
+        let msg = SocialMessage::new(
+            SocialMessageType::GovernanceVote,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xE0); // GovernanceVote type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::GovernanceVote);
+        assert!(decoded.msg_type().is_governance());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn governance_proposal_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // GovernanceProposal format: [proposal_type(1)][title_len(1)][title][desc_len(2)][description]
+        let mut payload = Vec::new();
+        payload.push(0x01); // proposal_type: 1 = parameter change
+
+        let title = b"Increase block size";
+        payload.push(title.len() as u8);
+        payload.extend_from_slice(title);
+
+        let description = b"Proposal to increase max block size from 2MB to 4MB";
+        payload.extend_from_slice(&(description.len() as u16).to_le_bytes());
+        payload.extend_from_slice(description);
+
+        let msg = SocialMessage::new(
+            SocialMessageType::GovernanceProposal,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xE1); // GovernanceProposal type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::GovernanceProposal);
+        assert!(decoded.msg_type().is_governance());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn governance_types_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Governance messages can be batched with other actions
+        let actions = vec![
+            SocialMessage::new(
+                SocialMessageType::GovernanceVote,
+                SOCIAL_PROTOCOL_VERSION,
+                {
+                    let mut payload = vec![0xAB; 32]; // proposal_id
+                    payload.push(0x01); // vote: yes
+                    payload.extend_from_slice(&50u64.to_le_bytes()); // weight
+                    payload
+                },
+            ),
+            SocialMessage::new(
+                SocialMessageType::Post,
+                SOCIAL_PROTOCOL_VERSION,
+                b"Voted yes on BIP-001!".to_vec(),
+            ),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("valid batch");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should decode");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(
+            decoded.actions()[0].msg_type(),
+            SocialMessageType::GovernanceVote
+        );
+        assert!(decoded.actions()[0].msg_type().is_governance());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
+    fn governance_types_not_value_transfer() {
+        let _init_guard = zebra_test::init();
+
+        // Governance types are not value transfers (deposit is separate)
+        assert!(!SocialMessageType::GovernanceVote.is_value_transfer());
+        assert!(!SocialMessageType::GovernanceProposal.is_value_transfer());
+
+        // Governance types are not attention market
+        assert!(!SocialMessageType::GovernanceVote.is_attention_market());
+        assert!(!SocialMessageType::GovernanceProposal.is_attention_market());
+    }
+
+    #[test]
+    fn governance_vote_choices() {
+        let _init_guard = zebra_test::init();
+
+        // Test all vote choices: 0 = no, 1 = yes, 2 = abstain
+        for vote_choice in [0u8, 1u8, 2u8] {
+            let mut payload = vec![0xCD; 32]; // proposal_id
+            payload.push(vote_choice);
+            payload.extend_from_slice(&1000u64.to_le_bytes()); // weight
+
+            let msg = SocialMessage::new(
+                SocialMessageType::GovernanceVote,
+                SOCIAL_PROTOCOL_VERSION,
+                payload,
+            );
+
+            let encoded = msg.encode();
+            let memo = create_memo(&encoded);
+            let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+            assert_eq!(decoded.msg_type(), SocialMessageType::GovernanceVote);
+            // Verify vote choice is preserved
+            assert_eq!(decoded.payload()[32], vote_choice);
+        }
+    }
+
+    #[test]
+    fn governance_type_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", SocialMessageType::GovernanceVote), "GovernanceVote");
+        assert_eq!(
+            format!("{}", SocialMessageType::GovernanceProposal),
+            "GovernanceProposal"
+        );
     }
 }

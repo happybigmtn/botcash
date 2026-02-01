@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.1c Complete - Indexer Batch Parsing)
+**Last Updated:** 2026-02-01 (P6.2.1 Complete - Governance Message Types)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum with 17 types including attention market types and Batch, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods z_socialpost/z_socialdm/z_socialfollow/z_socialfeed, RPC response types, attention market governance parameters, attention RPC methods z_attentionboost/z_credittip/z_creditbalance/z_marketfeed/z_epochstats with validation, and full Rpc trait with all methods). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a done (Batch message type 0x80 with BatchMessage struct, MAX_BATCH_ACTIONS=5, encode/decode roundtrip, 14 tests), P6.1b done (Wallet batch queue RPC with 4 methods: z_batchqueue, z_batchsend, z_batchstatus, z_batchclear; BatchAction enum with 7 types; 18 tests), P6.1c done (Indexer batch parsing module with IndexedBatchAction, BatchSummary, ParsedBatch, BlockBatchStats; proto definitions; 16 tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 19 types including governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2.1 done (GovernanceVote 0xE0 and GovernanceProposal 0xE1 message types with is_governance() helper, RPC types, 7 tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -113,7 +113,10 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.1b** | Wallet batch queue | ✅ DONE | `zebra-rpc/src/methods/types/social.rs`, `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- types::social::tests::batch` |
 | **P6.1c** | Indexer batch parsing | ✅ DONE | `zebra-rpc/src/indexer/batch.rs`, `zebra-rpc/proto/indexer.proto` | `cargo test -p zebra-rpc -- indexer::batch::tests` |
 | **P6.2** | Layer-2 channels | ⬜ TODO | See specs/scaling.md | TBD |
-| **P6.3** | Governance voting | ⬜ TODO | See specs/governance.md | TBD |
+| **P6.3a** | Governance message types (0xE0, 0xE1) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- governance` |
+| **P6.3b** | Governance RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
+| **P6.3c** | Governance RPC methods | ⬜ TODO | `zebra-rpc/src/methods.rs` | TBD |
+| **P6.3d** | Governance voting logic | ⬜ TODO | See specs/governance.md | TBD |
 | **P6.4** | Social recovery | ⬜ TODO | See specs/recovery.md | TBD |
 | **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
 
@@ -142,6 +145,28 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `Memo::as_bytes()` public accessor to zebra-chain for cross-crate access
 - Extended `indexer.proto` with batch-related gRPC message types
 - 16 comprehensive tests covering parsing, validation, statistics, and edge cases
+
+**P6.3a Implementation Details:**
+- Added `SocialMessageType::GovernanceVote = 0xE0` for voting on proposals
+- Added `SocialMessageType::GovernanceProposal = 0xE1` for creating proposals
+- Extended message type range from 0x10-0x7F to 0x10-0xEF (includes experimental/governance range)
+- Added `is_governance()` helper method on SocialMessageType
+- Updated `TryFrom<u8>` to parse governance type bytes
+- SocialMessageType enum now has 19 types (was 17)
+- 7 comprehensive tests covering governance message roundtrips, batching, and categorization
+
+**P6.3b Implementation Details:**
+- Added `GovernanceProposalType` enum (Parameter, Upgrade, Spending, Other)
+- Added `GovernanceVoteChoice` enum (No, Yes, Abstain) with byte encoding
+- Added `GovernanceProposalRequest` struct with proposal fields and 10 BCASH default deposit
+- Added `GovernanceProposalResponse` struct with voting timeline blocks
+- Added `GovernanceVoteRequest` struct with proposal_id and vote choice
+- Added `GovernanceVoteResponse` struct with voting power calculation
+- Added `GovernanceProposalStatusRequest/Response` for querying proposal status
+- Added `GovernanceListRequest/Response` for listing proposals with pagination
+- Added `GovernanceProposalSummary` for compact proposal representation
+- Added `ParameterChange` struct for parameter modification proposals
+- 18 comprehensive tests for all governance RPC type serialization
 
 ---
 
