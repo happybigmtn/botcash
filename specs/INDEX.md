@@ -41,6 +41,7 @@ botcash/
 | Specification | File                         | Status | Description                                 |
 | ------------- | ---------------------------- | ------ | ------------------------------------------- |
 | **Social**    | [social.md](social.md)       | Draft  | Encrypted social network protocol           |
+| **Attention Market** | [attention-market.md](attention-market.md) | Draft | Paid rankings, credit redistribution, 7-day expiry |
 | **Wallet**    | [wallet.md](wallet.md)       | Draft  | Mobile wallet (Zashi fork)                  |
 | **Network**   | [network.md](network.md)     | Draft  | Ports, chain params                         |
 | **Consensus** | [consensus.md](consensus.md) | Draft  | RandomX PoW, block time                     |

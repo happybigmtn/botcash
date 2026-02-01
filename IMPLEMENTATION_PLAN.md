@@ -5,6 +5,246 @@
 
 ---
 
+## 🚦 Current Status: PHASE 0 COMPLETE
+
+**Last Updated:** 2026-01-31 (Phase 0 Complete)
+
+Phase 0 (librustzcash network constants and address encoding) is complete. All other phases remain not started.
+
+**Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
+
+---
+
+## 📋 Priority Task List (Sorted by Dependency Order)
+
+### ✅ Phase 0: librustzcash (COMPLETE)
+
+All other phases depend on Phase 0. These tasks define the network identity.
+
+| Priority | Task | Status | Files (with line numbers) | Test Command |
+|----------|------|--------|---------------------------|--------------|
+| **P0.1** | Add `NetworkType::Botcash` enum | ✅ DONE | `librustzcash/components/zcash_protocol/src/consensus.rs:131-141` | `cd librustzcash && cargo test -p zcash_protocol -- botcash` |
+| **P0.2** | Create botcash.rs constants (12 constants) | ✅ DONE | `librustzcash/components/zcash_protocol/src/constants/botcash.rs` | `cd librustzcash && cargo test -p zcash_protocol -- botcash` |
+| **P0.3** | Add `pub mod botcash;` to constants.rs | ✅ DONE | `librustzcash/components/zcash_protocol/src/constants.rs:1-6` | `cd librustzcash && cargo test -p zcash_protocol -- botcash` |
+| **P0.4** | Implement `NetworkConstants` trait (12 match arms) | ✅ DONE | `librustzcash/components/zcash_protocol/src/consensus.rs:236-330` | `cd librustzcash && cargo test -p zcash_protocol -- botcash` |
+| **P0.5** | Update Sapling address parsing | ✅ DONE | `librustzcash/components/zcash_address/src/encoding.rs:76-86` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+| **P0.6** | Update TEX address parsing | ✅ DONE | `librustzcash/components/zcash_address/src/encoding.rs:100-108` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+| **P0.7** | Update Base58Check prefix parsing | ✅ DONE | `librustzcash/components/zcash_address/src/encoding.rs:123-131` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+| **P0.8** | Extend SealedContainer trait for Botcash | ✅ DONE | `librustzcash/components/zcash_address/src/kind/unified.rs:209-236` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+| **P0.9** | Update Unified Address container | ✅ DONE | `librustzcash/components/zcash_address/src/kind/unified/address.rs:137-158` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+| **P0.10** | Update Unified FVK container | ✅ DONE | `librustzcash/components/zcash_address/src/kind/unified/fvk.rs:132-146` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+| **P0.11** | Update Unified IVK container | ✅ DONE | `librustzcash/components/zcash_address/src/kind/unified/ivk.rs:137-147` | `cd librustzcash && cargo test -p zcash_address -- botcash` |
+
+**Tests passing:**
+- `cargo test -p zcash_protocol -- botcash` → 2 tests pass
+- `cargo test -p zcash_address -- botcash` → 4 tests pass
+
+### ⬜ Phase 1: Zebra Full Node (Core Blockchain)
+
+| Priority | Task | Status | Files (with line numbers) | Test Command |
+|----------|------|--------|---------------------------|--------------|
+| **P1.1** | Add `NetworkKind::Botcash` variant | ⬜ TODO | `zebra-chain/src/parameters/network.rs:26-36` | `cargo test -p zebra-chain -- network_kind` |
+| **P1.2** | Add `Network::Botcash` variant | ⬜ TODO | `zebra-chain/src/parameters/network.rs:53-61` | `cargo test -p zebra-chain -- network_variant` |
+| **P1.3** | Add BOTCASH magic bytes (0x42434153) | ⬜ TODO | `zebra-chain/src/parameters/constants.rs:20-29` | `cargo test -p zebra-chain -- magic` |
+| **P1.4** | Update Network::magic() impl | ⬜ TODO | `zebra-chain/src/parameters/network/magic.rs:21-28` | `cargo test -p zebra-chain -- network_magic` |
+| **P1.5** | Set network ports (8533/18533) | ⬜ TODO | `zebra-chain/src/parameters/network.rs:236-241` | `cargo test -p zebra-chain -- default_port` |
+| **P1.6** | Set block time (60s) | ⬜ TODO | `zebra-chain/src/parameters/constants.rs` (NEW const) | `cargo test -p zebra-chain -- block_time` |
+| **P1.7** | Implement block subsidy (3.125 BCASH) | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:30,421-483` | `cargo test -p zebra-chain -- botcash_subsidy` |
+| **P1.8** | Disable funding streams for Botcash | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:211-310` | `cargo test -p zebra-chain -- no_funding_stream` |
+| **P1.9** | Add randomx-rs dependency | ⬜ TODO | `Cargo.toml:61` (workspace deps) | `cargo build -p zebra-consensus --features randomx` |
+| **P1.10** | Create RandomX verification module | ⬜ TODO | `zebra-chain/src/work/randomx.rs` (NEW, ~200-300 lines) | `cargo test -p zebra-chain -- randomx` |
+| **P1.11** | Add `pub mod randomx;` to work.rs | ⬜ TODO | `zebra-chain/src/work.rs:1-10` | `cargo build -p zebra-chain` |
+| **P1.12** | Integrate RandomX in block check | ⬜ TODO | `zebra-consensus/src/block/check.rs:141-149` | `cargo test -p zebra-consensus -- verify_randomx` |
+| **P1.13** | Update VerifyBlockError enum | ⬜ TODO | `zebra-consensus/src/block.rs:69-73,109` | `cargo test -p zebra-consensus -- block_error` |
+| **P1.14** | Create genesis block function | ⬜ TODO | `zebra-chain/src/parameters/genesis.rs:7` | `cargo test -p zebra-chain -- genesis_botcash` |
+| **P1.15** | Update transparent address encoding | ⬜ TODO | `zebra-chain/src/transparent/address.rs:190-226` | `cargo test -p zebra-chain -- transparent_address` |
+
+### ⬜ Phase 2: lightwalletd (Go Backend)
+
+| Priority | Task | Status | Files (with line numbers) | Test Command |
+|----------|------|--------|---------------------------|--------------|
+| **P2.1** | Create network_params.go | ⬜ TODO | `lightwalletd/common/network_params.go` (NEW) | `cd lightwalletd && go test ./common/... -run TestNetwork` |
+| **P2.2** | Update RPC port detection | ⬜ TODO | `lightwalletd/frontend/rpc_client.go:59-66` | `cd lightwalletd && go test ./frontend/... -run TestRPC` |
+| **P2.3** | Update address validation regex | ⬜ TODO | `lightwalletd/frontend/service.go:56-67` | `cd lightwalletd && go test ./frontend/... -run TestAddress` |
+| **P2.4** | Add Botcash chain name detection | ⬜ TODO | `lightwalletd/cmd/root.go:189-226` | `cd lightwalletd && go test ./... -run TestChain` |
+| **P2.5** | Update NodeName detection | ⬜ TODO | `lightwalletd/cmd/root.go:222-225` | `cd lightwalletd && go test ./... -run TestNode` |
+
+### ⬜ Phase 3: iOS Wallet (zashi-ios)
+
+| Priority | Task | Status | Files | Test Command |
+|----------|------|--------|-------|--------------|
+| **P3.1** | Update endpoint constants (9 URLs) | ⬜ TODO | `zashi-ios/modules/Sources/Dependencies/ZcashSDKEnvironment/ZcashSDKEnvironmentInterface.swift:24-27,94-106` | `xcodebuild test -scheme Botcash -only-testing:SecantTests/NetworkTests` |
+| **P3.2** | Update legacy migration paths | ⬜ TODO | `zashi-ios/modules/Sources/Dependencies/ZcashSDKEnvironment/ZcashSDKEnvironmentLiveKey.swift:89,93` | Build verification |
+| **P3.3** | Update bundle identifiers (6 targets) | ⬜ TODO | `zashi-ios/secant.xcodeproj/project.pbxproj` | `xcodebuild -showBuildSettings` |
+| **P3.4** | Update CFBundleDisplayName (5 plists) | ⬜ TODO | `zashi-ios/secant/*-Info.plist:12-13` | Visual verification |
+| **P3.5** | Update background task identifiers | ⬜ TODO | `zashi-ios/secant/AppDelegate.swift:20-21` | Build verification |
+| **P3.6** | Replace app icons (3 iconsets) | ⬜ TODO | `zashi-ios/secant/Resources/Assets.xcassets/AppIcon*.appiconset/` | Visual verification |
+| **P3.7** | Update localization strings (~50 refs) | ⬜ TODO | `zashi-ios/modules/Sources/Generated/Resources/*/Localizable.strings` | String verification |
+
+### ⬜ Phase 4: Android Wallet (zashi-android)
+
+| Priority | Task | Status | Files | Test Command |
+|----------|------|--------|-------|--------------|
+| **P4.1** | Update endpoint list | ⬜ TODO | `zashi-android/ui-lib/src/main/java/co/electriccoin/zcash/ui/common/provider/LightWalletEndpointProvider.kt:14-30` | `./gradlew :ui-lib:testDebugUnitTest --tests "*EndpointTest*"` |
+| **P4.2** | Update network flavor dimension | ⬜ TODO | `zashi-android/build-conventions-secant/src/main/kotlin/model/Dimensions.kt` | `./gradlew assembleBotcashmainnetDebug` |
+| **P4.3** | Update gradle.properties branding | ⬜ TODO | `zashi-android/gradle.properties:63-72` | `./gradlew :app:lintDebug` |
+| **P4.4** | Create botcash flavor directories | ⬜ TODO | `zashi-android/app/src/botcash*/` (NEW) | Build verification |
+
+### ⬜ Phase 5: Social Protocol (Application Layer)
+
+| Priority | Task | Status | Files | Test Command |
+|----------|------|--------|-------|--------------|
+| **P5.1** | Create SocialMessageType enum (16 types) | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` (NEW) | `cargo test -p zebra-chain -- social_message_type` |
+| **P5.2** | Create SocialMessage struct | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- social_message` |
+| **P5.3** | Implement TryFrom<&Memo> for SocialMessage | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- memo_parse` |
+| **P5.4** | Add `pub mod social;` to memo.rs | ⬜ TODO | `zebra-chain/src/transaction/memo.rs` | `cargo build -p zebra-chain` |
+| **P5.5** | Create social RPC methods (4 methods) | ⬜ TODO | `zebra-rpc/src/methods/social.rs` (NEW) | `cargo test -p zebra-rpc -- z_social` |
+| **P5.6** | Create social RPC response types | ⬜ TODO | `zebra-rpc/src/methods/types/social.rs` (NEW) | `cargo test -p zebra-rpc -- social_types` |
+| **P5.7** | Add attention message types (0x52-0x54) | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- attention_boost` |
+| **P5.8** | Create attention RPC methods (5 methods) | ⬜ TODO | `zebra-rpc/src/methods/attention.rs` (NEW) | `cargo test -p zebra-rpc -- z_attention` |
+| **P5.9** | Create attention parameters | ⬜ TODO | `zebra-chain/src/parameters/attention.rs` (NEW) | `cargo test -p zebra-chain -- attention_params` |
+| **P5.10** | Update methods.rs Rpc trait | ⬜ TODO | `zebra-rpc/src/methods.rs:132-624` | `cargo test -p zebra-rpc -- rpc_trait` |
+
+### ⬜ Phase 6: Infrastructure (Post-Launch)
+
+| Priority | Task | Status | Files | Test Command |
+|----------|------|--------|-------|--------------|
+| **P6.1** | Transaction batching | ⬜ TODO | See specs/scaling.md | TBD |
+| **P6.2** | Layer-2 channels | ⬜ TODO | See specs/scaling.md | TBD |
+| **P6.3** | Governance voting | ⬜ TODO | See specs/governance.md | TBD |
+| **P6.4** | Social recovery | ⬜ TODO | See specs/recovery.md | TBD |
+| **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
+
+---
+
+## 🔍 Deep Codebase Analysis (2026-01-31)
+
+### Current State Summary
+
+| Component | Location | Status | Gap Analysis |
+|-----------|----------|--------|--------------|
+| **librustzcash** | `librustzcash/` | Unmodified Zcash | `NetworkType` has only Main/Test/Regtest (line 131-141 in consensus.rs) |
+| **Zebra node** | `zebra-*/` | Unmodified Zcash | `Network` has only Mainnet/Testnet (line 53-61 in network.rs) |
+| **RandomX** | — | **NOT PRESENT** | No randomx-rs dependency; uses Equihash (equihash.rs: 298 lines) |
+| **Genesis block** | `zebra-chain/src/parameters/genesis.rs:7` | Zcash only | Only defines GENESIS_PREVIOUS_BLOCK_HASH |
+| **Block subsidy** | `zebra-chain/src/parameters/network/subsidy.rs:30` | Zcash (12.5 ZEC) | MAX_BLOCK_SUBSIDY hardcoded, needs 3.125 BCASH |
+| **Address encoding** | `librustzcash/.../encoding.rs:76-131` | Zcash prefixes (t1, zs) | 3 match statements need Botcash cases |
+| **Magic bytes** | `zebra-chain/src/parameters/constants.rs:20-29` | Zcash (0x24e92764) | No BCAS (0x42434153) defined |
+| **Ports** | `zebra-chain/src/parameters/network.rs:236-241` | 8233/18233 | default_port() needs Botcash case |
+| **lightwalletd** | `lightwalletd/frontend/rpc_client.go:59-66` | Zcash ports | Hardcoded 8232/18232 |
+| **iOS wallet** | `zashi-ios/.../ZcashSDKEnvironmentInterface.swift:24-27` | Zashi branding | 9 zec.rocks endpoints hardcoded |
+| **Android wallet** | `zashi-android/.../LightWalletEndpointProvider.kt:14-30` | Zashi branding | 8 zec.rocks endpoints hardcoded |
+| **Social protocol** | — | **NOT PRESENT** | No memo/social.rs module |
+| **Attention market** | — | **NOT PRESENT** | No attention.rs module |
+
+### Key Files to Modify (Phase 0-1) with Line Numbers
+
+```
+librustzcash/components/zcash_protocol/src/
+├── consensus.rs          ← Add NetworkType::Botcash (lines 131-141)
+│                         ← Extend NetworkConstants impl (lines 236-330, 12 methods)
+├── constants.rs          ← Add `pub mod botcash;` (line 4)
+└── constants/
+    ├── mainnet.rs        (reference: 12 constants defined)
+    ├── testnet.rs        (reference: 12 constants defined)
+    ├── regtest.rs        (reference: 12 constants defined)
+    └── botcash.rs        ← CREATE: COIN_TYPE=347, 11 HRP/prefix constants
+
+librustzcash/components/zcash_address/src/
+├── encoding.rs           ← Add Botcash cases at lines 76-86, 100-108, 123-131
+└── kind/unified/
+    ├── address.rs        ← Add BOTCASH const (lines 137-158)
+    ├── fvk.rs            ← Add BOTCASH const (lines 132-146)
+    └── ivk.rs            ← Add BOTCASH const (lines 137-147)
+
+zebra-chain/src/parameters/
+├── network.rs            ← Add NetworkKind::Botcash (line 35), default_port() (line 237)
+├── constants.rs          ← Add BOTCASH_MAGIC (after line 29), BOTCASH_POW_TARGET_SPACING
+├── genesis.rs            ← Add botcash_genesis_block() function
+└── network/
+    ├── subsidy.rs        ← Add Botcash subsidy at line 30, halving logic at 421-483
+    ├── magic.rs          ← Add BOTCASH magic constant (lines 21-28)
+    └── testnet.rs        ← Reference for custom network parameters
+
+zebra-chain/src/work/
+├── equihash.rs           (existing Zcash PoW, 298 lines)
+├── work.rs               ← Add `pub mod randomx;` after line 4
+└── randomx.rs            ← CREATE: RandomX verification (~200-300 lines)
+
+zebra-consensus/src/block/
+├── check.rs              ← Add randomx_solution_is_valid() at line 141-149
+└── ../block.rs           ← Update VerifyBlockError at lines 69-73
+```
+
+### RandomX Integration Points
+
+**Current Equihash Flow (to replace for Botcash):**
+1. `zebra-chain/src/work/equihash.rs:70-92` - `Solution::check()` validates PoW
+2. `zebra-consensus/src/block/check.rs:141-149` - `equihash_solution_is_valid()` entry point
+3. `zebra-consensus/src/block.rs:209` - Called from block verification
+
+**RandomX Required Changes:**
+- Add `randomx-rs` to workspace `Cargo.toml:61` (next to `equihash = "0.2.2"`)
+- Create `zebra-chain/src/work/randomx.rs` mirroring equihash.rs structure
+- Add network-aware dispatch in `check.rs` to call RandomX for Botcash
+
+### Existing Test Infrastructure
+
+**Test Patterns:**
+- Unit tests: `fn test_{functionality}()` or `fn {description}()`
+- Property tests: `proptest! { #[test] fn prop_{desc}() }`
+- Vector tests: `fn {functionality}_test_vectors()`
+- All tests require: `let _init_guard = zebra_test::init();`
+
+**Test Commands:**
+- Single test: `cargo test -p {crate} -- {test_name}`
+- Module tests: `cargo test -p {crate} -- {module}::`
+- With logging: `RUST_LOG=debug cargo test -- {test_name}`
+- Property cases: `PROPTEST_CASES=100 cargo test -- {test_name}`
+
+**Existing Test Counts:**
+- **4,233+ Rust tests** across zebra-* crates
+- **45 Go tests** in lightwalletd
+- **No Botcash-specific tests** exist yet
+
+### High-Relevance TODOs in Codebase (18 found)
+
+| File | Line | TODO | Impact |
+|------|------|------|--------|
+| `equihash.rs` | 73-77 | Add Equihash parameters field to testnet::Parameters | Blocks configurable PoW |
+| `equihash.rs` | 117 | Accept network as argument for Regtest | Needed for Botcash variant |
+| `miner.rs` | 3-7 | Pause mining if no peers, add developer config | Mining behavior |
+| `miner.rs` | 105 | Spawn new executor for mining isolation | Performance |
+| `mining.rs` | 19,43 | Internal miner config removed | Needs reimplementation |
+| `subsidy.rs` | 295-339 | 5 TODOs about funding streams and ZIP refs | Botcash subsidy logic |
+| `network.rs` | 24,230,239 | Testnet params, history tree, funding | Custom network config |
+| `network_upgrade.rs` | 499 | Move TESTNET_MINIMUM_DIFFICULTY_START_HEIGHT | Difficulty scheduling |
+| `testnet.rs` | 522,618,743 | Parameter serialization and funding | Botcash testnet config |
+
+### lightwalletd Hardcoded References (12 files)
+
+| File | Lines | Reference | Change Needed |
+|------|-------|-----------|---------------|
+| `rpc_client.go` | 59-66 | Port 8232/18232 | Add 8532/18532 for Botcash |
+| `service.go` | 56-67 | Regex `\\At[a-zA-Z0-9]{34}\\z` | Add B1/bs prefix support |
+| `root.go` | 40-42,344 | "zcash.conf", "Zcash" strings | Update for Botcash |
+| `common.go` | 32 | `NodeName = "zebrad"` | Add Botcash detection |
+
+### Mobile Wallet Hardcoded References
+
+**iOS (zashi-ios):**
+- `ZcashSDKEnvironmentInterface.swift:24-27,94-106` - 9 endpoint URLs
+- `secant/*-Info.plist:12-13` - 5 CFBundleDisplayName entries
+- `AppDelegate.swift:20-21` - 2 background task identifiers
+- `Localizable.strings` - ~50 "Zashi" string references
+
+**Android (zashi-android):**
+- `LightWalletEndpointProvider.kt:14-30` - 8 endpoint URLs
+- `Dimensions.kt` - Network flavor enum ("zcashmainnet", "zcashtestnet")
+- `gradle.properties:63-72` - Package name, app name
+
+---
+
 ## Architecture Overview
 
 ```
@@ -779,6 +1019,264 @@ pub async fn z_socialfeed(
 
 ---
 
+#### 5.4 Attention Market (specs/attention-market.md)
+
+> **Circular attention economy**: Paid rankings redistributed as tip credits with 7-day expiration.
+
+##### 5.4.1 Core Transaction Types
+**Files:**
+- `zebra-chain/src/transaction/memo/social.rs`
+
+**Changes:**
+```rust
+// Add new message types
+pub enum SocialMessageType {
+    // ... existing types ...
+    AttentionBoost = 0x52,  // Pay to boost content visibility
+    CreditTip = 0x53,       // Tip using credits (not BCASH)
+    CreditClaim = 0x54,     // Claim earned credits from pool
+}
+
+#[derive(Debug, Clone)]
+pub struct AttentionBoost {
+    pub target_txid: TxId,
+    pub duration_blocks: u32,
+    pub category: u8,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreditTip {
+    pub target_txid: TxId,
+    pub credit_amount: Amount,
+    pub message: Option<String>,
+}
+```
+
+**Required Tests:**
+```bash
+cargo test -p zebra-chain test_attention_boost_memo_parse
+cargo test -p zebra-chain test_credit_tip_memo_parse
+```
+
+---
+
+##### 5.4.2 Credit Pool & Redistribution Logic
+**Files:**
+- `botcash-indexer/src/credits.rs` (NEW)
+- `botcash-indexer/src/epoch.rs` (NEW)
+
+**Changes:**
+```rust
+// Credit balance tracking
+pub struct CreditBalance {
+    pub address: ZcashAddress,
+    pub balance: Amount,
+    pub grants: Vec<CreditGrant>,
+}
+
+pub struct CreditGrant {
+    pub amount: Amount,
+    pub granted_block: Height,
+    pub expires_block: Height,  // granted + 10080 (7 days)
+    pub spent: Amount,
+}
+
+// Epoch pool for redistribution
+pub struct Epoch {
+    pub number: u32,
+    pub start_block: Height,
+    pub end_block: Height,
+    pub total_paid: Amount,
+    pub payers: HashMap<ZcashAddress, Amount>,
+}
+
+impl Epoch {
+    /// Calculate credits earned by each payer
+    /// redistribution_rate = 0.8 (80% redistributed)
+    pub fn calculate_credits(&self) -> HashMap<ZcashAddress, Amount> {
+        let pool = self.total_paid * 80 / 100;
+        self.payers.iter()
+            .map(|(addr, paid)| {
+                let share = pool * paid / self.total_paid;
+                (addr.clone(), share)
+            })
+            .collect()
+    }
+}
+```
+
+**Required Tests:**
+```bash
+cargo test -p botcash-indexer test_credit_redistribution
+cargo test -p botcash-indexer test_credit_expiration
+cargo test -p botcash-indexer test_epoch_calculation
+```
+
+---
+
+##### 5.4.3 Market Ranking Algorithm
+**Files:**
+- `botcash-indexer/src/market.rs` (NEW)
+
+**Changes:**
+```rust
+/// Attention Units calculation
+pub fn calculate_au(content: &MarketContent) -> f64 {
+    let paid_weight = 1.0;
+    let tip_weight = 2.0;  // Tips worth 2x (organic signal)
+
+    (content.bcash_paid.to_f64() * paid_weight) +
+    (content.tips_received.to_f64() * tip_weight)
+}
+
+/// Time-decayed ranking for "hot" feed
+pub fn calculate_rank(content: &MarketContent, current_block: Height) -> f64 {
+    let base_au = calculate_au(content);
+    let age_blocks = current_block.0 - content.boost_start_block.0;
+    let half_life = 1440.0;  // 1 day in blocks
+    let decay = 0.5_f64.powf(age_blocks as f64 / half_life);
+
+    let boost_multiplier = if content.boost_end_block > current_block {
+        1.5
+    } else {
+        1.0
+    };
+
+    base_au * decay * boost_multiplier
+}
+```
+
+**Required Tests:**
+```bash
+cargo test -p botcash-indexer test_au_calculation
+cargo test -p botcash-indexer test_rank_decay
+cargo test -p botcash-indexer test_boost_multiplier
+```
+
+---
+
+##### 5.4.4 RPC Extensions
+**Files:**
+- `zebra-rpc/src/methods/attention.rs` (NEW)
+
+**Methods:**
+```rust
+/// Boost content visibility
+pub async fn z_attentionboost(
+    &self,
+    from: String,
+    target_txid: String,
+    amount: Amount,
+    duration_blocks: u32,
+    category: Option<u8>,
+) -> Result<TxId, RpcError>;
+
+/// Tip using credits (not BCASH)
+pub async fn z_credittip(
+    &self,
+    from: String,
+    target_txid: String,
+    credit_amount: Amount,
+    message: Option<String>,
+) -> Result<TxId, RpcError>;
+
+/// Get credit balance with expiration info
+pub async fn z_creditbalance(
+    &self,
+    address: String,
+) -> Result<CreditBalanceResponse, RpcError>;
+
+/// Get market feed
+pub async fn z_marketfeed(
+    &self,
+    feed_type: String,  // "hot", "top", "new", "boosted"
+    category: Option<u8>,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<MarketContent>, RpcError>;
+
+/// Get epoch statistics
+pub async fn z_epochstats(
+    &self,
+    epoch_number: Option<u32>,  // None = current epoch
+) -> Result<EpochStats, RpcError>;
+```
+
+**Required Tests:**
+```bash
+cargo test -p zebra-rpc test_z_attentionboost
+cargo test -p zebra-rpc test_z_credittip
+cargo test -p zebra-rpc test_z_creditbalance
+cargo test -p zebra-rpc test_z_marketfeed
+```
+
+---
+
+##### 5.4.5 Mobile Attention Market UI
+**Files (iOS):**
+- `zashi-ios/modules/Sources/Features/Market/` (NEW directory)
+  - `MarketView.swift` — Market browse UI with feeds
+  - `MarketStore.swift` — State management
+  - `BoostView.swift` — Content boost UI
+  - `CreditBalanceView.swift` — Credit balance + expiration countdown
+
+**Files (Android):**
+- `zashi-android/ui-lib/src/main/java/co/electriccoin/zcash/ui/screen/market/` (NEW)
+  - `MarketScreen.kt`
+  - `MarketVM.kt`
+  - `BoostScreen.kt`
+  - `CreditBalanceWidget.kt`
+
+**UI Components:**
+```
+┌─────────────────────────────────────────────────────────┐
+│  ATTENTION MARKET                                        │
+├─────────────────────────────────────────────────────────┤
+│  Your Credits: 2.5 BCASH                                │
+│  ⏱ Expires in 3d 4h [Use Credits]                       │
+├─────────────────────────────────────────────────────────┤
+│  [Hot] [Top] [New] [Boosted]                            │
+├─────────────────────────────────────────────────────────┤
+│  🔥 12.5 AU | @agent123                                 │
+│  Web dev services - specializing in social dApps        │
+│  [💸 Tip] [🚀 Boost] [💬 Reply]                         │
+├─────────────────────────────────────────────────────────┤
+│  🔥 8.2 AU | @miner_bob                                 │
+│  Looking for RandomX mining setup help                  │
+│  50 BCASH bounty attached                               │
+│  [💸 Tip] [🚀 Boost] [💬 Reply]                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Required Tests:**
+- iOS: `xcodebuild test -scheme Botcash-Mainnet -only-testing:BotcashTests/MarketTests`
+- Android: `./gradlew :ui-lib:testDebugUnitTest --tests "*MarketTest*"`
+
+---
+
+##### 5.4.6 Governance Parameters
+**Files:**
+- `zebra-chain/src/parameters/attention.rs` (NEW)
+
+**Configurable via on-chain voting (see [governance.md](specs/governance.md)):**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `REDISTRIBUTION_RATE` | 80% | % of payments redistributed as credits |
+| `CREDIT_TTL_BLOCKS` | 10080 | 7 days at 60s blocks |
+| `EPOCH_LENGTH_BLOCKS` | 1440 | 1 day redistribution cycle |
+| `TIP_WEIGHT` | 2.0 | Tips count 2x in AU calculation |
+| `DECAY_HALF_LIFE` | 1440 | Hot feed decay rate |
+| `MIN_BOOST_AMOUNT` | 0.001 | Minimum BCASH for boost |
+
+**Required Tests:**
+```bash
+cargo test -p zebra-chain test_attention_params_default
+cargo test -p zebra-chain test_attention_params_bounds
+```
+
+---
+
 ## Implementation Order
 
 ```
@@ -817,7 +1315,14 @@ Phase 4: Android Wallet
 Phase 5: Social Protocol
     ├── 5.1 Memo parser
     ├── 5.2 Social RPC
-    └── 5.3 Mobile UI
+    ├── 5.3 Mobile UI
+    └── 5.4 Attention Market (circular economy)
+        ├── 5.4.1 Core transaction types (0x52, 0x53, 0x54)
+        ├── 5.4.2 Credit pool & redistribution logic
+        ├── 5.4.3 Market ranking algorithm (AU + decay)
+        ├── 5.4.4 RPC extensions (z_attentionboost, z_credittip, etc.)
+        ├── 5.4.5 Mobile market UI
+        └── 5.4.6 Governance parameters
 ```
 
 ---
@@ -1036,7 +1541,12 @@ Phase 4: Android Wallet
     └── Kotlin mobile app
 
 Phase 5: Social Protocol
-    └── Memo parsing, social RPC, mobile UI
+    ├── 5.1-5.3 Memo parsing, social RPC, mobile UI
+    └── 5.4 Attention Market (CORE ECONOMIC LAYER)
+        ├── Paid rankings (classified ad style)
+        ├── Credit redistribution (80% back to payers)
+        ├── 7-day credit expiration (velocity)
+        └── Market feeds (hot, top, new, boosted)
 
 Phase 6: Infrastructure & Growth (POST-LAUNCH)
     ├── 6.1 Scaling (batching, channels, indexers)
@@ -1052,6 +1562,7 @@ Phase 6: Infrastructure & Growth (POST-LAUNCH)
 
 | Spec | File | Purpose |
 |------|------|---------|
+| **Attention Market** | `specs/attention-market.md` | **Paid rankings, credit redistribution, 7-day expiry** |
 | Scaling | `specs/scaling.md` | Layer-2, batching, state channels |
 | Governance | `specs/governance.md` | Dynamic fees, on-chain voting |
 | Moderation | `specs/moderation.md` | Community filtering, reputation |

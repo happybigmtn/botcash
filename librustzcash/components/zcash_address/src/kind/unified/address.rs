@@ -152,6 +152,9 @@ impl super::private::SealedContainer for Address {
     /// The HRP for a Bech32m-encoded regtest Unified Address.
     const REGTEST: &'static str = constants::regtest::HRP_UNIFIED_ADDRESS;
 
+    /// The HRP for a Bech32m-encoded Botcash Unified Address.
+    const BOTCASH: &'static str = constants::botcash::HRP_UNIFIED_ADDRESS;
+
     fn from_inner(receivers: Vec<Self::Item>) -> Self {
         Self(receivers)
     }
@@ -272,7 +275,7 @@ mod tests {
     proptest! {
         #[test]
         fn ua_roundtrip(
-            network in select(vec![NetworkType::Main, NetworkType::Test, NetworkType::Regtest]),
+            network in select(vec![NetworkType::Main, NetworkType::Test, NetworkType::Regtest, NetworkType::Botcash]),
             ua in arb_unified_address(),
         ) {
             let encoded = ua.encode(&network);
@@ -437,5 +440,15 @@ mod tests {
                 },
             ]
         )
+    }
+
+    #[test]
+    fn botcash_unified_address_roundtrip() {
+        // Test that Botcash unified addresses round-trip correctly
+        let ua = Address(vec![Receiver::Sapling([1; 43])]);
+        let encoded = ua.encode(&NetworkType::Botcash);
+        assert!(encoded.starts_with("bu1"));
+        let decoded = Address::decode(&encoded);
+        assert_eq!(decoded, Ok((NetworkType::Botcash, ua)));
     }
 }

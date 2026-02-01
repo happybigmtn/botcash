@@ -9,7 +9,7 @@ use std::error::Error;
 
 use bech32::{primitives::decode::CheckedHrpstring, Bech32, Bech32m, Checksum, Hrp};
 use zcash_protocol::consensus::{NetworkConstants, NetworkType};
-use zcash_protocol::constants::{mainnet, regtest, testnet};
+use zcash_protocol::constants::{botcash, mainnet, regtest, testnet};
 
 use crate::kind::unified::Encoding;
 use crate::{kind::*, AddressKind, ZcashAddress};
@@ -79,6 +79,7 @@ impl FromStr for ZcashAddress {
                 mainnet::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Main,
                 testnet::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Test,
                 regtest::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Regtest,
+                botcash::HRP_SAPLING_PAYMENT_ADDRESS => NetworkType::Botcash,
                 // We will not define new Bech32 address encodings.
                 _ => {
                     return Err(ParseError::NotZcash);
@@ -101,6 +102,7 @@ impl FromStr for ZcashAddress {
                 mainnet::HRP_TEX_ADDRESS => NetworkType::Main,
                 testnet::HRP_TEX_ADDRESS => NetworkType::Test,
                 regtest::HRP_TEX_ADDRESS => NetworkType::Regtest,
+                botcash::HRP_TEX_ADDRESS => NetworkType::Botcash,
                 // Not recognized as a Zcash address type
                 _ => {
                     return Err(ParseError::NotZcash);
@@ -126,18 +128,27 @@ impl FromStr for ZcashAddress {
                     prefix @ (testnet::B58_PUBKEY_ADDRESS_PREFIX
                     | testnet::B58_SCRIPT_ADDRESS_PREFIX
                     | testnet::B58_SPROUT_ADDRESS_PREFIX) => (prefix, NetworkType::Test),
+                    prefix @ (botcash::B58_PUBKEY_ADDRESS_PREFIX
+                    | botcash::B58_SCRIPT_ADDRESS_PREFIX
+                    | botcash::B58_SPROUT_ADDRESS_PREFIX) => (prefix, NetworkType::Botcash),
                     // We will not define new Base58Check address encodings.
                     _ => return Err(ParseError::NotZcash),
                 };
 
                 return match prefix {
-                    mainnet::B58_SPROUT_ADDRESS_PREFIX | testnet::B58_SPROUT_ADDRESS_PREFIX => {
+                    mainnet::B58_SPROUT_ADDRESS_PREFIX
+                    | testnet::B58_SPROUT_ADDRESS_PREFIX
+                    | botcash::B58_SPROUT_ADDRESS_PREFIX => {
                         decoded[2..].try_into().map(AddressKind::Sprout)
                     }
-                    mainnet::B58_PUBKEY_ADDRESS_PREFIX | testnet::B58_PUBKEY_ADDRESS_PREFIX => {
+                    mainnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | testnet::B58_PUBKEY_ADDRESS_PREFIX
+                    | botcash::B58_PUBKEY_ADDRESS_PREFIX => {
                         decoded[2..].try_into().map(AddressKind::P2pkh)
                     }
-                    mainnet::B58_SCRIPT_ADDRESS_PREFIX | testnet::B58_SCRIPT_ADDRESS_PREFIX => {
+                    mainnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | testnet::B58_SCRIPT_ADDRESS_PREFIX
+                    | botcash::B58_SCRIPT_ADDRESS_PREFIX => {
                         decoded[2..].try_into().map(AddressKind::P2sh)
                     }
                     _ => unreachable!(),
@@ -382,5 +393,58 @@ mod tests {
             "something t1Hsc1LR8yKnbbe3twRp88p6vFfC5t7DLbs".parse::<ZcashAddress>(),
             Err(ParseError::NotZcash),
         );
+    }
+
+    #[test]
+    fn botcash_sapling() {
+        // Test that a Botcash Sapling address round-trips correctly
+        let addr = ZcashAddress {
+            net: NetworkType::Botcash,
+            kind: AddressKind::Sapling([0; 43]),
+        };
+        let encoded = addr.to_string();
+        assert!(encoded.starts_with("bs1"));
+        let parsed: ZcashAddress = encoded.parse().unwrap();
+        assert_eq!(parsed.net, NetworkType::Botcash);
+        assert!(matches!(parsed.kind, AddressKind::Sapling(_)));
+    }
+
+    #[test]
+    fn botcash_tex() {
+        // Test that a Botcash TEX address round-trips correctly
+        let addr = ZcashAddress {
+            net: NetworkType::Botcash,
+            kind: AddressKind::Tex([0; 20]),
+        };
+        let encoded = addr.to_string();
+        assert!(encoded.starts_with("btex1"));
+        let parsed: ZcashAddress = encoded.parse().unwrap();
+        assert_eq!(parsed.net, NetworkType::Botcash);
+        assert!(matches!(parsed.kind, AddressKind::Tex(_)));
+    }
+
+    #[test]
+    fn botcash_transparent() {
+        // Test that a Botcash P2PKH address round-trips correctly
+        let addr = ZcashAddress {
+            net: NetworkType::Botcash,
+            kind: AddressKind::P2pkh([0; 20]),
+        };
+        let encoded = addr.to_string();
+        assert!(encoded.starts_with("B"));
+        let parsed: ZcashAddress = encoded.parse().unwrap();
+        assert_eq!(parsed.net, NetworkType::Botcash);
+        assert!(matches!(parsed.kind, AddressKind::P2pkh(_)));
+
+        // Test P2SH
+        let addr_p2sh = ZcashAddress {
+            net: NetworkType::Botcash,
+            kind: AddressKind::P2sh([0; 20]),
+        };
+        let encoded_p2sh = addr_p2sh.to_string();
+        assert!(encoded_p2sh.starts_with("B"));
+        let parsed_p2sh: ZcashAddress = encoded_p2sh.parse().unwrap();
+        assert_eq!(parsed_p2sh.net, NetworkType::Botcash);
+        assert!(matches!(parsed_p2sh.kind, AddressKind::P2sh(_)));
     }
 }

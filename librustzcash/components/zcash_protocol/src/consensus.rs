@@ -8,7 +8,7 @@ use core::ops::{Add, Bound, RangeBounds, Sub};
 #[cfg(feature = "std")]
 use memuse::DynamicUsage;
 
-use crate::constants::{mainnet, regtest, testnet};
+use crate::constants::{botcash, mainnet, regtest, testnet};
 
 /// A wrapper type representing blockchain heights.
 ///
@@ -138,6 +138,8 @@ pub enum NetworkType {
     /// For some address types there is no distinction between test and regtest encodings;
     /// those will always be parsed as `Network::Test`.
     Regtest,
+    /// Botcash Mainnet - Privacy + Social blockchain for AI agents.
+    Botcash,
 }
 
 #[cfg(feature = "std")]
@@ -238,6 +240,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::COIN_TYPE,
             NetworkType::Test => testnet::COIN_TYPE,
             NetworkType::Regtest => regtest::COIN_TYPE,
+            NetworkType::Botcash => botcash::COIN_TYPE,
         }
     }
 
@@ -246,6 +249,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_SAPLING_EXTENDED_SPENDING_KEY,
             NetworkType::Test => testnet::HRP_SAPLING_EXTENDED_SPENDING_KEY,
             NetworkType::Regtest => regtest::HRP_SAPLING_EXTENDED_SPENDING_KEY,
+            NetworkType::Botcash => botcash::HRP_SAPLING_EXTENDED_SPENDING_KEY,
         }
     }
 
@@ -254,6 +258,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
             NetworkType::Test => testnet::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
             NetworkType::Regtest => regtest::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
+            NetworkType::Botcash => botcash::HRP_SAPLING_EXTENDED_FULL_VIEWING_KEY,
         }
     }
 
@@ -262,6 +267,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_SAPLING_PAYMENT_ADDRESS,
             NetworkType::Test => testnet::HRP_SAPLING_PAYMENT_ADDRESS,
             NetworkType::Regtest => regtest::HRP_SAPLING_PAYMENT_ADDRESS,
+            NetworkType::Botcash => botcash::HRP_SAPLING_PAYMENT_ADDRESS,
         }
     }
 
@@ -270,6 +276,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_SPROUT_ADDRESS_PREFIX,
             NetworkType::Test => testnet::B58_SPROUT_ADDRESS_PREFIX,
             NetworkType::Regtest => regtest::B58_SPROUT_ADDRESS_PREFIX,
+            NetworkType::Botcash => botcash::B58_SPROUT_ADDRESS_PREFIX,
         }
     }
 
@@ -278,6 +285,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_PUBKEY_ADDRESS_PREFIX,
             NetworkType::Test => testnet::B58_PUBKEY_ADDRESS_PREFIX,
             NetworkType::Regtest => regtest::B58_PUBKEY_ADDRESS_PREFIX,
+            NetworkType::Botcash => botcash::B58_PUBKEY_ADDRESS_PREFIX,
         }
     }
 
@@ -286,6 +294,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_SECRET_KEY_PREFIX,
             NetworkType::Test => testnet::B58_SECRET_KEY_PREFIX,
             NetworkType::Regtest => regtest::B58_SECRET_KEY_PREFIX,
+            NetworkType::Botcash => botcash::B58_SECRET_KEY_PREFIX,
         }
     }
 
@@ -294,6 +303,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::B58_SCRIPT_ADDRESS_PREFIX,
             NetworkType::Test => testnet::B58_SCRIPT_ADDRESS_PREFIX,
             NetworkType::Regtest => regtest::B58_SCRIPT_ADDRESS_PREFIX,
+            NetworkType::Botcash => botcash::B58_SCRIPT_ADDRESS_PREFIX,
         }
     }
 
@@ -302,6 +312,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_TEX_ADDRESS,
             NetworkType::Test => testnet::HRP_TEX_ADDRESS,
             NetworkType::Regtest => regtest::HRP_TEX_ADDRESS,
+            NetworkType::Botcash => botcash::HRP_TEX_ADDRESS,
         }
     }
 
@@ -310,6 +321,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_UNIFIED_ADDRESS,
             NetworkType::Test => testnet::HRP_UNIFIED_ADDRESS,
             NetworkType::Regtest => regtest::HRP_UNIFIED_ADDRESS,
+            NetworkType::Botcash => botcash::HRP_UNIFIED_ADDRESS,
         }
     }
 
@@ -318,6 +330,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_UNIFIED_FVK,
             NetworkType::Test => testnet::HRP_UNIFIED_FVK,
             NetworkType::Regtest => regtest::HRP_UNIFIED_FVK,
+            NetworkType::Botcash => botcash::HRP_UNIFIED_FVK,
         }
     }
 
@@ -326,6 +339,7 @@ impl NetworkConstants for NetworkType {
             NetworkType::Main => mainnet::HRP_UNIFIED_IVK,
             NetworkType::Test => testnet::HRP_UNIFIED_IVK,
             NetworkType::Regtest => regtest::HRP_UNIFIED_IVK,
+            NetworkType::Botcash => botcash::HRP_UNIFIED_IVK,
         }
     }
 }
@@ -846,7 +860,8 @@ pub mod testing {
 #[cfg(test)]
 mod tests {
     use super::{
-        BlockHeight, BranchId, NetworkUpgrade, Parameters, MAIN_NETWORK, UPGRADES_IN_ORDER,
+        BlockHeight, BranchId, NetworkConstants, NetworkType, NetworkUpgrade, Parameters,
+        MAIN_NETWORK, UPGRADES_IN_ORDER,
     };
 
     #[test]
@@ -924,5 +939,30 @@ mod tests {
             BranchId::for_height(&MAIN_NETWORK, BlockHeight(5_000_000)),
             BranchId::Nu6_1,
         );
+    }
+
+    #[test]
+    fn botcash_network_type_exists() {
+        assert!(matches!(NetworkType::Botcash, NetworkType::Botcash));
+    }
+
+    #[test]
+    fn botcash_network_constants_complete() {
+        let net = NetworkType::Botcash;
+        assert_eq!(net.coin_type(), 347);
+        assert_eq!(net.hrp_sapling_payment_address(), "bs");
+        assert_eq!(net.hrp_unified_address(), "bu");
+        assert_eq!(net.hrp_unified_fvk(), "buview");
+        assert_eq!(net.hrp_unified_ivk(), "buivk");
+        assert_eq!(net.hrp_tex_address(), "btex");
+        assert_eq!(
+            net.hrp_sapling_extended_spending_key(),
+            "secret-extended-key-botcash"
+        );
+        assert_eq!(net.hrp_sapling_extended_full_viewing_key(), "bviews");
+        assert_eq!(net.b58_pubkey_address_prefix(), [0x05, 0xa2]);
+        assert_eq!(net.b58_script_address_prefix(), [0x05, 0xa7]);
+        assert_eq!(net.b58_secret_key_prefix(), [0x80]);
+        assert_eq!(net.b58_sprout_address_prefix(), [0x0d, 0x8f]);
     }
 }

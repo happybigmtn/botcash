@@ -146,6 +146,9 @@ impl SealedContainer for Uivk {
     /// The HRP for a Bech32m-encoded regtest Unified IVK.
     const REGTEST: &'static str = constants::regtest::HRP_UNIFIED_IVK;
 
+    /// The HRP for a Bech32m-encoded Botcash Unified IVK.
+    const BOTCASH: &'static str = constants::botcash::HRP_UNIFIED_IVK;
+
     fn from_inner(ivks: Vec<Self::Item>) -> Self {
         Self(ivks)
     }
@@ -218,7 +221,7 @@ mod tests {
     proptest! {
         #[test]
         fn uivk_roundtrip(
-            network in select(vec![NetworkType::Main, NetworkType::Test, NetworkType::Regtest]),
+            network in select(vec![NetworkType::Main, NetworkType::Test, NetworkType::Regtest, NetworkType::Botcash]),
             uivk in arb_unified_ivk(),
         ) {
             let encoded = uivk.encode(&network);

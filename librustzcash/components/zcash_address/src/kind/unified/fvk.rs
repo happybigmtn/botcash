@@ -145,6 +145,9 @@ impl SealedContainer for Ufvk {
     /// [zip-0316]: https://zips.z.cash/zip-0316
     const REGTEST: &'static str = constants::regtest::HRP_UNIFIED_FVK;
 
+    /// The HRP for a Bech32m-encoded Botcash Unified FVK.
+    const BOTCASH: &'static str = constants::botcash::HRP_UNIFIED_FVK;
+
     fn from_inner(fvks: Vec<Self::Item>) -> Self {
         Self(fvks)
     }
@@ -229,7 +232,7 @@ mod tests {
     proptest! {
         #[test]
         fn ufvk_roundtrip(
-            network in select(vec![NetworkType::Main, NetworkType::Test, NetworkType::Regtest]),
+            network in select(vec![NetworkType::Main, NetworkType::Test, NetworkType::Regtest, NetworkType::Botcash]),
             ufvk in arb_unified_fvk(),
         ) {
             let encoded = ufvk.encode(&network);

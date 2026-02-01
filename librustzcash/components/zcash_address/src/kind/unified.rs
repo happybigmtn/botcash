@@ -210,6 +210,7 @@ pub(crate) mod private {
         const MAINNET: &'static str;
         const TESTNET: &'static str;
         const REGTEST: &'static str;
+        const BOTCASH: &'static str;
 
         /// Implementations of this method should act as unchecked constructors
         /// of the container type; the caller is guaranteed to check the
@@ -221,6 +222,7 @@ pub(crate) mod private {
                 NetworkType::Main => Self::MAINNET,
                 NetworkType::Test => Self::TESTNET,
                 NetworkType::Regtest => Self::REGTEST,
+                NetworkType::Botcash => Self::BOTCASH,
             }
         }
 
@@ -231,6 +233,8 @@ pub(crate) mod private {
                 Some(NetworkType::Test)
             } else if hrp == Self::REGTEST {
                 Some(NetworkType::Regtest)
+            } else if hrp == Self::BOTCASH {
+                Some(NetworkType::Botcash)
             } else {
                 None
             }
