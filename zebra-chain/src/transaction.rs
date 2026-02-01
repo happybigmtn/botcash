@@ -27,6 +27,7 @@ pub use hash::{Hash, WtxId};
 pub use joinsplit::JoinSplitData;
 pub use lock_time::LockTime;
 pub use memo::Memo;
+pub use memo::social;
 use redjubjub::{Binding, Signature};
 pub use sapling::FieldNotPresent;
 pub use serialize::{

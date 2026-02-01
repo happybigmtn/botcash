@@ -5,11 +5,11 @@
 
 ---
 
-## 🚦 Current Status: PHASE 4 COMPLETE
+## 🚦 Current Status: PHASE 5 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (Phase 4 Complete)
+**Last Updated:** 2026-02-01 (Phase 5 Started)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done (endpoint updates to botcash.network, network flavor dimension updated to botcashmainnet/botcashtestnet, gradle.properties branding updated to Botcash/com.botcash.wallet, and flavor directories renamed with updated provider authorities).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **IN PROGRESS**: P5.1-P5.4, P5.7 done (SocialMessageType enum with 16 types including attention market types, SocialMessage struct, TryFrom<&Memo>, and pub mod social added).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -90,17 +90,17 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P4.3** | Update gradle.properties branding | ✅ DONE | `zashi-android/gradle.properties:69-70` | `./gradlew :app:lintDebug` |
 | **P4.4** | Create botcash flavor directories | ✅ DONE | `zashi-android/app/src/botcash*/` (7 directories renamed) | Build verification |
 
-### ⬜ Phase 5: Social Protocol (Application Layer)
+### 🔄 Phase 5: Social Protocol (Application Layer) — IN PROGRESS
 
 | Priority | Task | Status | Files | Test Command |
 |----------|------|--------|-------|--------------|
-| **P5.1** | Create SocialMessageType enum (16 types) | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` (NEW) | `cargo test -p zebra-chain -- social_message_type` |
-| **P5.2** | Create SocialMessage struct | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- social_message` |
-| **P5.3** | Implement TryFrom<&Memo> for SocialMessage | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- memo_parse` |
-| **P5.4** | Add `pub mod social;` to memo.rs | ⬜ TODO | `zebra-chain/src/transaction/memo.rs` | `cargo build -p zebra-chain` |
+| **P5.1** | Create SocialMessageType enum (16 types) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- social_message_type` |
+| **P5.2** | Create SocialMessage struct | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- social_message` |
+| **P5.3** | Implement TryFrom<&Memo> for SocialMessage | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- memo_parse` |
+| **P5.4** | Add `pub mod social;` to memo.rs | ✅ DONE | `zebra-chain/src/transaction/memo.rs` | `cargo build -p zebra-chain` |
 | **P5.5** | Create social RPC methods (4 methods) | ⬜ TODO | `zebra-rpc/src/methods/social.rs` (NEW) | `cargo test -p zebra-rpc -- z_social` |
 | **P5.6** | Create social RPC response types | ⬜ TODO | `zebra-rpc/src/methods/types/social.rs` (NEW) | `cargo test -p zebra-rpc -- social_types` |
-| **P5.7** | Add attention message types (0x52-0x54) | ⬜ TODO | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- attention_boost` |
+| **P5.7** | Add attention message types (0x52-0x54) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- attention_boost` |
 | **P5.8** | Create attention RPC methods (5 methods) | ⬜ TODO | `zebra-rpc/src/methods/attention.rs` (NEW) | `cargo test -p zebra-rpc -- z_attention` |
 | **P5.9** | Create attention parameters | ⬜ TODO | `zebra-chain/src/parameters/attention.rs` (NEW) | `cargo test -p zebra-chain -- attention_params` |
 | **P5.10** | Update methods.rs Rpc trait | ⬜ TODO | `zebra-rpc/src/methods.rs:132-624` | `cargo test -p zebra-rpc -- rpc_trait` |
