@@ -549,6 +549,9 @@ proptest! {
                 let block: Arc<Block> = block_bytes.zcash_deserialize_into().expect("block is valid");
                 block
             },
+            Network::Botcash => {
+                zebra_chain::block::genesis::botcash_genesis_block()
+            },
         };
 
         // Genesis block fields
