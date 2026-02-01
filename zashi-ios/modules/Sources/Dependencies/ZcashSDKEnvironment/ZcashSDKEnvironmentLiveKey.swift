@@ -39,26 +39,28 @@ extension ZcashSDKEnvironment {
 extension ZcashSDKEnvironment {
     public static func serverConfig(for network: NetworkType) -> UserPreferencesStorage.ServerConfig {
         migrateVersion1IfNeeded()
-        
+
         guard let serverConfig = storedServerConfig() else {
             return defaultEndpoint(for: network).serverConfig()
         }
-        
-        // Migrate lwdX.zcash-infra.com servers to custom
-        if serverConfig.host.hasSuffix(".zcash-infra.com") {
+
+        // Migrate legacy Zcash servers to custom (for users migrating from Zashi)
+        if serverConfig.host.hasSuffix(".zcash-infra.com") ||
+           serverConfig.host.hasSuffix(".zec.rocks") ||
+           serverConfig.host.hasSuffix(".lightwalletd.com") {
             return UserPreferencesStorage.ServerConfig(host: serverConfig.host, port: serverConfig.port, isCustom: true)
         }
-        
+
         return serverConfig
     }
-    
+
     static func migrateVersion1IfNeeded() {
         @Dependency(\.userStoredPreferences) var userStoredPreferences
         @Dependency(\.userDefaults) var userDefaults
 
         let streamingCallTimeoutInMillis = ZcashSDKConstants.streamingCallTimeoutInMillis
-        let udServerKey = "zashi_udServerKey"
-        let udCustomServerKey = "zashi_udCustomServerKey"
+        let udServerKey = "botcash_udServerKey"
+        let udCustomServerKey = "botcash_udCustomServerKey"
 
         // only if there's no ServerConfig stored
         guard userStoredPreferences.server() == nil else {
@@ -66,14 +68,14 @@ extension ZcashSDKEnvironment {
             userDefaults.remove(udCustomServerKey)
             return
         }
-        
+
         // get server key
         guard let storedKey = userDefaults.objectForKey(udServerKey) as? String else {
             userDefaults.remove(udServerKey)
             userDefaults.remove(udCustomServerKey)
             return
         }
-        
+
         // ensure custom server is preserved
         if storedKey == "custom" {
             if let customValue = userDefaults.objectForKey(udCustomServerKey) as? String {
@@ -81,17 +83,17 @@ extension ZcashSDKEnvironment {
                     for: customValue,
                     streamingCallTimeoutInMillis: streamingCallTimeoutInMillis)?.serverConfig(
                         isCustom: true
-                    ) 
+                    )
                 {
                     try? userStoredPreferences.setServer(serverConfig)
                 }
             }
         } else if storedKey == "mainnet" {
-            let serverConfig = UserPreferencesStorage.ServerConfig(host: "mainnet.lightwalletd.com", port: 9067, isCustom: true)
+            let serverConfig = UserPreferencesStorage.ServerConfig(host: "mainnet.botcash.network", port: 9067, isCustom: true)
             try? userStoredPreferences.setServer(serverConfig)
         } else {
-            // some of the lwd servers
-            let serverConfig = UserPreferencesStorage.ServerConfig(host: "\(storedKey.dropLast(2)).lightwalletd.com", port: 443, isCustom: true)
+            // Community-run servers
+            let serverConfig = UserPreferencesStorage.ServerConfig(host: "\(storedKey).botcash.run", port: 9067, isCustom: true)
             try? userStoredPreferences.setServer(serverConfig)
         }
     }

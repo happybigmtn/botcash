@@ -1,8 +1,9 @@
 //
 //  ZcashSDKEnvironmentTestKey.swift
-//  Zashi
+//  Botcash
 //
 //  Created by Lukáš Korba on 13.11.2022.
+//  Modified for Botcash network support.
 //
 
 import ComposableArchitecture
@@ -26,6 +27,6 @@ extension ZcashSDKEnvironment: TestDependencyKey {
         serverConfig: { defaultEndpoint(for: .testnet).serverConfig() },
         servers: [],
         shieldingThreshold: Zatoshi(100_000),
-        tokenName: "TAZ"
+        tokenName: "tBCASH"
     )
 }
