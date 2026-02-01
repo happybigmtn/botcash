@@ -60,9 +60,10 @@ impl ParameterCheckpoint for Network {
                 .expect("hard-coded hash parses"),
             // See `zebra_chain::parameters::network::testnet` for more details.
             Network::Testnet(params) => params.genesis_hash(),
-            // Botcash genesis hash - will be set after mining genesis block
-            // TODO: Replace with actual genesis hash after mining
-            Network::Botcash => zebra_chain::parameters::GENESIS_PREVIOUS_BLOCK_HASH,
+            // Botcash genesis block hash
+            Network::Botcash => zebra_chain::block::genesis::BOTCASH_GENESIS_HASH
+                .parse()
+                .expect("hard-coded Botcash genesis hash parses"),
         }
     }
 

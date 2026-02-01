@@ -58,6 +58,23 @@ pub const GENESIS_COINBASE_DATA: [u8; 77] = [
     54, 52, 56, 51, 53, 100, 51, 52,
 ];
 
+/// The coinbase data for the Botcash genesis block.
+///
+/// Contains the message: "Privacy is not secrecy. Agents deserve both."
+/// Format: [0x04][difficulty_le_4bytes][0x01][message_len][message_bytes]
+///
+/// The difficulty bytes (0xff, 0xff, 0x07, 0x1f) encode 0x1f07ffff in little-endian,
+/// which is the initial (easiest) difficulty target.
+pub const BOTCASH_GENESIS_COINBASE_DATA: [u8; 52] = [
+    // Opcode 0x04 means "push 4 bytes" (difficulty in LE: 0x1f07ffff)
+    0x04, 0xff, 0xff, 0x07, 0x1f, // Opcode 0x01 means "push 1 byte" (separator)
+    0x01, 0x2e, // Opcode 0x2d (45) means "push 45 bytes" (the message)
+    0x2d, // "Privacy is not secrecy. Agents deserve both."
+    0x50, 0x72, 0x69, 0x76, 0x61, 0x63, 0x79, 0x20, 0x69, 0x73, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x73,
+    0x65, 0x63, 0x72, 0x65, 0x63, 0x79, 0x2e, 0x20, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x73, 0x20, 0x64,
+    0x65, 0x73, 0x65, 0x72, 0x76, 0x65, 0x20, 0x62, 0x6f, 0x74, 0x68, 0x2e,
+];
+
 impl ZcashSerialize for OutPoint {
     fn zcash_serialize<W: io::Write>(&self, mut writer: W) -> Result<(), io::Error> {
         writer.write_all(&self.hash.0[..])?;
@@ -159,6 +176,11 @@ pub(crate) fn parse_coinbase_height(
         (Some(0x04), _) if data[..] == GENESIS_COINBASE_DATA[..] => {
             Ok((Height(0), CoinbaseData(data)))
         }
+        // Botcash genesis block coinbase data.
+        // Uses the same format with message: "Privacy is not secrecy. Agents deserve both."
+        (Some(0x04), _) if data[..] == BOTCASH_GENESIS_COINBASE_DATA[..] => {
+            Ok((Height(0), CoinbaseData(data)))
+        }
         // As noted above, this is included for completeness.
         // The Bitcoin encoding requires that the most significant byte is below 0x80.
         (Some(0x04), len) if len >= 5 && data[4] < 0x80 => {
@@ -207,7 +229,9 @@ pub(crate) fn write_coinbase_height<W: io::Write>(
         //
         // TODO: update this check based on the consensus rule changes in
         //       https://github.com/zcash/zips/issues/540
-        if coinbase_data.0 != GENESIS_COINBASE_DATA {
+        if coinbase_data.0 != GENESIS_COINBASE_DATA
+            && coinbase_data.0 != BOTCASH_GENESIS_COINBASE_DATA
+        {
             return Err(io::Error::other("invalid genesis coinbase data"));
         }
     } else if let h @ 1..=16 = height.0 {

@@ -20,7 +20,10 @@ use crate::{
 
 pub use address::Address;
 pub use script::Script;
-pub use serialize::{GENESIS_COINBASE_DATA, MAX_COINBASE_DATA_LEN, MAX_COINBASE_HEIGHT_DATA_LEN};
+pub use serialize::{
+    BOTCASH_GENESIS_COINBASE_DATA, GENESIS_COINBASE_DATA, MAX_COINBASE_DATA_LEN,
+    MAX_COINBASE_HEIGHT_DATA_LEN,
+};
 pub use utxo::{
     new_ordered_outputs, new_outputs, outputs_from_utxos, utxos_from_ordered_utxos,
     CoinbaseSpendRestriction, OrderedUtxo, Utxo,

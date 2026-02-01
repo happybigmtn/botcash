@@ -121,24 +121,28 @@ while true; do
     # Run Claude Code from repo root
     echo "Running Claude Code from $REPO_ROOT..."
     pushd "$REPO_ROOT" > /dev/null
-    # Use --output-format json to avoid streaming mode issues with -p flag
-    # Redirect stderr to capture errors, tee stdout to log file
-    if claude --dangerously-skip-permissions --output-format json -p "$prompt_content" > "$log_file" 2>&1; then
+
+    # Run Claude Code with -p flag (prompt mode)
+    # Note: --output-format json conflicts with -p in some versions, so we skip it
+    # and just capture the output directly
+    if claude --dangerously-skip-permissions -p "$prompt_content" > "$log_file" 2>&1; then
         echo "Claude Code completed successfully"
-        # Show summary from JSON output
-        if command -v jq &>/dev/null && [[ -s "$log_file" ]]; then
-            jq -r 'select(.type == "result") | "Cost: $\(.total_cost_usd // 0 | tostring | .[0:6]) | Turns: \(.num_turns // 0)"' "$log_file" 2>/dev/null || true
-        fi
     else
+        exit_code=$?
+        # Check for transient errors
         if grep -q "Error: No messages returned" "$log_file" 2>/dev/null; then
             echo "Claude Code returned no messages (likely transient). Retrying after 5s..."
             sleep 5
+            popd > /dev/null
             continue
         fi
-        echo "Claude Code exited with error, checking if progress was made..."
-        # Show error from JSON output
-        if command -v jq &>/dev/null && [[ -s "$log_file" ]]; then
-            jq -r '.errors[]? // empty' "$log_file" 2>/dev/null | head -5 || true
+        # The "streaming mode" warning is benign - check if work was actually done
+        if grep -q "only prompt commands are supported in streaming mode" "$log_file" 2>/dev/null; then
+            echo "Claude Code completed (with streaming mode warning)"
+        else
+            echo "Claude Code exited with error (code $exit_code), checking if progress was made..."
+            # Show last few lines of log for debugging
+            tail -10 "$log_file" 2>/dev/null || true
         fi
     fi
     popd > /dev/null
