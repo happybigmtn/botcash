@@ -1,8 +1,9 @@
 //
 //  ZcashSDKEnvironmentLiveKey.swift
-//  Zashi
+//  Botcash
 //
 //  Created by Lukáš Korba on 13.11.2022.
+//  Modified for Botcash network support.
 //
 
 import ComposableArchitecture
@@ -30,7 +31,7 @@ extension ZcashSDKEnvironment {
             serverConfig: { ZcashSDKEnvironment.serverConfig(for: network.networkType) },
             servers: ZcashSDKEnvironment.servers(for: network.networkType),
             shieldingThreshold: Zatoshi(100_000),
-            tokenName: network.networkType == .testnet ? "TAZ" : "ZEC"
+            tokenName: network.networkType == .testnet ? "tBCASH" : "BCASH"
         )
     }
 }

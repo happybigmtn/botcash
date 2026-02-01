@@ -1,8 +1,9 @@
 //
 //  ZcashSDKEnvironmentInterface.swift
-//  Zashi
+//  Botcash
 //
 //  Created by Lukáš Korba on 13.11.2022.
+//  Modified for Botcash network support.
 //
 
 import Foundation
@@ -21,10 +22,11 @@ extension DependencyValues {
 
 extension ZcashSDKEnvironment {
     public enum ZcashSDKConstants {
-        static let endpointMainnetAddress = "zec.rocks"
-        static let endpointTestnetAddress = "testnet.zec.rocks"
-        static let endpointMainnetPort = 443
-        static let endpointTestnetPort = 443
+        // Botcash network endpoints
+        static let endpointMainnetAddress = "mainnet.botcash.network"
+        static let endpointTestnetAddress = "testnet.botcash.network"
+        static let endpointMainnetPort = 9067
+        static let endpointTestnetPort = 19067
         static let mnemonicWordsMaxCount = 24
         static let requiredTransactionConfirmations = 10
         public static let streamingCallTimeoutInMillis = Int64(10 * 60 * 60 * 1000) // ten hours
@@ -89,24 +91,27 @@ extension ZcashSDKEnvironment {
     
     public static func endpoints(skipDefault: Bool = false) -> [LightWalletEndpoint] {
         var result: [LightWalletEndpoint] = []
-        
+
+        // Botcash mainnet lightwalletd endpoints
         if !skipDefault {
-            result.append(LightWalletEndpoint(address: "zec.rocks", port: 443))
+            result.append(LightWalletEndpoint(address: "mainnet.botcash.network", port: 9067))
         }
-        
+
         result.append(
             contentsOf: [
-                LightWalletEndpoint(address: "na.zec.rocks", port: 443),
-                LightWalletEndpoint(address: "sa.zec.rocks", port: 443),
-                LightWalletEndpoint(address: "eu.zec.rocks", port: 443),
-                LightWalletEndpoint(address: "ap.zec.rocks", port: 443),
-                LightWalletEndpoint(address: "eu.zec.stardust.rest", port: 443),
-                LightWalletEndpoint(address: "eu2.zec.stardust.rest", port: 443),
-                LightWalletEndpoint(address: "jp.zec.stardust.rest", port: 443),
-                LightWalletEndpoint(address: "us.zec.stardust.rest", port: 443)
+                // Geographic distribution for Botcash network
+                LightWalletEndpoint(address: "na.botcash.network", port: 9067),
+                LightWalletEndpoint(address: "sa.botcash.network", port: 9067),
+                LightWalletEndpoint(address: "eu.botcash.network", port: 9067),
+                LightWalletEndpoint(address: "ap.botcash.network", port: 9067),
+                // Community-run servers
+                LightWalletEndpoint(address: "eu.botcash.run", port: 9067),
+                LightWalletEndpoint(address: "eu2.botcash.run", port: 9067),
+                LightWalletEndpoint(address: "jp.botcash.run", port: 9067),
+                LightWalletEndpoint(address: "us.botcash.run", port: 9067)
             ]
         )
-        
+
         return result
     }
 }
