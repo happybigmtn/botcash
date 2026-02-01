@@ -3,8 +3,9 @@
 set -euo pipefail
 
 # Resolve script directory and repo root
+# Script lives in repo root for botcash (not a subdirectory like rsocietyv2/ralph/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$SCRIPT_DIR"
 
 # Configuration - paths relative to SCRIPT_DIR for prompts, REPO_ROOT for execution
 PLAN_FILE="$SCRIPT_DIR/IMPLEMENTATION_PLAN.md"
