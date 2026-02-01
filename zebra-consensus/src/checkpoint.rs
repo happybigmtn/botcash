@@ -34,7 +34,6 @@ use zebra_chain::{
         subsidy::{block_subsidy, funding_stream_values, FundingStreamReceiver, SubsidyError},
         Network, GENESIS_PREVIOUS_BLOCK_HASH,
     },
-    work::equihash,
 };
 use zebra_state::{self as zs, CheckpointVerifiedBlock};
 
@@ -607,7 +606,10 @@ where
             )?;
         } else {
             crate::block::check::difficulty_is_valid(&block.header, &self.network, &height, &hash)?;
-            crate::block::check::equihash_solution_is_valid(&block.header)?;
+            // Use network-aware PoW validation:
+            // - Botcash uses RandomX (CPU-optimized)
+            // - Zcash networks use Equihash (memory-hard)
+            crate::block::check::pow_solution_is_valid(&block.header, &self.network, &height)?;
         }
 
         // We can't get the block subsidy for blocks with heights in the slow start interval, so we
@@ -1026,8 +1028,8 @@ impl From<BlockError> for VerifyCheckpointError {
     }
 }
 
-impl From<equihash::Error> for VerifyCheckpointError {
-    fn from(err: equihash::Error) -> VerifyCheckpointError {
+impl From<crate::block::check::PowError> for VerifyCheckpointError {
+    fn from(err: crate::block::check::PowError) -> VerifyCheckpointError {
         VerifyCheckpointError::VerifyBlock(err.into())
     }
 }

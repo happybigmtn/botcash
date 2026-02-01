@@ -60,6 +60,9 @@ impl ParameterCheckpoint for Network {
                 .expect("hard-coded hash parses"),
             // See `zebra_chain::parameters::network::testnet` for more details.
             Network::Testnet(params) => params.genesis_hash(),
+            // Botcash genesis hash - will be set after mining genesis block
+            // TODO: Replace with actual genesis hash after mining
+            Network::Botcash => zebra_chain::parameters::GENESIS_PREVIOUS_BLOCK_HASH,
         }
     }
 
@@ -68,6 +71,8 @@ impl ParameterCheckpoint for Network {
             Network::Mainnet => (MAINNET_CHECKPOINTS, false),
             Network::Testnet(params) if params.is_default_testnet() => (TESTNET_CHECKPOINTS, false),
             Network::Testnet(_params) => ("", true),
+            // Botcash has no checkpoints yet - use genesis hash only
+            Network::Botcash => ("", true),
         };
 
         // Check that the list starts with the correct genesis block and parses checkpoint list.

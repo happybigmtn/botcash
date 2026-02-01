@@ -105,6 +105,8 @@ fn test_funding_stream_addresses() -> Result<(), Report> {
                     NetworkKind::Mainnet => NetworkKind::Mainnet,
                     // `Regtest` uses `Testnet` transparent addresses.
                     NetworkKind::Testnet | NetworkKind::Regtest => NetworkKind::Testnet,
+                    // Botcash uses its own transparent addresses
+                    NetworkKind::Botcash => NetworkKind::Botcash,
                 };
 
                 assert_eq!(

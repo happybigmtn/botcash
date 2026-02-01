@@ -27,7 +27,7 @@ use zebra_chain::{
     block,
     parameters::{subsidy::SubsidyError, Network},
     transaction, transparent,
-    work::equihash,
+    work::{equihash, randomx},
 };
 use zebra_state as zs;
 
@@ -73,6 +73,12 @@ pub enum VerifyBlockError {
     },
 
     #[error(transparent)]
+    RandomX {
+        #[from]
+        source: randomx::Error,
+    },
+
+    #[error(transparent)]
     Time(zebra_chain::block::BlockTimeError),
 
     #[error("unable to commit block after semantic verification: {0}")]
@@ -107,7 +113,17 @@ impl VerifyBlockError {
         match self {
             Block { source } => source.misbehavior_score(),
             Equihash { .. } => 100,
+            RandomX { .. } => 100,
             _other => 0,
+        }
+    }
+}
+
+impl From<check::PowError> for VerifyBlockError {
+    fn from(err: check::PowError) -> Self {
+        match err {
+            check::PowError::Equihash(e) => VerifyBlockError::Equihash { source: e },
+            check::PowError::RandomX(e) => VerifyBlockError::RandomX { source: e },
         }
     }
 }
@@ -206,7 +222,10 @@ where
                 // Do the difficulty checks first, to raise the threshold for
                 // attacks that use any other fields.
                 check::difficulty_is_valid(&block.header, &network, &height, &hash)?;
-                check::equihash_solution_is_valid(&block.header)?;
+                // Use network-aware PoW validation:
+                // - Botcash uses RandomX (CPU-optimized)
+                // - Zcash networks use Equihash (memory-hard)
+                check::pow_solution_is_valid(&block.header, &network, &height)?;
             }
 
             // Next, check the Merkle root validity, to ensure that

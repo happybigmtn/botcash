@@ -18,7 +18,7 @@ use zebra_chain::{
     transparent::Output,
     work::{
         difficulty::{ExpandedDifficulty, ParameterDifficulty as _},
-        equihash,
+        equihash, randomx,
     },
 };
 
@@ -146,6 +146,81 @@ pub fn equihash_solution_is_valid(header: &Header) -> Result<(), equihash::Error
     //
     // https://zips.z.cash/protocol/protocol.pdf#blockheader
     header.solution.check(header)
+}
+
+/// The result type for proof-of-work validation that can be either Equihash or RandomX.
+#[derive(Debug)]
+pub enum PowError {
+    /// Equihash proof-of-work error
+    Equihash(equihash::Error),
+    /// RandomX proof-of-work error
+    RandomX(randomx::Error),
+}
+
+impl std::fmt::Display for PowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PowError::Equihash(e) => write!(f, "Equihash PoW error: {}", e),
+            PowError::RandomX(e) => write!(f, "RandomX PoW error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for PowError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            PowError::Equihash(e) => Some(e),
+            PowError::RandomX(e) => Some(e),
+        }
+    }
+}
+
+impl From<equihash::Error> for PowError {
+    fn from(err: equihash::Error) -> Self {
+        PowError::Equihash(err)
+    }
+}
+
+impl From<randomx::Error> for PowError {
+    fn from(err: randomx::Error) -> Self {
+        PowError::RandomX(err)
+    }
+}
+
+/// Returns `Ok(())` if the `RandomXSolution` is valid for `header` at the given `height`.
+///
+/// RandomX is the proof-of-work algorithm used by Botcash. Unlike Equihash,
+/// it requires the block height to determine the key epoch for cache initialization.
+pub fn randomx_solution_is_valid(header: &Header, height: &Height) -> Result<(), randomx::Error> {
+    // # Consensus
+    //
+    // For Botcash, the block header must satisfy RandomX PoW requirements.
+    // The nonce and header data must hash to a value below the difficulty threshold.
+    randomx::verify(header, height.0)
+}
+
+/// Returns `Ok(())` if the proof-of-work solution is valid for `header` on `network`.
+///
+/// This function dispatches to the appropriate PoW validator based on the network:
+/// - Botcash uses RandomX (CPU-optimized, ASIC-resistant)
+/// - Zcash Mainnet/Testnet use Equihash (memory-hard)
+///
+/// The `height` parameter is required for RandomX key epoch calculation.
+pub fn pow_solution_is_valid(
+    header: &Header,
+    network: &Network,
+    height: &Height,
+) -> Result<(), PowError> {
+    match network {
+        Network::Botcash => {
+            randomx_solution_is_valid(header, height)?;
+            Ok(())
+        }
+        Network::Mainnet | Network::Testnet(_) => {
+            equihash_solution_is_valid(header)?;
+            Ok(())
+        }
+    }
 }
 
 /// Returns `Ok()` with the deferred pool balance change of the coinbase transaction if

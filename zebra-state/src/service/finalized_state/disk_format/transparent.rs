@@ -587,6 +587,10 @@ fn address_variant(address: &transparent::Address) -> u8 {
         // TEX address variants
         (Mainnet, Tex { .. }) => 4,
         (Testnet | Regtest, Tex { .. }) => 5,
+        // Botcash address variants - uses distinct variants for storage
+        (Botcash, PayToPublicKeyHash { .. }) => 6,
+        (Botcash, PayToScriptHash { .. }) => 7,
+        (Botcash, Tex { .. }) => 8,
     }
 }
 
@@ -609,16 +613,26 @@ impl FromDisk for transparent::Address {
         let address_variant = address_variant[0];
         let hash_bytes = hash_bytes.try_into().unwrap();
 
-        let network = if address_variant < 2 {
-            NetworkKind::Mainnet
-        } else {
-            NetworkKind::Testnet
+        // Variants:
+        // 0, 1 = Mainnet P2PKH/P2SH
+        // 2, 3 = Testnet/Regtest P2PKH/P2SH
+        // 4, 5 = Mainnet/Testnet TEX
+        // 6, 7, 8 = Botcash P2PKH/P2SH/TEX
+        let network_kind = match address_variant {
+            0 | 1 | 4 => NetworkKind::Mainnet,
+            2 | 3 | 5 => NetworkKind::Testnet,
+            6 | 7 | 8 => NetworkKind::Botcash,
+            _ => panic!("unknown address variant: {}", address_variant),
         };
 
-        if address_variant % 2 == 0 {
-            transparent::Address::from_pub_key_hash(network, hash_bytes)
-        } else {
-            transparent::Address::from_script_hash(network, hash_bytes)
+        match address_variant {
+            0 | 2 | 6 => transparent::Address::from_pub_key_hash(network_kind, hash_bytes),
+            1 | 3 | 7 => transparent::Address::from_script_hash(network_kind, hash_bytes),
+            4 | 5 | 8 => transparent::Address::Tex {
+                network_kind,
+                validating_key_hash: hash_bytes,
+            },
+            _ => panic!("unknown address variant: {}", address_variant),
         }
     }
 }

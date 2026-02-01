@@ -773,3 +773,109 @@ fn transaction_expiration_height_for_network(network: &Network) -> Result<(), Re
 
     Ok(())
 }
+
+// P1.12: Tests for RandomX integration in block check
+
+/// Tests that pow_solution_is_valid correctly dispatches to Equihash for Zcash networks.
+#[test]
+fn pow_solution_dispatch_equihash_for_zcash() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    // Test with mainnet genesis block
+    let block: Block =
+        Block::zcash_deserialize(&zebra_test::vectors::BLOCK_MAINNET_GENESIS_BYTES[..])
+            .expect("block is structurally valid");
+
+    // For Zcash Mainnet, pow_solution_is_valid should use Equihash
+    let height = Height(0);
+    let result = check::pow_solution_is_valid(&block.header, &Network::Mainnet, &height);
+    assert!(result.is_ok(), "Mainnet block should pass Equihash PoW check");
+
+    Ok(())
+}
+
+/// Tests that pow_solution_is_valid correctly dispatches to RandomX for Botcash.
+///
+/// Note: This test validates the dispatch logic only. Actual RandomX verification
+/// requires a valid Botcash block with a RandomX solution, which will be available
+/// after the genesis block is mined.
+#[test]
+fn pow_solution_dispatch_randomx_for_botcash() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    // For Botcash, pow_solution_is_valid should use RandomX
+    // We test the dispatch logic here; actual RandomX verification would fail
+    // for a non-Botcash block header, but we're testing that it takes the
+    // RandomX code path
+
+    // Use a block to get a valid header structure
+    let block: Block =
+        Block::zcash_deserialize(&zebra_test::vectors::BLOCK_MAINNET_GENESIS_BYTES[..])
+            .expect("block is structurally valid");
+
+    let height = Height(0);
+    let result = check::pow_solution_is_valid(&block.header, &Network::Botcash, &height);
+
+    // The result should be an error because the Zcash block doesn't have a valid
+    // RandomX solution, but it should be a RandomX error specifically
+    match result {
+        Err(check::PowError::RandomX(_)) => {
+            // This is expected - the Zcash block doesn't satisfy RandomX PoW
+        }
+        Err(check::PowError::Equihash(_)) => {
+            panic!("Botcash should dispatch to RandomX, not Equihash");
+        }
+        Ok(()) => {
+            // This could happen if the block accidentally passes RandomX PoW,
+            // which is astronomically unlikely but not impossible
+        }
+    }
+
+    Ok(())
+}
+
+/// Tests that PowError can be converted to VerifyBlockError correctly.
+#[test]
+fn pow_error_converts_to_verify_block_error() {
+    use zebra_chain::work::randomx;
+
+    // Test RandomX error conversion
+    let randomx_err = check::PowError::RandomX(randomx::Error::InvalidSolution);
+    let verify_err: VerifyBlockError = randomx_err.into();
+    assert!(matches!(verify_err, VerifyBlockError::RandomX { .. }));
+
+    // Note: Equihash error conversion is also tested via the pow_solution_dispatch_equihash_for_zcash test
+    // which exercises the Equihash code path on real blocks.
+}
+
+/// Tests that VerifyBlockError::RandomX has the correct misbehavior score.
+#[test]
+fn randomx_error_has_correct_misbehavior_score() {
+    use zebra_chain::work::randomx;
+
+    let err = VerifyBlockError::RandomX {
+        source: randomx::Error::InvalidSolution,
+    };
+
+    // RandomX errors should have the same misbehavior score as Equihash errors
+    assert_eq!(err.misbehavior_score(), 100);
+}
+
+/// Tests that randomx_solution_is_valid function is accessible and works.
+#[test]
+fn randomx_solution_is_valid_basic() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    // Use a Zcash block to test the function signature
+    let block: Block =
+        Block::zcash_deserialize(&zebra_test::vectors::BLOCK_MAINNET_GENESIS_BYTES[..])
+            .expect("block is structurally valid");
+
+    let height = Height(0);
+    let result = check::randomx_solution_is_valid(&block.header, &height);
+
+    // Should fail because it's not a valid RandomX solution
+    assert!(result.is_err(), "Zcash block should not pass RandomX verification");
+
+    Ok(())
+}

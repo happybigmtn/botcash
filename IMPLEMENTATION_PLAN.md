@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASE 1 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (Phase 1.11 Complete)
+**Last Updated:** 2026-02-01 (Phase 1.13 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.11 complete (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams, RandomX dependency and verification module).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.13 complete (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams, RandomX dependency, verification module, and consensus integration with network-aware PoW dispatch).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -54,8 +54,8 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P1.9** | Add randomx-rs dependency | ✅ DONE | `Cargo.toml:62` (workspace deps) | `cargo check -p zebra-chain` |
 | **P1.10** | Create RandomX verification module | ✅ DONE | `zebra-chain/src/work/randomx.rs` (299 lines) | `cargo test -p zebra-chain -- randomx` |
 | **P1.11** | Add `pub mod randomx;` to work.rs | ✅ DONE | `zebra-chain/src/work.rs:5` | `cargo check -p zebra-chain` |
-| **P1.12** | Integrate RandomX in block check | ⬜ TODO | `zebra-consensus/src/block/check.rs:141-149` | `cargo test -p zebra-consensus -- verify_randomx` |
-| **P1.13** | Update VerifyBlockError enum | ⬜ TODO | `zebra-consensus/src/block.rs:69-73,109` | `cargo test -p zebra-consensus -- block_error` |
+| **P1.12** | Integrate RandomX in block check | ✅ DONE | `zebra-consensus/src/block/check.rs:141-232` | `cargo test -p zebra-consensus -- pow_solution` |
+| **P1.13** | Update VerifyBlockError enum | ✅ DONE | `zebra-consensus/src/block.rs:69-80,109-128` | `cargo test -p zebra-consensus -- randomx` |
 | **P1.14** | Create genesis block function | ⬜ TODO | `zebra-chain/src/parameters/genesis.rs:7` | `cargo test -p zebra-chain -- genesis_botcash` |
 | **P1.15** | Update transparent address encoding | ⬜ TODO | `zebra-chain/src/transparent/address.rs:190-226` | `cargo test -p zebra-chain -- transparent_address` |
 
