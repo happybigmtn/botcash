@@ -915,19 +915,33 @@ impl Network {
         }
     }
 
-    /// Returns post-Canopy funding streams for this network at the provided height
+    /// Returns post-Canopy funding streams for this network at the provided height.
+    ///
+    /// Returns `None` for Botcash (100% to miners, no funding streams).
     pub fn funding_streams(&self, height: Height) -> Option<&FundingStreams> {
+        // Botcash has no funding streams (100% to miners)
+        if matches!(self, Self::Botcash) {
+            return None;
+        }
         self.all_funding_streams()
             .iter()
             .find(|&streams| streams.height_range().contains(&height))
     }
 
-    /// Returns post-Canopy funding streams for this network at the provided height
+    /// Returns all funding streams for this network.
+    ///
+    /// Returns an empty Vec for Botcash (100% to miners, no funding streams).
     pub fn all_funding_streams(&self) -> &Vec<FundingStreams> {
-        if let Self::Testnet(params) = self {
-            params.funding_streams()
-        } else {
-            &FUNDING_STREAMS_MAINNET
+        // Use lazy_static empty vec for Botcash to avoid returning dangling reference
+        lazy_static::lazy_static! {
+            static ref EMPTY_FUNDING_STREAMS: Vec<FundingStreams> = Vec::new();
+        }
+
+        match self {
+            Self::Mainnet => &FUNDING_STREAMS_MAINNET,
+            Self::Testnet(params) => params.funding_streams(),
+            // Botcash has no funding streams (100% to miners)
+            Self::Botcash => &EMPTY_FUNDING_STREAMS,
         }
     }
 

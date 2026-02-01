@@ -679,3 +679,54 @@ fn botcash_miner_subsidy_is_full_block_subsidy() {
         );
     }
 }
+
+// ============================================================================
+// P1.8: Botcash no funding streams tests
+// ============================================================================
+
+/// Tests Botcash has no funding streams at any height.
+#[test]
+fn botcash_no_funding_streams() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+
+    // Test that funding_streams() returns None at various heights
+    for height in [Height(0), Height(1), Height(1000), Height(1_046_400), Height(2_726_400)] {
+        assert!(
+            network.funding_streams(height).is_none(),
+            "Botcash should have no funding streams at height {}",
+            height.0
+        );
+    }
+
+    // Test that all_funding_streams() returns empty vec
+    assert!(
+        network.all_funding_streams().is_empty(),
+        "Botcash should have empty all_funding_streams()"
+    );
+}
+
+/// Tests funding_stream_values returns empty for Botcash.
+#[test]
+fn botcash_no_funding_stream_values() -> Result<(), Report> {
+    let _init_guard = zebra_test::init();
+
+    use crate::parameters::network::subsidy::{block_subsidy, funding_stream_values};
+
+    let network = Network::Botcash;
+
+    // At various heights (including post-Canopy equivalent heights), values should be empty
+    for height in [Height(0), Height(1000), Height(1_046_400), Height(2_000_000)] {
+        let block_sub = block_subsidy(height, &network).expect("subsidy should be calculable");
+        let values = funding_stream_values(height, &network, block_sub)?;
+
+        assert!(
+            values.is_empty(),
+            "Botcash should have no funding stream values at height {}",
+            height.0
+        );
+    }
+
+    Ok(())
+}
