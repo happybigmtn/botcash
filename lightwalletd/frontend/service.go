@@ -79,7 +79,7 @@ func checkTaddressForChain(taddr string, chainName string) error {
 	}
 	if !match {
 		return status.Errorf(codes.InvalidArgument,
-			"checkTaddress: transparent address %s has invalid format", taddr)
+			"checkTaddress: transparent address %s contains invalid characters", taddr)
 	}
 	return nil
 }

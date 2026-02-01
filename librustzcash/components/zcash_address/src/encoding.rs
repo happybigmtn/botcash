@@ -425,24 +425,24 @@ mod tests {
 
     #[test]
     fn botcash_transparent() {
-        // Test that a Botcash P2PKH address round-trips correctly
+        // Test that a Botcash P2PKH address round-trips correctly with "B1" prefix
         let addr = ZcashAddress {
             net: NetworkType::Botcash,
             kind: AddressKind::P2pkh([0; 20]),
         };
         let encoded = addr.to_string();
-        assert!(encoded.starts_with("B"));
+        assert!(encoded.starts_with("B1"), "P2PKH should start with B1, got: {}", encoded);
         let parsed: ZcashAddress = encoded.parse().unwrap();
         assert_eq!(parsed.net, NetworkType::Botcash);
         assert!(matches!(parsed.kind, AddressKind::P2pkh(_)));
 
-        // Test P2SH
+        // Test P2SH with "B3" prefix
         let addr_p2sh = ZcashAddress {
             net: NetworkType::Botcash,
             kind: AddressKind::P2sh([0; 20]),
         };
         let encoded_p2sh = addr_p2sh.to_string();
-        assert!(encoded_p2sh.starts_with("B"));
+        assert!(encoded_p2sh.starts_with("B3"), "P2SH should start with B3, got: {}", encoded_p2sh);
         let parsed_p2sh: ZcashAddress = encoded_p2sh.parse().unwrap();
         assert_eq!(parsed_p2sh.net, NetworkType::Botcash);
         assert!(matches!(parsed_p2sh.kind, AddressKind::P2sh(_)));

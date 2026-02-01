@@ -5,11 +5,11 @@
 
 ---
 
-## 🚦 Current Status: PHASE 1 COMPLETE
+## 🚦 Current Status: PHASE 2 COMPLETE
 
-**Last Updated:** 2026-02-01 (Phase 1.15 Complete)
+**Last Updated:** 2026-02-01 (Phase 2.5 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams, RandomX dependency, verification module, consensus integration, genesis block, and transparent address encoding).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done (network_params.go with Botcash network definitions, RPC port detection, address validation for B1 prefix, chain name detection, and NodeName detection for botcashd).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -59,15 +59,15 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P1.14** | Create genesis block function | ✅ DONE | `zebra-chain/src/block/genesis.rs:24-53` | `cargo test -p zebra-chain -- botcash_genesis` |
 | **P1.15** | Update transparent address encoding | ✅ DONE | `zebra-chain/src/transparent/address.rs:190-245` | `cargo test -p zebra-chain -- transparent_address` |
 
-### ⬜ Phase 2: lightwalletd (Go Backend)
+### ✅ Phase 2: lightwalletd (Go Backend) — COMPLETE
 
 | Priority | Task | Status | Files (with line numbers) | Test Command |
 |----------|------|--------|---------------------------|--------------|
-| **P2.1** | Create network_params.go | ⬜ TODO | `lightwalletd/common/network_params.go` (NEW) | `cd lightwalletd && go test ./common/... -run TestNetwork` |
-| **P2.2** | Update RPC port detection | ⬜ TODO | `lightwalletd/frontend/rpc_client.go:59-66` | `cd lightwalletd && go test ./frontend/... -run TestRPC` |
-| **P2.3** | Update address validation regex | ⬜ TODO | `lightwalletd/frontend/service.go:56-67` | `cd lightwalletd && go test ./frontend/... -run TestAddress` |
-| **P2.4** | Add Botcash chain name detection | ⬜ TODO | `lightwalletd/cmd/root.go:189-226` | `cd lightwalletd && go test ./... -run TestChain` |
-| **P2.5** | Update NodeName detection | ⬜ TODO | `lightwalletd/cmd/root.go:222-225` | `cd lightwalletd && go test ./... -run TestNode` |
+| **P2.1** | Create network_params.go | ✅ DONE | `lightwalletd/common/network_params.go` (299 lines) | `cd lightwalletd && go test ./common/... -run TestNetwork` |
+| **P2.2** | Update RPC port detection | ✅ DONE | `lightwalletd/frontend/rpc_client.go:49-67` | `cd lightwalletd && go test ./frontend/...` |
+| **P2.3** | Update address validation regex | ✅ DONE | `lightwalletd/frontend/service.go:55-82` | `cd lightwalletd && go test ./frontend/... -run TestGetTaddress` |
+| **P2.4** | Add Botcash chain name detection | ✅ DONE | `lightwalletd/cmd/root.go:217-229` | `cd lightwalletd && go test ./cmd/...` |
+| **P2.5** | Update NodeName detection | ✅ DONE | `lightwalletd/cmd/root.go:222-229` | `cd lightwalletd && go test ./cmd/...` |
 
 ### ⬜ Phase 3: iOS Wallet (zashi-ios)
 
