@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASE 1 IN PROGRESS
 
-**Last Updated:** 2026-01-31 (Phase 1.2 Complete)
+**Last Updated:** 2026-01-31 (Phase 1.4 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1 (NetworkKind::Botcash) and P1.2 (Network::Botcash) complete.
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.4 complete (NetworkKind, Network variant, magic bytes).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -45,8 +45,8 @@ All other phases depend on Phase 0. These tasks define the network identity.
 |----------|------|--------|---------------------------|--------------|
 | **P1.1** | Add `NetworkKind::Botcash` variant | ✅ DONE | `zebra-chain/src/parameters/network.rs:26-39` | `cargo test -p zebra-chain -- network_kind` |
 | **P1.2** | Add `Network::Botcash` variant | ✅ DONE | `zebra-chain/src/parameters/network.rs:53-67` | `cargo test -p zebra-chain -- botcash_network_variant` |
-| **P1.3** | Add BOTCASH magic bytes (0x42434153) | ⬜ TODO | `zebra-chain/src/parameters/constants.rs:20-29` | `cargo test -p zebra-chain -- magic` |
-| **P1.4** | Update Network::magic() impl | ⬜ TODO | `zebra-chain/src/parameters/network/magic.rs:21-28` | `cargo test -p zebra-chain -- network_magic` |
+| **P1.3** | Add BOTCASH magic bytes (0x42434153) | ✅ DONE | `zebra-chain/src/parameters/constants.rs:29-30` | `cargo test -p zebra-chain -- magic` |
+| **P1.4** | Update Network::magic() impl | ✅ DONE | `zebra-chain/src/parameters/network/magic.rs:21-29` | `cargo test -p zebra-chain -- network_magic` |
 | **P1.5** | Set network ports (8533/18533) | ⬜ TODO | `zebra-chain/src/parameters/network.rs:236-241` | `cargo test -p zebra-chain -- default_port` |
 | **P1.6** | Set block time (60s) | ⬜ TODO | `zebra-chain/src/parameters/constants.rs` (NEW const) | `cargo test -p zebra-chain -- block_time` |
 | **P1.7** | Implement block subsidy (3.125 BCASH) | ⬜ TODO | `zebra-chain/src/parameters/network/subsidy.rs:30,421-483` | `cargo test -p zebra-chain -- botcash_subsidy` |

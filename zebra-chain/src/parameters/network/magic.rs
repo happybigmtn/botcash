@@ -43,6 +43,28 @@ mod magic_proptest {
         assert_eq!(format!("{:?}", magics::MAINNET), "Magic(\"24e92764\")");
         assert_eq!(format!("{:?}", magics::TESTNET), "Magic(\"fa1af9bf\")");
         assert_eq!(format!("{:?}", magics::REGTEST), "Magic(\"aae83f5f\")");
+        assert_eq!(format!("{:?}", magics::BOTCASH), "Magic(\"42434153\")");
+    }
+
+    /// Test that Botcash magic bytes spell "BCAS" in ASCII.
+    #[test]
+    fn botcash_magic_is_bcas() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(&magics::BOTCASH.0, b"BCAS");
+    }
+
+    /// Test that Network::magic() returns the correct magic for each network.
+    #[test]
+    fn network_magic() {
+        use crate::parameters::Network;
+
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(Network::Mainnet.magic(), magics::MAINNET);
+        assert_eq!(Network::Botcash.magic(), magics::BOTCASH);
+        // Botcash magic should be "BCAS"
+        assert_eq!(&Network::Botcash.magic().0, b"BCAS");
     }
 
     proptest! {
