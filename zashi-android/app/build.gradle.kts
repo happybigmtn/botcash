@@ -39,6 +39,7 @@ if (hasFirebaseApiKeys) {
 val packageName = project.property("ZCASH_RELEASE_PACKAGE_NAME").toString()
 
 val testnetNetworkName = "Testnet"
+val botcashNetworkPrefix = "Botcash"
 
 android {
     namespace = "co.electriccoin.zcash.app"
@@ -164,32 +165,32 @@ android {
         val debugAppNameSuffix = project.property("ZCASH_DEBUG_APP_NAME_SUFFIX").toString()
         val fossAppNameSuffix = project.property("ZCASH_FOSS_APP_NAME_SUFFIX").toString()
         when (this.name) {
-            "zcashtestnetStoreDebug" -> {
+            "botcashtestnetStoreDebug" -> {
                 resValue("string", "app_name", "$defaultAppName $debugAppNameSuffix $testnetNetworkName")
             }
-            "zcashmainnetStoreDebug" -> {
+            "botcashmainnetStoreDebug" -> {
                 resValue("string", "app_name", "$defaultAppName $debugAppNameSuffix")
             }
-            "zcashtestnetStoreRelease" -> {
+            "botcashtestnetStoreRelease" -> {
                 resValue("string", "app_name", "$defaultAppName $testnetNetworkName")
             }
-            "zcashmainnetStoreRelease" -> {
+            "botcashmainnetStoreRelease" -> {
                 resValue("string", "app_name", defaultAppName)
             }
-            "zcashtestnetFossDebug" -> {
+            "botcashtestnetFossDebug" -> {
                 resValue(
                     "string",
                     "app_name",
                     "$defaultAppName $fossAppNameSuffix $debugAppNameSuffix $testnetNetworkName"
                 )
             }
-            "zcashmainnetFossDebug" -> {
+            "botcashmainnetFossDebug" -> {
                 resValue("string", "app_name", "$defaultAppName $fossAppNameSuffix $debugAppNameSuffix")
             }
-            "zcashtestnetFossRelease" -> {
+            "botcashtestnetFossRelease" -> {
                 resValue("string", "app_name", "$defaultAppName $fossAppNameSuffix $testnetNetworkName")
             }
-            "zcashmainnetFossRelease" -> {
+            "botcashmainnetFossRelease" -> {
                 resValue("string", "app_name", defaultAppName)
             }
         }
@@ -334,7 +335,7 @@ fladle {
 
             debugApk.set(
                 project.provider {
-                    "${buildDirectory}/outputs/apk/zcashmainnetStore/debug/app-zcashmainnet-store-debug.apk"
+                    "${buildDirectory}/outputs/apk/botcashmainnetStore/debug/app-botcashmainnet-store-debug.apk"
                 }
             )
 
@@ -353,7 +354,7 @@ fladle {
             debugApk.set(
                 project.provider {
                     "$buildDirectory" +
-                        "/outputs/apk_from_bundle/zcashmainnetStoreRelease/app-zcashmainnet-store-release-universal.apk"
+                        "/outputs/apk_from_bundle/botcashmainnetStoreRelease/app-botcashmainnet-store-release-universal.apk"
                 }
             )
 

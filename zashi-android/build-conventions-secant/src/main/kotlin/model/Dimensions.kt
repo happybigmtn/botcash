@@ -3,8 +3,8 @@ package model
 enum class NetworkDimension(
     val value: String
 ) {
-    MAINNET("zcashmainnet"),
-    TESTNET("zcashtestnet");
+    MAINNET("botcashmainnet"),
+    TESTNET("botcashtestnet");
 
     companion object {
         const val DIMENSION_NAME = "network"

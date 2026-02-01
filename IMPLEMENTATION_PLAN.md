@@ -5,11 +5,11 @@
 
 ---
 
-## 🚦 Current Status: PHASE 3 COMPLETE
+## 🚦 Current Status: PHASE 4 COMPLETE
 
-**Last Updated:** 2026-02-01 (Phase 3 Complete)
+**Last Updated:** 2026-02-01 (Phase 4 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done (endpoint updates to botcash.network, network flavor dimension updated to botcashmainnet/botcashtestnet, gradle.properties branding updated to Botcash/com.botcash.wallet, and flavor directories renamed with updated provider authorities).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -81,14 +81,14 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P3.6** | Replace app icons (3 iconsets) | ✅ DONE | `zashi-ios/secant/Resources/Assets.xcassets/AppIcon*.appiconset/` | Visual verification |
 | **P3.7** | Update localization strings (~50 refs) | ✅ DONE | `zashi-ios/modules/Sources/Generated/Resources/*/Localizable.strings` | String verification |
 
-### ⬜ Phase 4: Android Wallet (zashi-android)
+### ✅ Phase 4: Android Wallet (zashi-android) — COMPLETE
 
 | Priority | Task | Status | Files | Test Command |
 |----------|------|--------|-------|--------------|
-| **P4.1** | Update endpoint list | ⬜ TODO | `zashi-android/ui-lib/src/main/java/co/electriccoin/zcash/ui/common/provider/LightWalletEndpointProvider.kt:14-30` | `./gradlew :ui-lib:testDebugUnitTest --tests "*EndpointTest*"` |
-| **P4.2** | Update network flavor dimension | ⬜ TODO | `zashi-android/build-conventions-secant/src/main/kotlin/model/Dimensions.kt` | `./gradlew assembleBotcashmainnetDebug` |
-| **P4.3** | Update gradle.properties branding | ⬜ TODO | `zashi-android/gradle.properties:63-72` | `./gradlew :app:lintDebug` |
-| **P4.4** | Create botcash flavor directories | ⬜ TODO | `zashi-android/app/src/botcash*/` (NEW) | Build verification |
+| **P4.1** | Update endpoint list | ✅ DONE | `zashi-android/ui-lib/src/main/java/co/electriccoin/zcash/ui/common/provider/LightWalletEndpointProvider.kt:14-30` | `./gradlew :ui-lib:testDebugUnitTest --tests "*EndpointTest*"` |
+| **P4.2** | Update network flavor dimension | ✅ DONE | `zashi-android/build-conventions-secant/src/main/kotlin/model/Dimensions.kt` | `./gradlew assembleBotcashmainnetDebug` |
+| **P4.3** | Update gradle.properties branding | ✅ DONE | `zashi-android/gradle.properties:69-70` | `./gradlew :app:lintDebug` |
+| **P4.4** | Create botcash flavor directories | ✅ DONE | `zashi-android/app/src/botcash*/` (7 directories renamed) | Build verification |
 
 ### ⬜ Phase 5: Social Protocol (Application Layer)
 

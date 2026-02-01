@@ -5,27 +5,30 @@ import cash.z.ecc.android.sdk.model.ZcashNetwork
 import cash.z.ecc.sdk.type.fromResources
 import co.electriccoin.lightwallet.client.model.LightWalletEndpoint
 
-// TODO [#1273]: Add ChooseServer Tests #1273
-// TODO [#1273]: https://github.com/Electric-Coin-Company/zashi-android/issues/1273
+// Botcash lightwalletd endpoints
+// Port 9067 is the standard Botcash lightwalletd gRPC port
 class LightWalletEndpointProvider(
     private val application: Application
 ) {
     fun getEndpoints(): List<LightWalletEndpoint> =
         if (ZcashNetwork.fromResources(application) == ZcashNetwork.Mainnet) {
             listOf(
-                LightWalletEndpoint(host = "zec.rocks", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "na.zec.rocks", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "sa.zec.rocks", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "eu.zec.rocks", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "ap.zec.rocks", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "eu.zec.stardust.rest", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "eu2.zec.stardust.rest", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "jp.zec.stardust.rest", port = 443, isSecure = true),
-                LightWalletEndpoint(host = "us.zec.stardust.rest", port = 443, isSecure = true),
+                // Botcash mainnet endpoints
+                LightWalletEndpoint(host = "mainnet.botcash.network", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "na.botcash.network", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "sa.botcash.network", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "eu.botcash.network", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "ap.botcash.network", port = 9067, isSecure = true),
+                // Community-run servers
+                LightWalletEndpoint(host = "eu.botcash.run", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "eu2.botcash.run", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "jp.botcash.run", port = 9067, isSecure = true),
+                LightWalletEndpoint(host = "us.botcash.run", port = 9067, isSecure = true),
             )
         } else {
             listOf(
-                LightWalletEndpoint(host = "testnet.zec.rocks", port = 443, isSecure = true)
+                // Botcash testnet endpoint
+                LightWalletEndpoint(host = "testnet.botcash.network", port = 19067, isSecure = true)
             )
         }
 
