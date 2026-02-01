@@ -8,7 +8,7 @@
 //! The default values are designed to create a balanced economy that rewards
 //! active participants while maintaining velocity through credit expiration.
 
-use crate::amount::{Amount, NonNegative, COIN};
+use crate::amount::COIN;
 use crate::block::HeightDiff;
 
 /// The percentage of attention market payments redistributed as credits.
