@@ -37,3 +37,5 @@
 
 |**P0.5**|UpdateSaplingaddressparsing|✅DONE|`librustzcash/components/zcash_address/src/encoding.rs:76-86`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
 
+|**P0.6**|UpdateTEXaddressparsing|✅DONE|`librustzcash/components/zcash_address/src/encoding.rs:100-108`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
+
