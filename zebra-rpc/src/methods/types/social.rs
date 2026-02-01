@@ -447,6 +447,193 @@ pub struct EpochStatsResponse {
     is_complete: bool,
 }
 
+// ==================== Batch Queue Types ====================
+
+/// Maximum number of actions that can be queued for batching.
+pub const MAX_BATCH_QUEUE_SIZE: usize = 5;
+
+/// A single action to be queued for batching.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum BatchAction {
+    /// Create a post.
+    Post {
+        /// The content of the post.
+        content: String,
+        /// Optional tags for the post.
+        #[serde(default)]
+        tags: Vec<String>,
+    },
+    /// Send a direct message.
+    Dm {
+        /// The recipient's address.
+        to: String,
+        /// The message content.
+        content: String,
+    },
+    /// Follow a user.
+    Follow {
+        /// The address to follow.
+        target: String,
+    },
+    /// Unfollow a user.
+    Unfollow {
+        /// The address to unfollow.
+        target: String,
+    },
+    /// Upvote content.
+    Upvote {
+        /// The transaction ID of content to upvote.
+        #[serde(rename = "targetTxid")]
+        target_txid: String,
+    },
+    /// Create a comment.
+    Comment {
+        /// The transaction ID of content to comment on.
+        #[serde(rename = "targetTxid")]
+        target_txid: String,
+        /// The comment content.
+        content: String,
+    },
+    /// Tip content.
+    Tip {
+        /// The transaction ID of content to tip.
+        #[serde(rename = "targetTxid")]
+        target_txid: String,
+        /// The amount to tip in zatoshis.
+        amount: u64,
+    },
+}
+
+impl BatchAction {
+    /// Returns the action type as a string for display.
+    pub fn action_type(&self) -> &'static str {
+        match self {
+            BatchAction::Post { .. } => "Post",
+            BatchAction::Dm { .. } => "Dm",
+            BatchAction::Follow { .. } => "Follow",
+            BatchAction::Unfollow { .. } => "Unfollow",
+            BatchAction::Upvote { .. } => "Upvote",
+            BatchAction::Comment { .. } => "Comment",
+            BatchAction::Tip { .. } => "Tip",
+        }
+    }
+}
+
+/// Request for queuing actions to be batched.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BatchQueueRequest {
+    /// The sender's address (unified or shielded).
+    pub from: String,
+
+    /// The actions to queue for batching.
+    pub actions: Vec<BatchAction>,
+
+    /// Whether to send immediately if queue reaches max size.
+    /// If false, returns an error when queue is full.
+    #[serde(rename = "autoSend", default)]
+    pub auto_send: bool,
+}
+
+/// Response for queuing actions.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BatchQueueResponse {
+    /// Number of actions successfully queued.
+    #[getter(copy)]
+    queued: usize,
+
+    /// Current queue size after adding actions.
+    #[serde(rename = "queueSize")]
+    #[getter(copy)]
+    queue_size: usize,
+
+    /// If auto_send was true and queue was sent, this is the transaction ID.
+    #[serde(rename = "txid", skip_serializing_if = "Option::is_none")]
+    txid: Option<String>,
+
+    /// Actions that were queued (type names).
+    #[serde(rename = "actionTypes")]
+    action_types: Vec<String>,
+}
+
+/// Request for sending the current batch queue.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BatchSendRequest {
+    /// The sender's address (must match the queued actions).
+    pub from: String,
+}
+
+/// Response for sending the batch.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BatchSendResponse {
+    /// The transaction ID of the batched transaction.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// Number of actions that were batched.
+    #[serde(rename = "actionCount")]
+    #[getter(copy)]
+    action_count: usize,
+
+    /// The types of actions that were batched.
+    #[serde(rename = "actionTypes")]
+    action_types: Vec<String>,
+
+    /// Estimated fee saved compared to individual transactions (in zatoshis).
+    #[serde(rename = "feeSaved")]
+    #[getter(copy)]
+    fee_saved: u64,
+}
+
+/// Request for getting the current batch queue status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BatchStatusRequest {
+    /// The address to check queue status for.
+    pub from: String,
+}
+
+/// Response for batch queue status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BatchStatusResponse {
+    /// Current number of actions in the queue.
+    #[serde(rename = "queueSize")]
+    #[getter(copy)]
+    queue_size: usize,
+
+    /// Maximum queue size before auto-send or error.
+    #[serde(rename = "maxSize")]
+    #[getter(copy)]
+    max_size: usize,
+
+    /// The types of actions currently queued.
+    #[serde(rename = "actionTypes")]
+    action_types: Vec<String>,
+
+    /// Estimated encoded size of the batch (bytes).
+    #[serde(rename = "estimatedSize")]
+    #[getter(copy)]
+    estimated_size: usize,
+}
+
+/// Request for clearing the batch queue.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BatchClearRequest {
+    /// The address whose queue should be cleared.
+    pub from: String,
+}
+
+/// Response for clearing the batch queue.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BatchClearResponse {
+    /// Number of actions that were cleared.
+    #[getter(copy)]
+    cleared: usize,
+
+    /// Whether the operation was successful.
+    #[getter(copy)]
+    success: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -769,5 +956,216 @@ mod tests {
         assert!(json.contains("\"participants\":50"));
         assert!(json.contains("\"distributed\":800000"));
         assert!(json.contains("\"isComplete\":true"));
+    }
+
+    // ==================== Batch Queue Tests ====================
+
+    #[test]
+    fn batch_action_post_deserialize() {
+        let json = r#"{"type":"post","content":"Hello Botcash!","tags":["test"]}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Post { content, tags } => {
+                assert_eq!(content, "Hello Botcash!");
+                assert_eq!(tags, &vec!["test"]);
+            }
+            _ => panic!("Expected Post action"),
+        }
+        assert_eq!(action.action_type(), "Post");
+    }
+
+    #[test]
+    fn batch_action_dm_deserialize() {
+        let json = r#"{"type":"dm","to":"bs1recipient","content":"Private message"}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Dm { to, content } => {
+                assert_eq!(to, "bs1recipient");
+                assert_eq!(content, "Private message");
+            }
+            _ => panic!("Expected Dm action"),
+        }
+        assert_eq!(action.action_type(), "Dm");
+    }
+
+    #[test]
+    fn batch_action_follow_deserialize() {
+        let json = r#"{"type":"follow","target":"bs1target"}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Follow { target } => {
+                assert_eq!(target, "bs1target");
+            }
+            _ => panic!("Expected Follow action"),
+        }
+        assert_eq!(action.action_type(), "Follow");
+    }
+
+    #[test]
+    fn batch_action_unfollow_deserialize() {
+        let json = r#"{"type":"unfollow","target":"bs1target"}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Unfollow { target } => {
+                assert_eq!(target, "bs1target");
+            }
+            _ => panic!("Expected Unfollow action"),
+        }
+        assert_eq!(action.action_type(), "Unfollow");
+    }
+
+    #[test]
+    fn batch_action_upvote_deserialize() {
+        let json = r#"{"type":"upvote","targetTxid":"abc123"}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Upvote { target_txid } => {
+                assert_eq!(target_txid, "abc123");
+            }
+            _ => panic!("Expected Upvote action"),
+        }
+        assert_eq!(action.action_type(), "Upvote");
+    }
+
+    #[test]
+    fn batch_action_comment_deserialize() {
+        let json = r#"{"type":"comment","targetTxid":"abc123","content":"Great post!"}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Comment {
+                target_txid,
+                content,
+            } => {
+                assert_eq!(target_txid, "abc123");
+                assert_eq!(content, "Great post!");
+            }
+            _ => panic!("Expected Comment action"),
+        }
+        assert_eq!(action.action_type(), "Comment");
+    }
+
+    #[test]
+    fn batch_action_tip_deserialize() {
+        let json = r#"{"type":"tip","targetTxid":"abc123","amount":100000}"#;
+        let action: BatchAction = serde_json::from_str(json).unwrap();
+        match &action {
+            BatchAction::Tip {
+                target_txid,
+                amount,
+            } => {
+                assert_eq!(target_txid, "abc123");
+                assert_eq!(*amount, 100000);
+            }
+            _ => panic!("Expected Tip action"),
+        }
+        assert_eq!(action.action_type(), "Tip");
+    }
+
+    #[test]
+    fn batch_queue_request_deserialize() {
+        let json = r#"{
+            "from": "bs1sender",
+            "actions": [
+                {"type":"post","content":"Hello!","tags":[]},
+                {"type":"follow","target":"bs1friend"}
+            ],
+            "autoSend": true
+        }"#;
+        let req: BatchQueueRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1sender");
+        assert_eq!(req.actions.len(), 2);
+        assert!(req.auto_send);
+    }
+
+    #[test]
+    fn batch_queue_request_defaults() {
+        let json = r#"{"from":"bs1sender","actions":[]}"#;
+        let req: BatchQueueRequest = serde_json::from_str(json).unwrap();
+        assert!(!req.auto_send); // default is false
+    }
+
+    #[test]
+    fn batch_queue_response_serialize() {
+        let resp =
+            BatchQueueResponse::new(2, 3, None, vec!["Post".to_string(), "Follow".to_string()]);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"queued\":2"));
+        assert!(json.contains("\"queueSize\":3"));
+        assert!(!json.contains("\"txid\"")); // skipped when None
+        assert!(json.contains("\"actionTypes\":[\"Post\",\"Follow\"]"));
+    }
+
+    #[test]
+    fn batch_queue_response_with_txid() {
+        let resp = BatchQueueResponse::new(
+            5,
+            0, // queue was sent
+            Some("txid123".to_string()),
+            vec!["Post".to_string()],
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid123\""));
+        assert!(json.contains("\"queueSize\":0"));
+    }
+
+    #[test]
+    fn batch_send_request_deserialize() {
+        let json = r#"{"from":"bs1sender"}"#;
+        let req: BatchSendRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1sender");
+    }
+
+    #[test]
+    fn batch_send_response_serialize() {
+        let resp = BatchSendResponse::new(
+            "txid456".to_string(),
+            3,
+            vec![
+                "Post".to_string(),
+                "Follow".to_string(),
+                "Upvote".to_string(),
+            ],
+            5000,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid456\""));
+        assert!(json.contains("\"actionCount\":3"));
+        assert!(json.contains("\"feeSaved\":5000"));
+    }
+
+    #[test]
+    fn batch_status_request_deserialize() {
+        let json = r#"{"from":"bs1sender"}"#;
+        let req: BatchStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1sender");
+    }
+
+    #[test]
+    fn batch_status_response_serialize() {
+        let resp = BatchStatusResponse::new(2, 5, vec!["Post".to_string(), "Dm".to_string()], 128);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"queueSize\":2"));
+        assert!(json.contains("\"maxSize\":5"));
+        assert!(json.contains("\"estimatedSize\":128"));
+    }
+
+    #[test]
+    fn batch_clear_request_deserialize() {
+        let json = r#"{"from":"bs1sender"}"#;
+        let req: BatchClearRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1sender");
+    }
+
+    #[test]
+    fn batch_clear_response_serialize() {
+        let resp = BatchClearResponse::new(3, true);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"cleared\":3"));
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn max_batch_queue_size_constant() {
+        assert_eq!(MAX_BATCH_QUEUE_SIZE, 5);
     }
 }

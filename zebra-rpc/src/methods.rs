@@ -883,6 +883,99 @@ pub trait Rpc {
         &self,
         request: types::social::EpochStatsRequest,
     ) -> Result<types::social::EpochStatsResponse>;
+
+    // ==================== Botcash Batch Queue RPC Methods ====================
+
+    /// Queues social actions for batching.
+    ///
+    /// Actions are accumulated locally until sent with z_batchsend or auto-sent
+    /// when the queue reaches MAX_BATCH_QUEUE_SIZE (5) if auto_send is enabled.
+    /// Batching reduces fees by combining multiple actions into a single transaction.
+    ///
+    /// method: post
+    /// tags: batch
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The queue request containing:
+    ///   - `from`: (string) The sender's shielded address
+    ///   - `actions`: (array) Actions to queue (post, dm, follow, etc.)
+    ///   - `autoSend`: (boolean, optional, default=false) Auto-send when queue is full
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Maximum 5 actions can be batched per transaction.
+    #[method(name = "z_batchqueue")]
+    async fn z_batch_queue(
+        &self,
+        request: types::social::BatchQueueRequest,
+    ) -> Result<types::social::BatchQueueResponse>;
+
+    /// Sends the current batch queue as a single transaction.
+    ///
+    /// Creates a batched transaction containing all queued actions for the address.
+    /// The queue is cleared after successful submission.
+    ///
+    /// method: post
+    /// tags: batch
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The send request containing:
+    ///   - `from`: (string) The sender's address (must match queued actions)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Returns an error if the queue is empty.
+    #[method(name = "z_batchsend")]
+    async fn z_batch_send(
+        &self,
+        request: types::social::BatchSendRequest,
+    ) -> Result<types::social::BatchSendResponse>;
+
+    /// Gets the current batch queue status for an address.
+    ///
+    /// Returns information about queued actions including count, types, and size.
+    ///
+    /// method: post
+    /// tags: batch
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `from`: (string) The address to check queue status for
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    #[method(name = "z_batchstatus")]
+    async fn z_batch_status(
+        &self,
+        request: types::social::BatchStatusRequest,
+    ) -> Result<types::social::BatchStatusResponse>;
+
+    /// Clears the batch queue for an address.
+    ///
+    /// Removes all queued actions without sending them.
+    ///
+    /// method: post
+    /// tags: batch
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The clear request containing:
+    ///   - `from`: (string) The address whose queue should be cleared
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    #[method(name = "z_batchclear")]
+    async fn z_batch_clear(
+        &self,
+        request: types::social::BatchClearRequest,
+    ) -> Result<types::social::BatchClearResponse>;
 }
 
 /// RPC method implementations.
@@ -3150,10 +3243,7 @@ where
         if request.content.len() > 500 {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
-                format!(
-                    "content too long: {} bytes, max 500",
-                    request.content.len()
-                ),
+                format!("content too long: {} bytes, max 500", request.content.len()),
                 None::<()>,
             ));
         }
@@ -3205,10 +3295,7 @@ where
         if request.content.len() > 500 {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
-                format!(
-                    "content too long: {} bytes, max 500",
-                    request.content.len()
-                ),
+                format!("content too long: {} bytes, max 500", request.content.len()),
                 None::<()>,
             ));
         }
@@ -3340,7 +3427,10 @@ where
         if request.amount < MIN_BOOST_AMOUNT {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
-                format!("amount must be at least {} zatoshis (0.001 BCASH)", MIN_BOOST_AMOUNT),
+                format!(
+                    "amount must be at least {} zatoshis (0.001 BCASH)",
+                    MIN_BOOST_AMOUNT
+                ),
                 None::<()>,
             ));
         }
@@ -3358,7 +3448,10 @@ where
         if request.duration_blocks > MAX_DURATION_BLOCKS {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
-                format!("durationBlocks must not exceed {} (~30 days)", MAX_DURATION_BLOCKS),
+                format!(
+                    "durationBlocks must not exceed {} (~30 days)",
+                    MAX_DURATION_BLOCKS
+                ),
                 None::<()>,
             ));
         }
@@ -3461,10 +3554,7 @@ where
         if !valid_feed_types.contains(&request.feed_type.as_str()) {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
-                format!(
-                    "feedType must be one of: {}",
-                    valid_feed_types.join(", ")
-                ),
+                format!("feedType must be one of: {}", valid_feed_types.join(", ")),
                 None::<()>,
             ));
         }
@@ -3531,7 +3621,10 @@ where
         if epoch_number > current_epoch {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
-                format!("epochNumber {} is in the future (current epoch: {})", epoch_number, current_epoch),
+                format!(
+                    "epochNumber {} is in the future (current epoch: {})",
+                    epoch_number, current_epoch
+                ),
                 None::<()>,
             ));
         }
@@ -3551,10 +3644,148 @@ where
             epoch_number,
             start_block,
             end_block,
-            0,           // total_paid (requires indexer)
-            0,           // participants (requires indexer)
-            0,           // distributed (requires indexer)
+            0, // total_paid (requires indexer)
+            0, // participants (requires indexer)
+            0, // distributed (requires indexer)
             is_complete,
+        ))
+    }
+
+    // ==================== Batch Queue RPC Method Implementations ====================
+
+    async fn z_batch_queue(
+        &self,
+        request: types::social::BatchQueueRequest,
+    ) -> Result<types::social::BatchQueueResponse> {
+        // Validate the from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate actions
+        if request.actions.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one action is required",
+                None::<()>,
+            ));
+        }
+
+        if request.actions.len() > types::social::MAX_BATCH_QUEUE_SIZE {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "too many actions: {} (max: {})",
+                    request.actions.len(),
+                    types::social::MAX_BATCH_QUEUE_SIZE
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Collect action types for response
+        let action_types: Vec<String> = request
+            .actions
+            .iter()
+            .map(|a| a.action_type().to_string())
+            .collect();
+
+        let queued_count = request.actions.len();
+
+        // Note: Full implementation requires wallet support to:
+        // - Maintain a queue of pending actions per address
+        // - Convert BatchAction to SocialMessage
+        // - Encode as BatchMessage when sending
+        //
+        // For now, return a stub response indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_batchqueue requires wallet support which is not yet implemented in Zebra. \
+                Would queue {} actions: {:?}",
+                queued_count, action_types
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_batch_send(
+        &self,
+        request: types::social::BatchSendRequest,
+    ) -> Result<types::social::BatchSendResponse> {
+        // Validate the from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Retrieve the pending action queue for this address
+        // - Convert actions to SocialMessage instances
+        // - Create a BatchMessage
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "z_batchsend requires wallet support which is not yet implemented in Zebra",
+            None::<()>,
+        ))
+    }
+
+    async fn z_batch_status(
+        &self,
+        request: types::social::BatchStatusRequest,
+    ) -> Result<types::social::BatchStatusResponse> {
+        // Validate the from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Maintain a queue of pending actions per address
+        // - Track estimated encoded size
+        //
+        // For now, return an empty queue status (no wallet = no queue).
+        Ok(types::social::BatchStatusResponse::new(
+            0, // queue_size
+            types::social::MAX_BATCH_QUEUE_SIZE,
+            vec![], // action_types
+            0,      // estimated_size
+        ))
+    }
+
+    async fn z_batch_clear(
+        &self,
+        request: types::social::BatchClearRequest,
+    ) -> Result<types::social::BatchClearResponse> {
+        // Validate the from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Clear the pending action queue for this address
+        //
+        // For now, return success with 0 cleared (no wallet = no queue).
+        Ok(types::social::BatchClearResponse::new(
+            0,    // cleared
+            true, // success
         ))
     }
 }
