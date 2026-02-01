@@ -52,16 +52,34 @@ func NewDarksideStreamer(cache *common.BlockCache) (walletrpc.DarksideStreamerSe
 	return &DarksideStreamer{cache: cache}, nil
 }
 
-// Test to make sure Address is a single t address, return a gRPC error
+// checkTaddress validates a transparent address format.
+// It supports both Zcash (t1/tm) and Botcash (B1) address prefixes.
+// Returns a gRPC error if the address is invalid.
 func checkTaddress(taddr string) error {
-	match, err := regexp.Match("\\At[a-zA-Z0-9]{34}\\z", []byte(taddr))
+	return checkTaddressForChain(taddr, "")
+}
+
+// checkTaddressForChain validates a transparent address format for a specific chain.
+// If chainName is empty, it accepts addresses from any known network.
+func checkTaddressForChain(taddr string, chainName string) error {
+	var pattern string
+	if chainName != "" {
+		// Use chain-specific pattern
+		prefix := common.GetTaddrPrefixRegex(chainName)
+		pattern = "\\A" + prefix[1:] + "[a-zA-Z0-9]{33}\\z" // Remove ^ from prefix, add \\A anchor
+	} else {
+		// Accept addresses from any known network (Zcash t1/tm or Botcash B1)
+		pattern = "\\A(t[a-zA-Z0-9]{34}|B1[a-zA-Z0-9]{33})\\z"
+	}
+
+	match, err := regexp.Match(pattern, []byte(taddr))
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument,
 			"checkTaddress: invalid transparent address: %s error: %s", taddr, err.Error())
 	}
 	if !match {
 		return status.Errorf(codes.InvalidArgument,
-			"checkTaddress: transparent address %s contains invalid characters", taddr)
+			"checkTaddress: transparent address %s has invalid format", taddr)
 	}
 	return nil
 }

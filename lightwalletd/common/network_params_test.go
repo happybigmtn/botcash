@@ -158,18 +158,19 @@ func TestIsZcashNetwork(t *testing.T) {
 
 func TestBotcashAddressPrefixRegex(t *testing.T) {
 	// Test that the B1 prefix regex correctly matches Botcash addresses
+	// Transparent addresses are 35 characters total: 2 char prefix + 33 alphanumeric
 	regex := regexp.MustCompile(GetTaddrPrefixRegex("botcash") + "[a-zA-Z0-9]{33}$")
 
 	validAddresses := []string{
-		"B1abcdefghijklmnopqrstuvwxyz123456", // 35 chars total (B1 + 33)
-		"B1ABCDEFGHIJKLMNOPQRSTUVWXYZ123456", // uppercase
+		"B1abcdefghijklmnopqrstuvwxyz1234567", // 35 chars total (B1 + 33)
+		"B1ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567", // uppercase
 	}
 
 	invalidAddresses := []string{
-		"t1abcdefghijklmnopqrstuvwxyz123456", // Zcash prefix
-		"b1abcdefghijklmnopqrstuvwxyz123456", // lowercase b1
-		"B2abcdefghijklmnopqrstuvwxyz123456", // B2 prefix
-		"B1abc",                               // too short
+		"t1abcdefghijklmnopqrstuvwxyz1234567", // Zcash prefix
+		"b1abcdefghijklmnopqrstuvwxyz1234567", // lowercase b1
+		"B2abcdefghijklmnopqrstuvwxyz1234567", // B2 prefix
+		"B1abc",                                // too short
 	}
 
 	for _, addr := range validAddresses {
@@ -187,15 +188,16 @@ func TestBotcashAddressPrefixRegex(t *testing.T) {
 
 func TestZcashAddressPrefixRegex(t *testing.T) {
 	// Test that the t1 prefix regex correctly matches Zcash addresses
+	// Transparent addresses are 35 characters total: 2 char prefix + 33 alphanumeric
 	regex := regexp.MustCompile(GetTaddrPrefixRegex("main") + "[a-zA-Z0-9]{33}$")
 
 	validAddresses := []string{
-		"t1abcdefghijklmnopqrstuvwxyz123456", // 35 chars total (t1 + 33)
+		"t1abcdefghijklmnopqrstuvwxyz1234567", // 35 chars total (t1 + 33)
 	}
 
 	invalidAddresses := []string{
-		"B1abcdefghijklmnopqrstuvwxyz123456", // Botcash prefix
-		"t1abc",                               // too short
+		"B1abcdefghijklmnopqrstuvwxyz1234567", // Botcash prefix
+		"t1abc",                                // too short
 	}
 
 	for _, addr := range validAddresses {

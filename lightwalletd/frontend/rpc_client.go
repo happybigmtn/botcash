@@ -58,11 +58,21 @@ func connFromIni(confPath string) (*rpcclient.ConnConfig, error) {
 	}
 	rpcport := cfg.Section("").Key("rpcport").String()
 	if rpcport == "" {
-		rpcport = "8232" // default mainnet
+		// Determine default port based on network type
+		botcash, _ := cfg.Section("").Key("botcash").Int()
 		testnet, _ := cfg.Section("").Key("testnet").Int()
 		regtest, _ := cfg.Section("").Key("regtest").Int()
-		if testnet > 0 || regtest > 0 {
-			rpcport = "18232"
+
+		if botcash > 0 {
+			if testnet > 0 {
+				rpcport = common.GetDefaultRPCPort("botcash-test")
+			} else {
+				rpcport = common.GetDefaultRPCPort("botcash")
+			}
+		} else if testnet > 0 || regtest > 0 {
+			rpcport = common.GetDefaultRPCPort("test")
+		} else {
+			rpcport = common.GetDefaultRPCPort("main")
 		}
 	}
 	username := cfg.Section("").Key("rpcuser").String()

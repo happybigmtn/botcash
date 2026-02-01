@@ -219,9 +219,14 @@ func startServer(opts *common.Options) error {
 			" chain ", getLightdInfo.ChainName,
 			" branchID ", getLightdInfo.ConsensusBranchId)
 		chainName = getLightdInfo.ChainName
+
+		// Detect node type from subversion string
 		if strings.Contains(getLightdInfo.ZcashdSubversion, "MagicBean") {
 			// The default is zebrad
 			common.NodeName = "zcashd"
+		} else if common.IsBotcashNetwork(chainName) {
+			// For Botcash networks, the node is botcashd
+			common.NodeName = "botcashd"
 		}
 	}
 
