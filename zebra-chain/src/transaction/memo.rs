@@ -34,6 +34,14 @@ impl<'a> TryFrom<&'a [u8]> for Memo {
     }
 }
 
+impl Memo {
+    /// Returns a reference to the underlying bytes.
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8; 512] {
+        &self.0
+    }
+}
+
 impl fmt::Debug for Memo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // This saves work but if the 'valid utf8 string' is just a

@@ -8,7 +8,7 @@ message Empty {};
 message BlockHashAndHeight {
   // The hash of the block in display order.
   bytes hash = 1;
-  
+
   // The height of the block in the chain.
   uint32 height = 2;
 };
@@ -17,7 +17,7 @@ message BlockHashAndHeight {
 message BlockAndHash {
   // The hash of the block in display order.
   bytes hash = 1;
-  
+
   // The encoded block data.
   bytes data = 2;
 };
@@ -30,7 +30,7 @@ message MempoolChangeMessage {
     ADDED = 0;
     // Represents a transaction being invalidated and rejected from the mempool.
     INVALIDATED  = 1;
-    // Represents a transaction being mined into a block on the best chain and 
+    // Represents a transaction being mined into a block on the best chain and
     // removed from the mempool.
     MINED = 2;
   }
@@ -44,6 +44,121 @@ message MempoolChangeMessage {
   // The transaction auth digest.
   bytes auth_digest = 3;
 };
+
+// Represents an individual social action extracted from a batch or standalone memo.
+// Used by indexers to process social protocol messages.
+message IndexedBatchAction {
+  // The transaction ID containing this action (hex-encoded).
+  string tx_id = 1;
+
+  // Zero-based index of this action within the batch (0 for standalone actions).
+  uint32 action_index = 2;
+
+  // The social message type byte (e.g., 0x20 for Post, 0x30 for Follow).
+  uint32 action_type = 3;
+
+  // Human-readable name of the action type.
+  string action_type_name = 4;
+
+  // The protocol version of this action.
+  uint32 version = 5;
+
+  // The raw payload bytes of this action.
+  bytes payload = 6;
+
+  // Whether this action involves value transfer.
+  bool is_value_transfer = 7;
+
+  // Whether this action is an attention market action.
+  bool is_attention_market = 8;
+
+  // Block height where this transaction was included.
+  uint32 block_height = 9;
+}
+
+// Summary information about a parsed batch.
+message BatchSummary {
+  // The transaction ID containing this batch.
+  string tx_id = 1;
+
+  // Block height where this transaction was included.
+  uint32 block_height = 2;
+
+  // Number of actions in the batch.
+  uint32 action_count = 3;
+
+  // Total encoded size of the batch in bytes.
+  uint32 encoded_size = 4;
+
+  // Protocol version of the batch.
+  uint32 version = 5;
+
+  // List of action type bytes in the batch (in order).
+  repeated uint32 action_types = 6;
+
+  // Human-readable names of action types.
+  repeated string action_type_names = 7;
+}
+
+// A parsed batch with summary and individual actions.
+message ParsedBatch {
+  // Summary information about the batch.
+  BatchSummary summary = 1;
+
+  // Individual actions extracted from the batch.
+  repeated IndexedBatchAction actions = 2;
+}
+
+// Statistics about batch processing in a block.
+message BlockBatchStats {
+  // Block height.
+  uint32 block_height = 1;
+
+  // Total number of transactions in the block.
+  uint32 total_transactions = 2;
+
+  // Number of transactions containing batch messages.
+  uint32 batch_transactions = 3;
+
+  // Total number of social actions (individual + expanded from batches).
+  uint32 total_social_actions = 4;
+
+  // Number of individual (non-batched) social actions.
+  uint32 individual_actions = 5;
+
+  // Number of actions expanded from batches.
+  uint32 batched_actions = 6;
+
+  // Average actions per batch (multiplied by 100 for fixed-point representation).
+  uint32 avg_actions_per_batch_x100 = 7;
+
+  // Estimated space savings from batching in bytes.
+  uint32 estimated_space_savings = 8;
+}
+
+// Request to parse a batch from a memo.
+message ParseBatchRequest {
+  // The raw memo bytes to parse.
+  bytes memo = 1;
+
+  // The transaction ID (hex-encoded).
+  string tx_id = 2;
+
+  // The block height where the transaction was included.
+  uint32 block_height = 3;
+}
+
+// Response from parsing a batch.
+message ParseBatchResponse {
+  // Whether the memo was successfully parsed as a batch.
+  bool success = 1;
+
+  // Error message if parsing failed.
+  string error = 2;
+
+  // The parsed batch (only present if success is true).
+  ParsedBatch batch = 3;
+}
 
 service Indexer {
   // Notifies listeners of chain tip changes

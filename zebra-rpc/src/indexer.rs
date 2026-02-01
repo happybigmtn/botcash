@@ -10,6 +10,7 @@ use zebra_chain::{
 #[cfg(test)]
 mod tests;
 
+pub mod batch;
 pub mod methods;
 pub mod server;
 
