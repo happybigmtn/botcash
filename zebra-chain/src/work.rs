@@ -2,7 +2,8 @@
 
 pub mod difficulty;
 pub mod equihash;
-mod u256;
+pub mod randomx;
+pub(crate) mod u256;
 
 #[cfg(any(test, feature = "proptest-impl"))]
 mod arbitrary;

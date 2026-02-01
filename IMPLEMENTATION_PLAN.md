@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASE 1 IN PROGRESS
 
-**Last Updated:** 2026-01-31 (Phase 1.8 Complete)
+**Last Updated:** 2026-02-01 (Phase 1.11 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.8 complete (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1-P1.11 complete (NetworkKind, Network variant, magic bytes, ports, block time, block subsidy, no funding streams, RandomX dependency and verification module).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -51,9 +51,9 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P1.6** | Set block time (60s) | ✅ DONE | `zebra-chain/src/parameters/network_upgrade.rs:294-296` | `cargo test -p zebra-chain -- block_time` |
 | **P1.7** | Implement block subsidy (3.125 BCASH) | ✅ DONE | `zebra-chain/src/parameters/network/subsidy.rs:30-40,800-815` | `cargo test -p zebra-chain -- botcash_subsidy` |
 | **P1.8** | Disable funding streams for Botcash | ✅ DONE | `zebra-chain/src/parameters/network/testnet.rs:918-943` | `cargo test -p zebra-chain -- no_funding` |
-| **P1.9** | Add randomx-rs dependency | ⬜ TODO | `Cargo.toml:61` (workspace deps) | `cargo build -p zebra-consensus --features randomx` |
-| **P1.10** | Create RandomX verification module | ⬜ TODO | `zebra-chain/src/work/randomx.rs` (NEW, ~200-300 lines) | `cargo test -p zebra-chain -- randomx` |
-| **P1.11** | Add `pub mod randomx;` to work.rs | ⬜ TODO | `zebra-chain/src/work.rs:1-10` | `cargo build -p zebra-chain` |
+| **P1.9** | Add randomx-rs dependency | ✅ DONE | `Cargo.toml:62` (workspace deps) | `cargo check -p zebra-chain` |
+| **P1.10** | Create RandomX verification module | ✅ DONE | `zebra-chain/src/work/randomx.rs` (299 lines) | `cargo test -p zebra-chain -- randomx` |
+| **P1.11** | Add `pub mod randomx;` to work.rs | ✅ DONE | `zebra-chain/src/work.rs:5` | `cargo check -p zebra-chain` |
 | **P1.12** | Integrate RandomX in block check | ⬜ TODO | `zebra-consensus/src/block/check.rs:141-149` | `cargo test -p zebra-consensus -- verify_randomx` |
 | **P1.13** | Update VerifyBlockError enum | ⬜ TODO | `zebra-consensus/src/block.rs:69-73,109` | `cargo test -p zebra-consensus -- block_error` |
 | **P1.14** | Create genesis block function | ⬜ TODO | `zebra-chain/src/parameters/genesis.rs:7` | `cargo test -p zebra-chain -- genesis_botcash` |

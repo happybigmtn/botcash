@@ -62,6 +62,7 @@ bs58 = { workspace = true, features = ["check"] }
 byteorder = { workspace = true }
 
 equihash = { workspace = true }
+randomx-rs = { workspace = true }
 
 group = { workspace = true }
 incrementalmerkletree.workspace = true
