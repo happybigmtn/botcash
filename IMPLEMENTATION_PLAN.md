@@ -877,3 +877,183 @@ cd zashi-android && ./gradlew test
 4. **Genesis Mining**: After all parameters are set, mine genesis block using RandomX.
 
 5. **Social Protocol**: Built on top of the existing 512-byte memo field. No consensus changes required.
+
+---
+
+## Phase 6: Infrastructure & Growth (Post-Launch)
+
+> New specs derived from deep research analysis. See `specs/scaling.md`, `specs/governance.md`, `specs/moderation.md`, `specs/recovery.md`, `specs/bridges.md`.
+
+### 6.1 Scaling Infrastructure (specs/scaling.md)
+
+#### 6.1.1 Transaction Batching
+- [ ] Binary memo encoding (70-80% size reduction)
+- [ ] Wallet batch queue (5 actions per tx)
+- [ ] Indexer batch parsing support
+- [ ] Required Tests: Batch parsing roundtrip, memo compression ratio
+
+#### 6.1.2 Layer-2 Social Channels
+- [ ] Channel open/close transaction types (0xC0, 0xC1)
+- [ ] Off-chain message signing protocol
+- [ ] Channel settlement transactions
+- [ ] Dispute resolution mechanism
+- [ ] Required Tests: Channel lifecycle, settlement correctness
+
+#### 6.1.3 Indexer Scaling
+- [ ] Redis caching layer (feed TTL: 10s, profiles: 5m)
+- [ ] Geographic distribution (US, EU, Asia)
+- [ ] Read replica architecture
+- [ ] Required Tests: Cache invalidation, feed freshness
+
+---
+
+### 6.2 Governance System (specs/governance.md)
+
+#### 6.2.1 Price Oracle (Dynamic Fees)
+- [ ] Miner price signaling in block headers
+- [ ] Median price aggregation (last 100 blocks)
+- [ ] Dynamic fee calculation: `fee = $0.00001 / bcash_price`
+- [ ] Fee bounds (min: 0.00001, max: 0.01 BCASH)
+- [ ] Required Tests: Price aggregation accuracy, fee calculation
+
+#### 6.2.2 On-Chain Voting
+- [ ] Proposal transaction type (0xE1)
+- [ ] Vote transaction type (0xE0)
+- [ ] Karma-weighted voting power formula
+- [ ] Quorum (20%) and threshold (66%) logic
+- [ ] 30-day timelock for passed proposals
+- [ ] Required Tests: Vote tallying, quorum detection
+
+#### 6.2.3 Protocol Upgrades
+- [ ] Version bit signaling in blocks
+- [ ] 75% threshold for soft fork activation
+- [ ] BIP template and process documentation
+- [ ] Required Tests: Signaling detection, activation logic
+
+---
+
+### 6.3 Content Moderation (specs/moderation.md)
+
+#### 6.3.1 User Controls
+- [ ] Personal block/mute lists in wallet
+- [ ] Keyword filtering
+- [ ] Content warning tags (author-applied)
+- [ ] Required Tests: Filter persistence, feed exclusion
+
+#### 6.3.2 Community Lists
+- [ ] Shared block list format specification
+- [ ] List publishing via PROFILE memo extension
+- [ ] List subscription in wallet
+- [ ] Multi-list aggregation with allow-list overrides
+- [ ] Required Tests: List parsing, subscription sync
+
+#### 6.3.3 Reputation System
+- [ ] Karma calculation: `Σ(upvotes) + Σ(tips) - Σ(downvotes)`
+- [ ] Trust transaction type (0xD0)
+- [ ] Web of trust propagation (with decay)
+- [ ] Required Tests: Karma accuracy, trust propagation
+
+#### 6.3.4 Stake-Weighted Reports
+- [ ] Report transaction type (0xD1)
+- [ ] Report stake requirement (0.01 BCASH)
+- [ ] False report penalty mechanism
+- [ ] Required Tests: Report submission, stake handling
+
+---
+
+### 6.4 Key Recovery (specs/recovery.md)
+
+#### 6.4.1 Social Recovery
+- [ ] Shamir's Secret Sharing implementation
+- [ ] recovery_config transaction type (0xF0)
+- [ ] recovery_request transaction type (0xF1)
+- [ ] Guardian approval flow (M-of-N)
+- [ ] 7-day timelock mechanism
+- [ ] recovery_cancel transaction (by owner)
+- [ ] Required Tests: Share generation, reconstruction, timelock
+
+#### 6.4.2 Key Rotation
+- [ ] key_rotation transaction type (0xF2)
+- [ ] Indexer migration logic (follower auto-update)
+- [ ] Karma/reputation transfer
+- [ ] Required Tests: Migration correctness, follower preservation
+
+#### 6.4.3 Multi-Sig Identities
+- [ ] multisig_setup transaction type (0xF3)
+- [ ] M-of-N signature verification for posts
+- [ ] Required Tests: Multi-sig posting, threshold verification
+
+---
+
+### 6.5 Platform Bridges (specs/bridges.md)
+
+#### 6.5.1 Telegram Bridge
+- [ ] Bot framework (python-telegram-bot)
+- [ ] Link/unlink commands
+- [ ] Bidirectional message relay
+- [ ] Privacy mode configuration
+- [ ] Required Tests: Message relay, identity linking
+
+#### 6.5.2 Discord Bridge
+- [ ] Discord.js bot setup
+- [ ] Slash commands (/bcash link, /bcash post)
+- [ ] Channel bridging configuration
+- [ ] Rich embed formatting
+- [ ] Required Tests: Command parsing, embed generation
+
+#### 6.5.3 Nostr Bridge
+- [ ] Relay implementation (WebSocket server)
+- [ ] Protocol mapping (Kind 1 ↔ Post, Kind 4 ↔ DM)
+- [ ] Address linking (npub ↔ bs1)
+- [ ] Zap → BCASH conversion
+- [ ] Required Tests: Event relay, address resolution
+
+#### 6.5.4 ActivityPub/Fediverse Bridge
+- [ ] Actor representation (@bs1...@botcash.social)
+- [ ] Federation protocol handlers
+- [ ] Inbox/Outbox implementation
+- [ ] WebFinger support
+- [ ] Required Tests: Federation messages, actor discovery
+
+---
+
+## Implementation Order (Updated)
+
+```
+Phase 0: librustzcash (MUST BE FIRST)
+    └── Network constants, address encoding
+
+Phase 1: Zebra (Full Node)
+    └── Network, consensus, RandomX PoW
+
+Phase 2: lightwalletd
+    └── Go backend for mobile
+
+Phase 3: iOS Wallet
+    └── Swift mobile app
+
+Phase 4: Android Wallet
+    └── Kotlin mobile app
+
+Phase 5: Social Protocol
+    └── Memo parsing, social RPC, mobile UI
+
+Phase 6: Infrastructure & Growth (POST-LAUNCH)
+    ├── 6.1 Scaling (batching, channels, indexers)
+    ├── 6.2 Governance (dynamic fees, voting)
+    ├── 6.3 Moderation (user controls, reputation)
+    ├── 6.4 Recovery (social recovery, key rotation)
+    └── 6.5 Bridges (Telegram, Discord, Nostr, Fediverse)
+```
+
+---
+
+## New Specification Files
+
+| Spec | File | Purpose |
+|------|------|---------|
+| Scaling | `specs/scaling.md` | Layer-2, batching, state channels |
+| Governance | `specs/governance.md` | Dynamic fees, on-chain voting |
+| Moderation | `specs/moderation.md` | Community filtering, reputation |
+| Recovery | `specs/recovery.md` | Social recovery, key backup |
+| Bridges | `specs/bridges.md` | Telegram/Discord/Nostr integration |
