@@ -756,6 +756,133 @@ pub trait Rpc {
         &self,
         request: types::social::SocialFeedRequest,
     ) -> Result<types::social::SocialFeedResponse>;
+
+    // ==================== Botcash Attention Market RPC Methods ====================
+
+    /// Boosts content visibility in the attention market.
+    ///
+    /// Pays BCASH to boost the visibility of content in the market feeds.
+    /// The payment contributes to the sender's credit pool for redistribution.
+    ///
+    /// method: post
+    /// tags: attention
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The boost request containing:
+    ///   - `from`: (string) The sender's shielded address
+    ///   - `targetTxid`: (string) The transaction ID of content to boost
+    ///   - `amount`: (number) Amount in zatoshis to spend on the boost
+    ///   - `durationBlocks`: (number, optional, default=1440) Duration in blocks (~1 day)
+    ///   - `category`: (number, optional) Category code (0-255)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet functionality to sign and broadcast the transaction.
+    #[method(name = "z_attentionboost")]
+    async fn z_attention_boost(
+        &self,
+        request: types::social::AttentionBoostRequest,
+    ) -> Result<types::social::AttentionBoostResponse>;
+
+    /// Tips content using credits instead of BCASH.
+    ///
+    /// Credits are earned from previous attention market payments and expire after 7 days.
+    /// When tipping with credits, the recipient receives real BCASH from the pool.
+    ///
+    /// method: post
+    /// tags: attention
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The tip request containing:
+    ///   - `from`: (string) The sender's shielded address
+    ///   - `targetTxid`: (string) The transaction ID of content to tip
+    ///   - `creditAmount`: (number) Amount of credits to tip (in zatoshis)
+    ///   - `message`: (string, optional) Message to include with the tip
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet functionality and sufficient credit balance.
+    #[method(name = "z_credittip")]
+    async fn z_credit_tip(
+        &self,
+        request: types::social::CreditTipRequest,
+    ) -> Result<types::social::CreditTipResponse>;
+
+    /// Gets the credit balance for an address.
+    ///
+    /// Returns the available credit balance, credits expiring soon, and individual grants.
+    /// Credits are earned from attention market payments and expire after 7 days.
+    ///
+    /// method: post
+    /// tags: attention
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The balance request containing:
+    ///   - `address`: (string) The address to check credit balance for
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Typically requires an indexer to track credit balances.
+    #[method(name = "z_creditbalance")]
+    async fn z_credit_balance(
+        &self,
+        request: types::social::CreditBalanceRequest,
+    ) -> Result<types::social::CreditBalanceResponse>;
+
+    /// Gets the attention market feed.
+    ///
+    /// Returns content ordered by the specified algorithm (hot, top, new, or boosted).
+    /// Hot feed uses time-decayed AU scores; top uses all-time AU; boosted shows only active boosts.
+    ///
+    /// method: post
+    /// tags: attention
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The feed request containing:
+    ///   - `feedType`: (string, optional, default="hot") One of: "hot", "top", "new", "boosted"
+    ///   - `category`: (number, optional) Filter by category code (0-255)
+    ///   - `limit`: (number, optional, default=50) Maximum items to return
+    ///   - `offset`: (number, optional, default=0) Pagination offset
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Typically requires an indexer to compute rankings efficiently.
+    #[method(name = "z_marketfeed")]
+    async fn z_market_feed(
+        &self,
+        request: types::social::MarketFeedRequest,
+    ) -> Result<types::social::MarketFeedResponse>;
+
+    /// Gets statistics for an attention market epoch.
+    ///
+    /// Returns total payments, participant count, and redistribution info for the epoch.
+    /// Each epoch is 1440 blocks (~1 day at 60s block time).
+    ///
+    /// method: post
+    /// tags: attention
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The stats request containing:
+    ///   - `epochNumber`: (number, optional) The epoch to query. If not specified, returns current epoch.
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Typically requires an indexer to track epoch statistics.
+    #[method(name = "z_epochstats")]
+    async fn z_epoch_stats(
+        &self,
+        request: types::social::EpochStatsRequest,
+    ) -> Result<types::social::EpochStatsResponse>;
 }
 
 /// RPC method implementations.
@@ -3174,6 +3301,260 @@ where
             vec![],
             0,
             types::social::ScannedRange::new(start_height, end_height),
+        ))
+    }
+
+    // ==================== Botcash Attention Market RPC Implementations ====================
+
+    async fn z_attention_boost(
+        &self,
+        request: types::social::AttentionBoostRequest,
+    ) -> Result<types::social::AttentionBoostResponse> {
+        // Validate the request
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        if request.target_txid.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "targetTxid is required",
+                None::<()>,
+            ));
+        }
+
+        if request.amount == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "amount must be greater than 0",
+                None::<()>,
+            ));
+        }
+
+        // Minimum boost amount is 0.001 BCASH = 100,000 zatoshis
+        const MIN_BOOST_AMOUNT: u64 = 100_000;
+        if request.amount < MIN_BOOST_AMOUNT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!("amount must be at least {} zatoshis (0.001 BCASH)", MIN_BOOST_AMOUNT),
+                None::<()>,
+            ));
+        }
+
+        if request.duration_blocks == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "durationBlocks must be greater than 0",
+                None::<()>,
+            ));
+        }
+
+        // Maximum duration is 30 days (~43,200 blocks at 60s)
+        const MAX_DURATION_BLOCKS: u32 = 43_200;
+        if request.duration_blocks > MAX_DURATION_BLOCKS {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!("durationBlocks must not exceed {} (~30 days)", MAX_DURATION_BLOCKS),
+                None::<()>,
+            ));
+        }
+
+        // Category code must be valid (0-255)
+        if let Some(category) = request.category {
+            if category > 6 {
+                // Categories 0-6 are defined, 7-255 reserved
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "category must be 0-6 (7-255 are reserved)",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet functionality
+        Err(ErrorObject::owned(
+            ErrorCode::MethodNotFound.code(),
+            "z_attentionboost requires wallet support which is not yet implemented in Zebra",
+            None::<()>,
+        ))
+    }
+
+    async fn z_credit_tip(
+        &self,
+        request: types::social::CreditTipRequest,
+    ) -> Result<types::social::CreditTipResponse> {
+        // Validate the request
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        if request.target_txid.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "targetTxid is required",
+                None::<()>,
+            ));
+        }
+
+        if request.credit_amount == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "creditAmount must be greater than 0",
+                None::<()>,
+            ));
+        }
+
+        // Validate message length if provided
+        if let Some(ref message) = request.message {
+            const MAX_TIP_MESSAGE_BYTES: usize = 456; // Max message bytes in CREDIT_TIP memo
+            if message.len() > MAX_TIP_MESSAGE_BYTES {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!("message must not exceed {} bytes", MAX_TIP_MESSAGE_BYTES),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet functionality and indexer support
+        Err(ErrorObject::owned(
+            ErrorCode::MethodNotFound.code(),
+            "z_credittip requires wallet and indexer support which is not yet implemented in Zebra",
+            None::<()>,
+        ))
+    }
+
+    async fn z_credit_balance(
+        &self,
+        request: types::social::CreditBalanceRequest,
+    ) -> Result<types::social::CreditBalanceResponse> {
+        // Validate the request
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to track credit balances.
+        // Credits are computed from attention market payments and their expirations.
+        //
+        // For now, return a response indicating no credits (requires indexer).
+        Ok(types::social::CreditBalanceResponse::new(0, 0, vec![]))
+    }
+
+    async fn z_market_feed(
+        &self,
+        request: types::social::MarketFeedRequest,
+    ) -> Result<types::social::MarketFeedResponse> {
+        // Validate feed type
+        let valid_feed_types = ["hot", "top", "new", "boosted"];
+        if !valid_feed_types.contains(&request.feed_type.as_str()) {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "feedType must be one of: {}",
+                    valid_feed_types.join(", ")
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate category if provided
+        if let Some(category) = request.category {
+            if category > 6 {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "category must be 0-6 (7-255 are reserved)",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Validate limit
+        if request.limit == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "limit must be greater than 0",
+                None::<()>,
+            ));
+        }
+
+        const MAX_LIMIT: u32 = 1000;
+        if request.limit > MAX_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!("limit must not exceed {}", MAX_LIMIT),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to track:
+        // - Attention market content
+        // - AU scores (paid + tips)
+        // - Time-decay calculations
+        // - Boost status
+        //
+        // For now, return an empty feed indicating indexer is required.
+        Ok(types::social::MarketFeedResponse::new(
+            vec![],
+            0,
+            request.feed_type,
+        ))
+    }
+
+    async fn z_epoch_stats(
+        &self,
+        request: types::social::EpochStatsRequest,
+    ) -> Result<types::social::EpochStatsResponse> {
+        // Get current tip height to calculate current epoch
+        let tip_height = self
+            .latest_chain_tip
+            .best_tip_height()
+            .unwrap_or(Height::MIN);
+
+        const EPOCH_LENGTH_BLOCKS: u32 = 1440; // ~1 day at 60s blocks
+        let current_epoch = tip_height.0 / EPOCH_LENGTH_BLOCKS;
+
+        let epoch_number = request.epoch_number.unwrap_or(current_epoch);
+
+        // Validate epoch number
+        if epoch_number > current_epoch {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!("epochNumber {} is in the future (current epoch: {})", epoch_number, current_epoch),
+                None::<()>,
+            ));
+        }
+
+        // Calculate epoch block range
+        let start_block = epoch_number * EPOCH_LENGTH_BLOCKS;
+        let end_block = start_block + EPOCH_LENGTH_BLOCKS - 1;
+        let is_complete = epoch_number < current_epoch;
+
+        // Note: Full implementation requires an indexer to track:
+        // - Total BCASH paid per epoch
+        // - Number of unique payers
+        // - Credits distributed
+        //
+        // For now, return epoch metadata with zero stats (requires indexer).
+        Ok(types::social::EpochStatsResponse::new(
+            epoch_number,
+            start_block,
+            end_block,
+            0,           // total_paid (requires indexer)
+            0,           // participants (requires indexer)
+            0,           // distributed (requires indexer)
+            is_complete,
         ))
     }
 }
