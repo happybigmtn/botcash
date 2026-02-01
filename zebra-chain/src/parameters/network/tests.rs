@@ -3,11 +3,12 @@ mod vectors;
 
 use color_eyre::Report;
 
-use super::Network;
+use super::{Network, NetworkKind};
 use crate::{
     amount::{Amount, NonNegative},
     block::Height,
     parameters::{
+        constants::botcash,
         subsidy::{
             block_subsidy, halving_divisor, height_for_halving, num_halvings,
             ParameterSubsidy as _, POST_BLOSSOM_HALVING_INTERVAL,
@@ -315,4 +316,58 @@ fn check_height_for_num_halvings() {
             );
         }
     }
+}
+
+/// Tests for the Botcash network kind (P1.1).
+#[test]
+fn botcash_network_kind_exists() {
+    let _init_guard = zebra_test::init();
+
+    // Verify NetworkKind::Botcash exists and is distinct
+    assert!(matches!(NetworkKind::Botcash, NetworkKind::Botcash));
+    assert_ne!(NetworkKind::Botcash, NetworkKind::Mainnet);
+    assert_ne!(NetworkKind::Botcash, NetworkKind::Testnet);
+    assert_ne!(NetworkKind::Botcash, NetworkKind::Regtest);
+}
+
+/// Tests for Botcash address prefix constants.
+#[test]
+fn botcash_address_prefixes() {
+    let _init_guard = zebra_test::init();
+
+    // Verify Botcash transparent address prefixes produce "B1" and "B3" addresses
+    // These values are defined in constants::botcash module
+    assert_eq!(
+        NetworkKind::Botcash.b58_pubkey_address_prefix(),
+        botcash::B58_PUBKEY_ADDRESS_PREFIX
+    );
+    assert_eq!(
+        NetworkKind::Botcash.b58_script_address_prefix(),
+        botcash::B58_SCRIPT_ADDRESS_PREFIX
+    );
+
+    // Verify TEX address prefix
+    assert_eq!(
+        NetworkKind::Botcash.tex_address_prefix(),
+        botcash::TEX_ADDRESS_PREFIX
+    );
+}
+
+/// Tests for Botcash network display.
+#[test]
+fn botcash_network_kind_display() {
+    let _init_guard = zebra_test::init();
+
+    // Verify the display name is correct
+    let display: &'static str = NetworkKind::Botcash.into();
+    assert_eq!(display, "BotcashKind");
+}
+
+/// Tests for Botcash BIP70 network name.
+#[test]
+fn botcash_bip70_name() {
+    let _init_guard = zebra_test::init();
+
+    // Botcash has its own BIP70 network name
+    assert_eq!(NetworkKind::Botcash.bip70_network_name(), "botcash");
 }

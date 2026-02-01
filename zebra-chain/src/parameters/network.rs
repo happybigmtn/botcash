@@ -33,6 +33,9 @@ pub enum NetworkKind {
 
     /// Regtest mode
     Regtest,
+
+    /// Botcash mainnet - Privacy + Social blockchain for AI agents.
+    Botcash,
 }
 
 impl From<Network> for NetworkKind {
@@ -69,6 +72,7 @@ impl NetworkKind {
             Self::Testnet | Self::Regtest => {
                 zcash_primitives::constants::testnet::B58_PUBKEY_ADDRESS_PREFIX
             }
+            Self::Botcash => super::constants::botcash::B58_PUBKEY_ADDRESS_PREFIX,
         }
     }
 
@@ -80,16 +84,17 @@ impl NetworkKind {
             Self::Testnet | Self::Regtest => {
                 zcash_primitives::constants::testnet::B58_SCRIPT_ADDRESS_PREFIX
             }
+            Self::Botcash => super::constants::botcash::B58_SCRIPT_ADDRESS_PREFIX,
         }
     }
 
     /// Return the network name as defined in
     /// [BIP70](https://github.com/bitcoin/bips/blob/master/bip-0070.mediawiki#paymentdetailspaymentrequest)
     pub fn bip70_network_name(&self) -> String {
-        if *self == Self::Mainnet {
-            "main".to_string()
-        } else {
-            "test".to_string()
+        match self {
+            Self::Mainnet => "main".to_string(),
+            Self::Botcash => "botcash".to_string(),
+            Self::Testnet | Self::Regtest => "test".to_string(),
         }
     }
 
@@ -100,6 +105,7 @@ impl NetworkKind {
         match self {
             Self::Mainnet => [0x1c, 0xb8],
             Self::Testnet | Self::Regtest => [0x1d, 0x25],
+            Self::Botcash => super::constants::botcash::TEX_ADDRESS_PREFIX,
         }
     }
 }
@@ -113,6 +119,7 @@ impl From<NetworkKind> for &'static str {
             NetworkKind::Mainnet => "MainnetKind",
             NetworkKind::Testnet => "TestnetKind",
             NetworkKind::Regtest => "RegtestKind",
+            NetworkKind::Botcash => "BotcashKind",
         }
     }
 }

@@ -187,6 +187,7 @@ impl From<NetworkType> for NetworkKind {
             NetworkType::Main => NetworkKind::Mainnet,
             NetworkType::Test => NetworkKind::Testnet,
             NetworkType::Regtest => NetworkKind::Regtest,
+            // Note: NetworkType::Botcash will be available when we integrate local librustzcash
         }
     }
 }
@@ -197,6 +198,13 @@ impl From<NetworkKind> for NetworkType {
             NetworkKind::Mainnet => NetworkType::Main,
             NetworkKind::Testnet => NetworkType::Test,
             NetworkKind::Regtest => NetworkType::Regtest,
+            // Botcash uses its own network type, not mappable to external zcash_protocol
+            // This will be properly handled when we integrate local librustzcash
+            NetworkKind::Botcash => {
+                // For address operations, Botcash behaves like Mainnet but with different prefixes
+                // The actual address encoding uses NetworkKind directly via b58_*_prefix methods
+                NetworkType::Main
+            }
         }
     }
 }
