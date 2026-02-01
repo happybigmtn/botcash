@@ -5,11 +5,11 @@
 
 ---
 
-## 🚦 Current Status: PHASE 2 COMPLETE
+## 🚦 Current Status: PHASE 3 COMPLETE
 
-**Last Updated:** 2026-02-01 (Phase 2.5 Complete)
+**Last Updated:** 2026-02-01 (Phase 3 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done (network_params.go with Botcash network definitions, RPC port detection, address validation for B1 prefix, chain name detection, and NodeName detection for botcashd).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -69,7 +69,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P2.4** | Add Botcash chain name detection | ✅ DONE | `lightwalletd/cmd/root.go:217-229` | `cd lightwalletd && go test ./cmd/...` |
 | **P2.5** | Update NodeName detection | ✅ DONE | `lightwalletd/cmd/root.go:222-229` | `cd lightwalletd && go test ./cmd/...` |
 
-### ⬜ Phase 3: iOS Wallet (zashi-ios)
+### ✅ Phase 3: iOS Wallet (zashi-ios) — COMPLETE
 
 | Priority | Task | Status | Files | Test Command |
 |----------|------|--------|-------|--------------|
@@ -79,7 +79,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P3.4** | Update CFBundleDisplayName (5 plists) | ✅ DONE | `zashi-ios/secant/*-Info.plist:12-13` | Visual verification |
 | **P3.5** | Update background task identifiers | ✅ DONE | `zashi-ios/secant/AppDelegate.swift:20-21` | Build verification |
 | **P3.6** | Replace app icons (3 iconsets) | ✅ DONE | `zashi-ios/secant/Resources/Assets.xcassets/AppIcon*.appiconset/` | Visual verification |
-| **P3.7** | Update localization strings (~50 refs) | ⬜ TODO | `zashi-ios/modules/Sources/Generated/Resources/*/Localizable.strings` | String verification |
+| **P3.7** | Update localization strings (~50 refs) | ✅ DONE | `zashi-ios/modules/Sources/Generated/Resources/*/Localizable.strings` | String verification |
 
 ### ⬜ Phase 4: Android Wallet (zashi-android)
 

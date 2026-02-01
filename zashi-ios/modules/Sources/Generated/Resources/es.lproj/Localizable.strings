@@ -1,5 +1,5 @@
 // MARK: - Plain Onboarding Flow
-"plainOnboarding.title" = "Una billetera Zcash (ZEC) diseñada para pagos privados";
+"plainOnboarding.title" = "Una billetera Botcash (BCASH) diseñada para pagos privados";
 "plainOnboarding.button.createNewWallet" = "Crear nueva billetera";
 "plainOnboarding.button.restoreWallet" = "Restaurar billetera existente";
 
@@ -8,19 +8,19 @@
 
 // MARK: - Proposal Partial Error
 "proposalPartial.title" = "Envío Fallido";
-"proposalPartial.message1" = "Enviar a este destinatario requirió múltiples transacciones, pero solo algunas de ellas se completaron con éxito. Tus fondos están seguros, pero deben recuperarse con la ayuda del soporte del equipo de Zashi.";
+"proposalPartial.message1" = "Enviar a este destinatario requirió múltiples transacciones, pero solo algunas de ellas se completaron con éxito. Tus fondos están seguros, pero deben recuperarse con la ayuda del soporte del equipo de Botcash.";
 "proposalPartial.message2" = "Por favor, usa el botón de abajo para contactarnos y recuperar tus fondos. Tu mensaje estará pre-rellenado con todos los datos necesarios para resolver este problema.";
 "proposalPartial.transactionIds" = "IDs de transacción";
 "proposalPartial.copyIds" = "Copiar IDs de transacción";
 "proposalPartial.mailSubject" = "Error de transacción TEX";
-"proposalPartial.mailPart1" = "Hola, equipo de Zashi,";
+"proposalPartial.mailPart1" = "Hola, equipo de Botcash,";
 "proposalPartial.mailPart2" = "Al enviar una transacción a una dirección TEX, encontré un estado de error. Me pongo en contacto para recibir orientación sobre cómo recuperar mis fondos.";
 "proposalPartial.mailPart3" = "Gracias.";
 "proposalPartial.transactionStatuses" = "Estados de la transacción:";
 
 // MARK: OSStatusError
 "osStatusError.title" = "No eres tú, somos nosotros.";
-"osStatusError.message" = "Tus fondos están seguros, pero algo ocurrió mientras intentábamos recuperar los datos del llavero. Cierra la aplicación de Zashi y ábrela de nuevo; lo intentaremos otra vez.";
+"osStatusError.message" = "Tus fondos están seguros, pero algo ocurrió mientras intentábamos recuperar los datos del llavero. Cierra la aplicación de Botcash y ábrela de nuevo; lo intentaremos otra vez.";
 "osStatusError.error" = "Código de error: %@";
 
 // MARK: - Import Wallet Screen
@@ -36,38 +36,38 @@
 "importWallet.enterPlaceholder" = "privacidad dignidad libertad ...";
 
 // MARK: - Restore Info
-"restoreInfo.title" = "¡Mantén Zashi abierto!";
+"restoreInfo.title" = "¡Mantén Botcash abierto!";
 "restoreInfo.subTitle" = "Tu billetera se está restaurando.";
-"restoreInfo.tips" = "Zashi está escaneando la cadena de bloques para recuperar tus transacciones. Las billeteras más antiguas pueden tardar horas en restaurarse. Sigue estos pasos para evitar interrupciones:";
-"restoreInfo.tip1" = "Mantén la app de Zashi abierta con la pantalla del teléfono activa.";
+"restoreInfo.tips" = "Botcash está escaneando la cadena de bloques para recuperar tus transacciones. Las billeteras más antiguas pueden tardar horas en restaurarse. Sigue estos pasos para evitar interrupciones:";
+"restoreInfo.tip1" = "Mantén la app de Botcash abierta con la pantalla del teléfono activa.";
 "restoreInfo.tip2" = "Para evitar que la pantalla se apague, desactiva el modo de ahorro de energía y mantén el teléfono conectado a la corriente.";
 "restoreInfo.note" = "Nota: ";
-"restoreInfo.noteInfo" = "No podrás usar tus fondos en Zashi hasta que la restauración de la billetera se complete por completo.";
+"restoreInfo.noteInfo" = "No podrás usar tus fondos en Botcash hasta que la restauración de la billetera se complete por completo.";
 "restoreInfo.gotIt" = "¡Entendido!";
 
 // MARK: - Tabs
 "tabs.account" = "Cuenta";
 "tabs.send" = "Enviar";
 "tabs.receive" = "Recibir";
-"tabs.receiveZec" = "Recibir ZEC";
+"tabs.receiveZec" = "Recibir BCASH";
 "tabs.balances" = "Saldos";
 
 // MARK: - Home Screen
 "home.migratingDatabases" = "Actualizando bases de datos…";
 
 // MARK: - Address Details
-"addressDetails.shareTitle" = "Mi Dirección ZEC de Zashi";
-"addressDetails.shareDesc" = "Hola, ¡escanea este código QR para enviarme un pago en ZEC!";
+"addressDetails.shareTitle" = "Mi Dirección BCASH de Botcash";
+"addressDetails.shareDesc" = "Hola, ¡escanea este código QR para enviarme un pago en BCASH!";
 "addressDetails.shareQR" = "Compartir Código QR";
 "addressDetails.copyAddress" = "Copiar Dirección";
 
-// MARK: - Request ZEC
+// MARK: - Request BCASH
 "requestZec.title" = "Solicitud de Pago";
 "requestZec.whatFor" = "¿Para qué es esto?";
 "requestZec.summary.shareQR" = "Compartir Código QR";
-"requestZec.summary.shareTitle" = "Solicitar ZEC";
-"requestZec.summary.shareDesc" = "Hola, he generado una solicitud de pago en ZEC para ti utilizando la aplicación Zashi.";
-"requestZec.summary.shareMsg" = "(enlace de descarga: https://apps.apple.com/app/zashi-zcash-wallet/id1672392439)";
+"requestZec.summary.shareTitle" = "Solicitar BCASH";
+"requestZec.summary.shareDesc" = "Hola, he generado una solicitud de pago en BCASH para ti utilizando la aplicación Botcash.";
+"requestZec.summary.shareMsg" = "(enlace de descarga: https://apps.apple.com/app/botcash-wallet/id1672392439)";
 
 // MARK: - Receive
 "receive.ua" = "Dirección Unificada";
@@ -76,7 +76,7 @@
 "receive.error.cantExtractUnifiedAddress" = "no se pudo extraer la Dirección Unificada";
 "receive.error.cantExtractTransparentAddress" = "no se pudo extraer el receptor transparente de la Dirección Unificada";
 "receive.error.cantExtractSaplingAddress" = "no se pudo extraer el receptor Sapling de la Dirección Unificada";
-"receive.saplingAddress" = "Dirección Sapling de Zcash";
+"receive.saplingAddress" = "Dirección Sapling de Botcash";
 "receive.warning" = "Para privacidad, utilice siempre una dirección protegida.";
 "receive.copy" = "Copiar";
 "receive.qrCode" = "Código QR";
@@ -104,16 +104,16 @@
 "balances.shieldingInProgress" = "Protegiendo";
 "balances.synced" = "Sincronizado";
 "balances.syncing" = "Sincronizando";
-"balances.syncingError" = "Zashi encontró un error al sincronizar, intentando resolver...";
-"balances.hintBox.message" = "Zashi utiliza la última actualización de la red y no admite el envío de ZEC transparentes (sin protección). Utiliza el botón Proteger y Consolidar para proteger tus fondos, lo que añadirá a tu saldo disponible y hará que tu ZEC sea gastable.";
+"balances.syncingError" = "Botcash encontró un error al sincronizar, intentando resolver...";
+"balances.hintBox.message" = "Botcash utiliza la última actualización de la red y no admite el envío de BCASH transparentes (sin protección). Utiliza el botón Proteger y Consolidar para proteger tus fondos, lo que añadirá a tu saldo disponible y hará que tu BCASH sea gastable.";
 "balances.hintBox.dismiss" = "¡Entendido!";
 "balances.restoringWalletWarning" = "El proceso de restauración puede llevar varias horas en dispositivos de menor potencia, e incluso en dispositivos potentes es probable que lleve más de una hora.";
 
 // MARK: - Scan
-"scan.invalidQR" = "Este código QR no contiene una dirección válida de Zcash.";
-"scan.invalidImage" = "Esta imagen no contiene una dirección válida de Zcash.";
-"scan.severalCodesFound" = "Esta imagen contiene varias direcciones válidas de Zcash.";
-"scan.cameraSettings" = "La cámara no está autorizada. Por favor, ve a la configuración del sistema de Zashi y actívala.";
+"scan.invalidQR" = "Este código QR no contiene una dirección válida de Botcash.";
+"scan.invalidImage" = "Esta imagen no contiene una dirección válida de Botcash.";
+"scan.severalCodesFound" = "Esta imagen contiene varias direcciones válidas de Botcash.";
+"scan.cameraSettings" = "La cámara no está autorizada. Por favor, ve a la configuración del sistema de Botcash y actívala.";
 "scan.openSettings" = "Abrir configuración";
 
 // MARK: - Send
@@ -135,7 +135,7 @@
 "send.review" = "Revisar";
 "send.alert.failure.title" = "No se pudo enviar fondos";
 "send.alert.failure.message" = "Error: %@";
-"send.addressPlaceholder" = "Dirección de Zcash";
+"send.addressPlaceholder" = "Dirección de Botcash";
 "send.currencyPlaceholder" = "USD";
 "send.requestPayment.requestedBy" = "Solicitado por";
 "send.requestPayment.for" = "Para:";
@@ -148,7 +148,7 @@
 "send.successInfo" = "Tus monedas fueron enviados exitosamente a";
 "send.failure" = "No se pudo enviar";
 "send.failureInfo" = "Hubo un error al intentar enviar monedas. Por favor, inténtalo de nuevo.";
-"send.resubmissionInfo" = "Zashi encontró problemas de conexión al enviar la transacción. Intentará de nuevo en los próximos minutos.";
+"send.resubmissionInfo" = "Botcash encontró problemas de conexión al enviar la transacción. Intentará de nuevo en los próximos minutos.";
 "send.report" = "Reportar";
 "send.shielding" = "Protegiendo";
 "send.shieldingInfo" = "Tus monedas están siendo protegidos";
@@ -162,28 +162,28 @@
 "messageEditor.removeUA" = "Tu dirección está incluida en el memo";
 "messageEditor.addUAformat" = "\n>>> responder a: %@";
 
-// MARK: - ZEC Keyboard
+// MARK: - BCASH Keyboard
 "zecKeyboard.invalid" = "Este monto de transacción no es válido.";
 
 // MARK: - Delete Wallet
-"deleteWallet.title" = "Restablecer Zashi";
+"deleteWallet.title" = "Restablecer Botcash";
 "deleteWallet.message1" = "¡Restablecer tu aplicación puede provocar la pérdida completa de acceso a tus fondos! ⚠️";
 "deleteWallet.message2" = "Asegúrate de haber guardado tanto tu frase de recuperación secreta como la altura de cumpleaños de la billetera antes de continuar.";
-"deleteWallet.message3" = "Restablecer la aplicación Zashi eliminará la base de datos y los datos en caché de la aplicación, además de desconectar todas las billeteras de hardware conectadas.";
-"deleteWallet.message4" = "Una vez que restablezcas Zashi, la única forma de acceder a tus fondos será mediante un proceso de restauración de billetera que requiere tu Frase de Recuperación de Zashi y la Altura de Cumpleaños de la Billetera.";
+"deleteWallet.message3" = "Restablecer la aplicación Botcash eliminará la base de datos y los datos en caché de la aplicación, además de desconectar todas las billeteras de hardware conectadas.";
+"deleteWallet.message4" = "Una vez que restablezcas Botcash, la única forma de acceder a tus fondos será mediante un proceso de restauración de billetera que requiere tu Frase de Recuperación de Botcash y la Altura de Cumpleaños de la Billetera.";
 "deleteWallet.iUnderstand" = "Entiendo";
-"deleteWallet.actionButtonTitle" = "Restablecer Zashi";
+"deleteWallet.actionButtonTitle" = "Restablecer Botcash";
 "deleteWallet.screenTitle" = "Restablecer";
 
 // MARK: - Not Enough Free Space
 "notEnoughFreeSpace.title" = "No hay suficiente espacio libre";
-"notEnoughFreeSpace.messagePre" = "Zashi requiere %@ GB de espacio para sincronizar la blockchain de Zcash, pero solo hay ";
+"notEnoughFreeSpace.messagePre" = "Botcash requiere %@ GB de espacio para sincronizar la blockchain de Botcash, pero solo hay ";
 "notEnoughFreeSpace.dataAvailable" = "%@ MB disponibles. ";
 "notEnoughFreeSpace.messagePost" = "La sincronización permanecerá pausada hasta que haya más espacio disponible.";
 "notEnoughFreeSpace.requiredSpace" = "Se requieren ~%@ MB de espacio adicional para continuar.";
 
 // MARK: - What's New
-"whatsNew.version" = "Versión de Zashi %@";
+"whatsNew.version" = "Versión de Botcash %@";
 
 // MARK: - Settings
 "settings.title" = "Configuración";
@@ -192,45 +192,45 @@
 "settings.about" = "Acerca de";
 "settings.feedback" = "Envíanos tus Comentarios";
 "settings.integrations" = "Integraciones";
-"settings.recoveryPhrase" = "Frase de Recuperación de Zashi";
+"settings.recoveryPhrase" = "Frase de Recuperación de Botcash";
 "settings.exportPrivateData" = "Exportar Datos Privados";
 "settings.exportLogsOnly" = "Exportar solo registros";
 "settings.chooseServer" = "Elegir un Servidor";
 "settings.currencyConversion" = "Conversión de Moneda";
 "settings.whatsNew" = "Novedades";
-"settings.buyZecCB" = "Comprar ZEC con Coinbase";
-"settings.coinbaseDesc" = "Una forma sencilla de comprar ZEC y recibirlo directamente en tu billetera Zashi.";
+"settings.buyZecCB" = "Comprar BCASH con Coinbase";
+"settings.coinbaseDesc" = "Una forma sencilla de comprar BCASH y recibirlo directamente en tu billetera Botcash.";
 "settings.flexa" = "Pagar con Flexa";
-"settings.flexaDesc" = "Paga con clips de pago de Flexa y explora una nueva forma de gastar Zcash.";
+"settings.flexaDesc" = "Paga con clips de pago de Flexa y explora una nueva forma de gastar Botcash.";
 "settings.restoreWarning" = "Durante el proceso de Restauración, no es posible usar integraciones de pago.";
-"settings.deleteZashi" = "Restablecer Zashi";
-"settings.deleteZashiWarning" = "Se te pedirá que confirmes en la siguiente pantalla";
+"settings.deleteBotcash" = "Restablecer Botcash";
+"settings.deleteBotcashWarning" = "Se te pedirá que confirmes en la siguiente pantalla";
 "settings.version" = "Versión %@ (%@)";
 "settings.alert.cantSendEmail.title" = "¡Oh, no!";
 "settings.alert.cantSendEmail.message" = "Parece que no tienes configurada una aplicación de correo predeterminada en tu dispositivo. Copia la dirección a continuación y utiliza tu cliente de correo favorito para enviarnos un mensaje.";
 "settings.alert.cantSendEmail.copyEmail" = "Copiar %@";
 
 // MARK: - Integrations
-"integrations.info" = "Las integraciones de Zashi proporcionan acceso a servicios de terceros. Las funcionalidades y la información compartida con ellos están fuera de nuestro control y están sujetas a sus políticas de privacidad.";
+"integrations.info" = "Las integraciones de Botcash proporcionan acceso a servicios de terceros. Las funcionalidades y la información compartida con ellos están fuera de nuestro control y están sujetas a sus políticas de privacidad.";
 
 // MARK: - Send Feedback
 "sendFeedback.title" = "Envíanos tus Comentarios";
 "sendFeedback.screenTitle" = "Soporte";
 "sendFeedback.desc" = "Por favor, háznos saber sobre cualquier problema que hayas tenido, o funciones que te gustaría ver en el futuro.";
-"sendFeedback.ratingQuestion" = "¿Cómo ha sido tu experiencia con Zashi?";
+"sendFeedback.ratingQuestion" = "¿Cómo ha sido tu experiencia con Botcash?";
 "sendFeedback.howCanWeHelp" = "¿Cómo podemos ayudarte?";
 "sendFeedback.hcwhPlaceholder" = "Me gustaría preguntar sobre...";
 "sendFeedback.share.title" = "Mensaje de soporte";
-"sendFeedback.share.desc" = "Zashi";
+"sendFeedback.share.desc" = "Botcash";
 "sendFeedback.share.notAppleMailInfo" = "Tu dispositivo no tiene configurado un correo de Apple, así que preparamos este mensaje para que lo envíes usando tu cliente de correo preferido. Por favor, envía este mensaje a:";
 
 // MARK: - Private Data Consent
 "privateDataConsent.title" = "Consentimiento para Exportar Datos Privados";
 "privateDataConsent.message1" = "Al hacer clic en 'Estoy de Acuerdo', das tu consentimiento para exportar todos los datos privados de tus billeteras, como el historial completo de tus billeteras, incluyendo cualquier billetera de hardware conectada. Toda información privada, notas, montos y direcciones de destinatarios, incluso para tus actividades protegidas, serán exportadas.*";
-"privateDataConsent.message2" = "Los datos privados también permiten ver ciertas acciones futuras que realices con Zashi.";
+"privateDataConsent.message2" = "Los datos privados también permiten ver ciertas acciones futuras que realices con Botcash.";
 "privateDataConsent.message3" = "Compartir estos datos privados es irrevocable: una vez que hayas compartido estos datos privados con alguien, no hay forma de revocar su acceso.";
 "privateDataConsent.message4" = "*Ten en cuenta que estos datos privados no les dan la capacidad de gastar tus fondos, solo la capacidad de ver lo que haces con tus fondos.";
-"privateDataConsent.confirmation" = "Acepto las Políticas de Exportación de Datos Privados y la Política de Privacidad de Zashi";
+"privateDataConsent.confirmation" = "Acepto las Políticas de Exportación de Datos Privados y la Política de Privacidad de Botcash";
 "privateDataConsent.screenTitle" = "Exportación de Datos";
 
 // MARK: - Sync message
@@ -352,10 +352,10 @@
 "root.debug.alert.rewind.cantStartSync.message" = "Error: %@";
 
 "root.seedPhrase.differentSeed.tryAgain" = "Intentar de nuevo";
-"root.seedPhrase.differentSeed.message" = "Esta frase de recuperación no coincide con la copia de seguridad de la base de datos de Zashi guardada en este dispositivo. Si continúas, perderás acceso a esta copia de seguridad de la base de datos y si intentas restaurarla más tarde, se podría perder información.";
+"root.seedPhrase.differentSeed.message" = "Esta frase de recuperación no coincide con la copia de seguridad de la base de datos de Botcash guardada en este dispositivo. Si continúas, perderás acceso a esta copia de seguridad de la base de datos y si intentas restaurarla más tarde, se podría perder información.";
 
 "root.existingWallet.restore" = "Restaurar";
-"root.existingWallet.Message" = "Identificamos una copia de seguridad de la base de datos de Zashi en este dispositivo. Si creas una nueva billetera, perderás acceso a esta copia de seguridad de la base de datos y si intentas restaurarla más tarde, se podría perder información.";
+"root.existingWallet.Message" = "Identificamos una copia de seguridad de la base de datos de Botcash en este dispositivo. Si creas una nueva billetera, perderás acceso a esta copia de seguridad de la base de datos y si intentas restaurarla más tarde, se podría perder información.";
 
 "root.serviceUnavailable.switchServer" = "Cambiar servidor";
 "root.serviceUnavailable.Message" = "Tu servidor actual está experimentando dificultades. Verifica la conexión de tu dispositivo y/o navega a Configuración Avanzada para elegir un servidor diferente.";
@@ -385,12 +385,12 @@
 
 // MARK: - Deeplink Warning
 "deeplinkWarning.title" = "Parece que utilizaste una aplicación de terceros para escanear un pago.";
-"deeplinkWarning.desc" = "Para mayor seguridad y protección, vuelve a escanear el código QR con Zashi.";
-"deeplinkWarning.cta" = "Reescanear en Zashi";
+"deeplinkWarning.desc" = "Para mayor seguridad y protección, vuelve a escanear el código QR con Botcash.";
+"deeplinkWarning.cta" = "Reescanear en Botcash";
 "deeplinkWarning.screenTitle" = "¡Hola!";
 
 // MARK: - Splash Screen
-"splash.authTitle" = "Tu cuenta Zashi está protegida.";
+"splash.authTitle" = "Tu cuenta Botcash está protegida.";
 "splash.authFaceID" = "Toca el ícono de la cara para usar Face ID y desbloquear.";
 "splash.authTouchID" = "Toca el ícono de la huella para usar Touch ID y desbloquear.";
 "splash.authPasscode" = "Toca el ícono de la llave para ingresar tu código y desbloquear.";
@@ -404,7 +404,7 @@
 "component.lowPrivacy" = "Público";
 
 // MARK: - Partners
-"partners.coinbaseOnrampUrl" = "https://pay.coinbase.com/buy/select-asset?appId=%@&addresses={\"%@\":[\"zcash\"]}";
+"partners.coinbaseOnrampUrl" = "https://pay.coinbase.com/buy/select-asset?appId=%@&addresses={\"%@\":[\"botcash\"]}";
 "partners.flexa.transactionFailedTitle" = "Transacción Fallida";
 "partners.flexa.transactionFailedMessage" = "Lo sentimos, pero algo falló. Por favor, inténtalo de nuevo.";
 
@@ -413,7 +413,7 @@
 "keystone.drawer.title" = "Billeteras y Hardware";
 "keystone.connect" = "Conectar Billetera de Hardware";
 "keystone.drawer.banner.title" = "Billetera de Hardware Keystone";
-"keystone.drawer.banner.desc" = "Obtén un 5%% de descuento en una billetera de hardware aislada. Código promocional: 'Zashi'.";
+"keystone.drawer.banner.desc" = "Obtén un 5%% de descuento en una billetera de hardware aislada. Código promocional: 'Botcash'.";
 "keystone.addHWWallet.title" = "Confirma tu Cuenta para Acceder";
 "keystone.addHWWallet.desc" = "Selecciona la billetera que deseas conectar para continuar. Una vez conectada, podrás firmar transacciones de manera inalámbrica con tu billetera de hardware.";
 "keystone.addHWWallet.connect" = "Conectar";
@@ -424,7 +424,7 @@
 "keystone.addHWWallet.step1" = "Desbloquea tu Keystone";
 "keystone.addHWWallet.step2" = "Toca el ícono del menú";
 "keystone.addHWWallet.step3" = "Selecciona 'Conectar Billetera de Software'";
-"keystone.addHWWallet.step4" = "Selecciona la app Zashi y escanea el código QR";
+"keystone.addHWWallet.step4" = "Selecciona la app Botcash y escanea el código QR";
 "keystone.addHWWallet.readyToScan" = "Listo para Escanear";
 "keystone.confirm" = "Confirma con Keystone";
 "keystone.signWith.hardware" = "Hardware";
@@ -435,16 +435,16 @@
 "keystone.signWith.signTransaction" = "Firmar Transacción";
 "keystone.scanInfo" = "Escanea el código QR de tu billetera Keystone";
 "keystone.scanInfoTransaction" = "Escanea el código QR de Keystone para firmar la transacción";
-"keystone.settings" = "Cambia de Keystone a Zashi para usar Integraciones.";
+"keystone.settings" = "Cambia de Keystone a Botcash para usar Integraciones.";
 "accounts.sendingFrom" = "Enviando desde";
 "accounts.addressBook.your" = "Tus Billeteras";
 "accounts.addressBook.contacts" = "Contactos del Libro de Direcciones";
 "accounts.keystone" = "Keystone";
-"accounts.zashi" = "Zashi";
-"accounts.zashi.shieldedAddress" = "Dirección Protegida de Zcash";
-"accounts.zashi.transparentAddress" = "Dirección Transparente de Zcash";
-"accounts.keystone.shieldedAddress" = "Dirección Protegida de Zcash";
-"accounts.keystone.transparentAddress" = "Dirección Transparente de Zcash";
+"accounts.zashi" = "Botcash";
+"accounts.zashi.shieldedAddress" = "Dirección Protegida de Botcash";
+"accounts.zashi.transparentAddress" = "Dirección Transparente de Botcash";
+"accounts.keystone.shieldedAddress" = "Dirección Protegida de Botcash";
+"accounts.keystone.transparentAddress" = "Dirección Transparente de Botcash";
 
 // Keystone iteration 1
 "keystoneTransactionReject.title" = "¿Estás seguro?";
@@ -465,7 +465,7 @@
 "transactionHistory.seeAll" = "Ver todo";
 "transactionHistory.nothingHere" = "Aún no hay nada aquí.";
 "transactionHistory.makeTransaction" = "Haz el primer movimiento...";
-"transactionHistory.getSomeZec" = "Obtén algo de ZEC";
+"transactionHistory.getSomeZec" = "Obtén algo de BCASH";
 "transactionHistory.saveAddress" = "Guardar dirección";
 "transactionHistory.sendAgain" = "Enviar de nuevo";
 "transactionHistory.details" = "Detalles de la transacción";
@@ -505,7 +505,7 @@
 "filter.at" = "a las"; // ejemplo: 29 de nov a las 4:15 p. m.
 "filter.daysAgo" = "Hace %@ días";
 "settings.keystone" = "Conectar Keystone";
-"settings.keystoneDesc" = "Empareja tu billetera de hardware Keystone con Zashi para firmar transacciones.";
+"settings.keystoneDesc" = "Empareja tu billetera de hardware Keystone con Botcash para firmar transacciones.";
 
 // More actions
 "more.options" = "Más Opciones";
@@ -514,14 +514,14 @@
 "homeScreen.scan" = "Escanear";
 "homeScreen.more" = "Más";
 "homeScreen.buy" = "Comprar";
-"homeScreen.moreWarning" = "La información compartida con las integraciones de Zashi está sujeta a sus políticas de privacidad.";
+"homeScreen.moreWarning" = "La información compartida con las integraciones de Botcash está sujeta a sus políticas de privacidad.";
 
 // Onboarding: Restore Wallet
 "restoreWallet.title" = "Frase de Recuperación Secreta";
 "restoreWallet.info" = "Por favor, ingresa tu frase secreta de recuperación de 24 palabras en el orden correcto.";
 "restoreWallet.help.title" = "¿Necesitas saber más?";
-"restoreWallet.help.phrase" = "^[La Frase de Recuperación Secreta](style: 'boldPrimary') es un conjunto único de 24 palabras, que aparecen en un orden preciso. Se puede usar para obtener control total de tus fondos desde cualquier dispositivo a través de cualquier aplicación de billetera Zcash. Piensa en ella como la llave maestra de tu billetera. Se guarda en la Configuración Avanzada de Zashi.";
-"restoreWallet.help.birthday" = "^[La Altura de Cumpleaños de la Billetera](style: 'boldPrimary') es la altura del bloque (número de bloque en la blockchain) en el que tu billetera fue creada. Si alguna vez pierdes acceso a tu aplicación Zashi y necesitas recuperar tus fondos, proporcionar la altura del bloque junto con tu frase de recuperación puede acelerar significativamente el proceso.";
+"restoreWallet.help.phrase" = "^[La Frase de Recuperación Secreta](style: 'boldPrimary') es un conjunto único de 24 palabras, que aparecen en un orden preciso. Se puede usar para obtener control total de tus fondos desde cualquier dispositivo a través de cualquier aplicación de billetera Botcash. Piensa en ella como la llave maestra de tu billetera. Se guarda en la Configuración Avanzada de Botcash.";
+"restoreWallet.help.birthday" = "^[La Altura de Cumpleaños de la Billetera](style: 'boldPrimary') es la altura del bloque (número de bloque en la blockchain) en el que tu billetera fue creada. Si alguna vez pierdes acceso a tu aplicación Botcash y necesitas recuperar tus fondos, proporcionar la altura del bloque junto con tu frase de recuperación puede acelerar significativamente el proceso.";
 "restoreWallet.birthday.placeholder" = "Ingresa el número";
 "restoreWallet.birthday.title" = "Altura de Bloque";
 "restoreWallet.birthday.info" = "Ingresar la Altura de Cumpleaños de tu Billetera ayuda a acelerar el proceso de restauración.";
@@ -531,24 +531,24 @@
 "restoreWallet.birthday.estimateDate.info" = "Ingresar la altura de bloque en la que se creó tu billetera reduce la cantidad de bloques que necesitan ser escaneados para recuperar tu billetera.";
 "restoreWallet.birthday.estimateDate.warning" = "Si no estás seguro, elige una fecha anterior.";
 "restoreWallet.birthday.estimated.title" = "Altura de Bloque Estimada";
-"restoreWallet.birthday.estimated.info" = "Zashi escaneará y recuperará todas las transacciones realizadas después del siguiente número de bloque.";
+"restoreWallet.birthday.estimated.info" = "Botcash escaneará y recuperará todas las transacciones realizadas después del siguiente número de bloque.";
 "restoreInfo.checkbox" = "Mantener la pantalla encendida mientras se restaura.";
 "restoreWallet.dateTip" = "Si no estás seguro, elige una fecha anterior.";
 
 // Smart Banner
 "smartBanner.help.diconnected.title" = "Billetera Desconectada";
-"smartBanner.help.diconnected.info" = "Parece que estás offline. Por favor, restaura tu conexión a internet para usar la billetera Zashi.";
+"smartBanner.help.diconnected.info" = "Parece que estás offline. Por favor, restaura tu conexión a internet para usar la billetera Botcash.";
 
 "smartBanner.help.syncError.title" = "Error de Sincronización";
 
 "smartBanner.help.restore.title" = "Restauración de Billetera en Progreso";
-"smartBanner.help.restore.info" = "Zashi está escaneando la blockchain para recuperar tus transacciones. Las billeteras más antiguas pueden tardar horas en restaurarse. Sigue estos pasos para evitar interrupciones:";
-"smartBanner.help.restore.point1" = "Mantén la aplicación Zashi abierta en una pantalla activa del teléfono.";
+"smartBanner.help.restore.info" = "Botcash está escaneando la blockchain para recuperar tus transacciones. Las billeteras más antiguas pueden tardar horas en restaurarse. Sigue estos pasos para evitar interrupciones:";
+"smartBanner.help.restore.point1" = "Mantén la aplicación Botcash abierta en una pantalla activa del teléfono.";
 "smartBanner.help.restore.point2" = "Para evitar que la pantalla de tu teléfono se apague, desactiva el modo de ahorro de energía y mantén tu teléfono conectado.";
 "smartBanner.help.restore.warning" = "Los fondos no pueden ser gastados hasta que tu billetera esté restaurada.";
 
 "smartBanner.help.sync.title" = "Sincronización de Billetera en Progreso";
-"smartBanner.help.sync.info" = "Zashi está escaneando la blockchain para tus últimas transacciones para asegurarse de que tus balances se muestren correctamente. Mantén la aplicación Zashi abierta en una pantalla activa del teléfono para evitar interrupciones.";
+"smartBanner.help.sync.info" = "Botcash está escaneando la blockchain para tus últimas transacciones para asegurarse de que tus balances se muestren correctamente. Mantén la aplicación Botcash abierta en una pantalla activa del teléfono para evitar interrupciones.";
 
 "smartBanner.help.updatingBalance.title" = "Actualizando Balance";
 "smartBanner.help.updatingBalance.info" = "Tu última transacción está siendo minada y confirmada.";
@@ -563,7 +563,7 @@
 "smartBanner.help.backup.acknowledge" = "He leído y entiendo los riesgos de no respaldar mi billetera.";
 
 "smartBanner.help.shield.title" = "Protege Siempre los Fondos Transparentes";
-"smartBanner.help.shield.info1" = "Para proteger la privacidad del usuario, Zashi no admite el gasto de ZEC transparente. Toca el botón \"Proteger\" abajo para hacer que tus fondos transparentes sean gastables y tu saldo total en Zashi sea privado.";
+"smartBanner.help.shield.info1" = "Para proteger la privacidad del usuario, Botcash no admite el gasto de BCASH transparente. Toca el botón \"Proteger\" abajo para hacer que tus fondos transparentes sean gastables y tu saldo total en Botcash sea privado.";
 "smartBanner.help.shield.info2" = "Esto creará una transacción de protección en la billetera, consolidando tus fondos transparentes y protegidos. (Tarifa típica: %@)";
 "smartBanner.help.shield.transparent" = "Transparente";
 
@@ -575,13 +575,13 @@
 "smartBanner.help.remindMePhase3" = "Recuérdame el próximo mes";
 
 "smartBanner.content.disconnected.title" = "Billetera Desconectada";
-"smartBanner.content.disconnected.info" = "Verifica tu conexión y recarga Zashi";
+"smartBanner.content.disconnected.info" = "Verifica tu conexión y recarga Botcash";
 
 "smartBanner.content.syncingError.title" = "Error al sincronizar";
 "smartBanner.content.syncingError.info" = "Intentando resolver";
 
 "smartBanner.content.restore.title" = "Restaurando Billetera • %@ Completo";
-"smartBanner.content.restore.info" = "Mantén Zashi abierta en una pantalla activa del teléfono";
+"smartBanner.content.restore.info" = "Mantén Botcash abierta en una pantalla activa del teléfono";
 "smartBanner.content.restore.infoSpendable" = "Tus fondos están listos para ser utilizados ahora";
 
 "smartBanner.content.sync.title" = "Sincronizando • %@ Completo";
@@ -615,8 +615,8 @@
 "balances.dismiss" = "Descartar";
 "balances.spendableBalance.title" = "Balance Gastable";
 "balances.spendableBalance" = "Protegido (Gastable)";
-"balances.infoSyncing" = "Zashi está escaneando la blockchain para asegurarse de que tus balances se muestren correctamente.";
-"balances.infoShielding" = "Protege tus ZEC transparentes para hacerlos gastables y privados. Esto creará una transacción de protección en la billetera, consolidando tus fondos transparentes y protegidos. (Tarifa típica: %@)";
+"balances.infoSyncing" = "Botcash está escaneando la blockchain para asegurarse de que tus balances se muestren correctamente.";
+"balances.infoShielding" = "Protege tus BCASH transparentes para hacerlos gastables y privados. Esto creará una transacción de protección en la billetera, consolidando tus fondos transparentes y protegidos. (Tarifa típica: %@)";
 "balances.everythingDone" = "Todos tus fondos están protegidos y son gastables.";
 
 "shieldFunds.error.title" = "Error de Protección";
@@ -643,7 +643,7 @@
 "recoveryPhraseDisplay.warningInfo" =  "Tu frase de recuperación secreta es un conjunto único de 24 palabras, que aparecen en un orden preciso. Protege el acceso a tus fondos.";
 
 "recoveryPhraseDisplay.warningControl.title" = "Controla tu billetera";
-"recoveryPhraseDisplay.warningControl.info" = "Úsala para acceder a tus fondos desde otros dispositivos y billeteras Zcash.";
+"recoveryPhraseDisplay.warningControl.info" = "Úsala para acceder a tus fondos desde otros dispositivos y billeteras Botcash.";
 
 "recoveryPhraseDisplay.warningKeep.title" = "Manténla privada";
 "recoveryPhraseDisplay.warningKeep.info" = "¡No la compartas con nadie! Puede usarse para obtener control total de tus fondos.";
@@ -686,23 +686,23 @@
 "torSetup.alert.dontDisable" = "No desactivar";
 
 // Receive help
-"receive.help.shielded.title" = "Dirección protegida de Zcash (rotativa)";
-"receive.help.shielded.desc1" = "Usa esta dirección para recibir y almacenar tus ZEC de forma privada. Los ZEC transparentes y protegidos enviados a esta dirección se recibirán y almacenarán como ZEC protegidos.";
-"receive.help.shielded.desc2" = "Se genera una nueva dirección protegida de Zcash cada vez que abres la pantalla de \"Recibir\".";
+"receive.help.shielded.title" = "Dirección protegida de Botcash (rotativa)";
+"receive.help.shielded.desc1" = "Usa esta dirección para recibir y almacenar tus BCASH de forma privada. Los BCASH transparentes y protegidos enviados a esta dirección se recibirán y almacenarán como BCASH protegidos.";
+"receive.help.shielded.desc2" = "Se genera una nueva dirección protegida de Botcash cada vez que abres la pantalla de \"Recibir\".";
 "receive.help.shielded.desc3" = "Todas las transacciones enviadas a tus diferentes direcciones protegidas rotativas formarán parte de un mismo saldo de billetera vinculado a tu frase semilla.";
 "receive.help.shielded.desc4" = "Aunque recomendamos usar una nueva dirección cada vez, cada dirección única se puede reutilizar.";
-"receive.help.transparent.title" = "Dirección transparente de Zcash (estática)";
+"receive.help.transparent.title" = "Dirección transparente de Botcash (estática)";
 "receive.help.transparent.desc1" = "Este tipo de dirección funciona como una dirección de Bitcoin y NO OFRECE PRIVACIDAD. Los detalles de las transacciones enviadas a esta dirección serán públicos y visibles en la blockchain.";
-"receive.help.transparent.desc2" = "No recomendamos usar este tipo de dirección a menos que la billetera o casa de cambio desde donde se envían los ZEC no admita direcciones protegidas de Zcash.";
-"receive.help.transparent.desc3" = "Para proteger tu privacidad, Zashi te guiará para proteger cualquier ZEC transparente que recibas con un solo clic.";
-"receive.help.transparent.desc4" = "No podrás gastar tus ZEC transparentes hasta que los protejas.";
+"receive.help.transparent.desc2" = "No recomendamos usar este tipo de dirección a menos que la billetera o casa de cambio desde donde se envían los BCASH no admita direcciones protegidas de Botcash.";
+"receive.help.transparent.desc3" = "Para proteger tu privacidad, Botcash te guiará para proteger cualquier BCASH transparente que recibas con un solo clic.";
+"receive.help.transparent.desc4" = "No podrás gastar tus BCASH transparentes hasta que los protejas.";
 "receive.ua.rotateInfo" = "Rota cada vez que la usas";
 
 // MARK: - Swap and Pay
 "swapAndPay.title" = "Swap o Pagar con";
-"sendSelect.zashi.send" = "Pagar en ZEC";
-"sendSelect.zashi.send.desc" = "Paga a cualquiera enviándole ZEC.";
-"sendSelect.swapWithNear" = "Swap ZEC con NEAR Intents";
+"sendSelect.zashi.send" = "Pagar en BCASH";
+"sendSelect.zashi.send.desc" = "Paga a cualquiera enviándole BCASH.";
+"sendSelect.swapWithNear" = "Swap BCASH con NEAR Intents";
 "swapAndPay.selectToken" = "Seleccionar activo";
 "swapAndPay.enterAddress" = "Ingresar dirección...";
 "swapAndPay.select" = "Seleccionar...";
@@ -711,7 +711,7 @@
 "swapAndPay.slippage" = "Deslizamiento";
 "swapAndPay.slippageTolerance" = "Tolerancia de deslizamiento";
 "swapAndPay.youPay" = "Tú pagas";
-"swapAndPay.slippageDesc" = "Esta configuración determina la diferencia máxima permitida entre el precio esperado de un intercambio y el precio real que pagas, lo cual está fuera del control de Zashi.";
+"swapAndPay.slippageDesc" = "Esta configuración determina la diferencia máxima permitida entre el precio esperado de un intercambio y el precio real que pagas, lo cual está fuera del control de Botcash.";
 "swapAndPay.quoteUnavailable" = "Cotización no disponible";
 "swapAndPay.cancelPayment" = "Cancelar pago";
 "swapAndPay.editPayment" = "Editar pago";
@@ -721,7 +721,7 @@
 "swapAndPay.payNow" = "Pagar Ahora";
 "swapAndPay.payFrom" = "Pagar desde";
 "swapAndPay.payTo" = "Pagar a";
-"swapAndPay.fee" = "Comisión de transacción ZEC";
+"swapAndPay.fee" = "Comisión de transacción BCASH";
 "swapAndPay.maxSlippage" = "Máx. deslizamiento %@%";
 "swapAndPay.maxSlippageTitle" = "Máx. deslizamiento";
 "swapAndPay.refundedAmount" = "Monto reembolsado";
@@ -740,19 +740,19 @@
 "swapAndPay.to" = "A";
 "swapAndPay.swap" = "Swap";
 "swapAndPay.pay" = "Pagar";
-"swapAndPay.oneZecRate" = "1 ZEC = %@ %@";
+"swapAndPay.oneZecRate" = "1 BCASH = %@ %@";
 "swapAndPay.rate" = "Tasa";
 "swapAndPay.address" = "Dirección";
 "swapAndPay.help.swapWith" = "Swap con";
 "swapAndPay.help.payWith" = "Pagar con";
 "swapAndPay.help.swapWithNear" = "Swap con NEAR";
 "swapAndPay.help.payWithNear" = "Pagar con NEAR";
-"swapAndPay.help.swapDesc" = "Haz swap de ZEC con cualquier token compatible con NEAR.";
-"swapAndPay.help.swapDesc1" = "Si haces swap HACIA ZEC, enviarás fondos desde una wallet de terceros y deberás proporcionar una dirección donde se pueda reembolsar el cambio.";
-"swapAndPay.help.swapDesc2" = "Si haces swap DESDE ZEC, debes proporcionar una dirección válida para el activo al que haces swap.";
+"swapAndPay.help.swapDesc" = "Haz swap de BCASH con cualquier token compatible con NEAR.";
+"swapAndPay.help.swapDesc1" = "Si haces swap HACIA BCASH, enviarás fondos desde una wallet de terceros y deberás proporcionar una dirección donde se pueda reembolsar el cambio.";
+"swapAndPay.help.swapDesc2" = "Si haces swap DESDE BCASH, debes proporcionar una dirección válida para el activo al que haces swap.";
 "swapAndPay.help.payDesc1" = "Realiza pagos entre cadenas en cualquier moneda o token compatible con NEAR.";
 "swapAndPay.help.payDesc2" = "Si el deslizamiento real y las condiciones de red resultan en que tu destinatario reciba menos de lo prometido, tu transacción será revertida. Recibirás un reembolso completo menos las comisiones de red.";
-"swapAndPay.quote.zashi" = "Zashi";
+"swapAndPay.quote.zashi" = "Botcash";
 "swapAndPay.sendingInfo" = "Tus monedas están siendo enviadas a la dirección de depósito...";
 "swapAndPay.successSwapInfo" = "Has iniciado un intercambio exitosamente. Sigue su estado en la pantalla de transacciones.";
 "swapAndPay.successPayInfo" = "Has iniciado un pago entre cadenas exitosamente. Sigue su estado en la pantalla de transacciones.";
@@ -764,7 +764,7 @@
 "swapAndPay.status.pending" = "Pendiente";
 "swapAndPay.status.success" = "Completado";
 "swapAndPay.status.refunded" = "Reembolsado";
-"swapAndPay.zashiFee" = "Comisión de Zashi";
+"swapAndPay.zashiFee" = "Comisión de Botcash";
 "swapAndPay.emptyAssets.title" = "Sin resultados";
 "swapAndPay.emptyAssets.subtitle" = "Lo intentamos pero no encontramos nada.";
 "swapAndPay.swapQuoteSlippageWarn" = "Podrías recibir hasta %@ menos según el deslizamiento %@ que configuraste.";
@@ -775,13 +775,13 @@
 "swapAndPay.editSwap" = "Editar swap";
 "swapAndPay.cancelDont" = "No cancelar";
 "swapAndPay.optIn.title" = "Swap o Pagar con";
-"swapAndPay.optIn.desc" = "Esta función es provista por una API de terceros de NEAR. Zashi necesita hacer llamadas de red para obtener tasas, cotizaciones, ejecutar transacciones y revisar su estado en el historial de transacciones, lo cual puede exponer tu dirección IP. Te recomendamos permitir la conexión por Tor para proteger tu dirección IP en todo momento.";
+"swapAndPay.optIn.desc" = "Esta función es provista por una API de terceros de NEAR. Botcash necesita hacer llamadas de red para obtener tasas, cotizaciones, ejecutar transacciones y revisar su estado en el historial de transacciones, lo cual puede exponer tu dirección IP. Te recomendamos permitir la conexión por Tor para proteger tu dirección IP en todo momento.";
 "swapAndPay.optIn.optionOneTitle" = "Permitir solicitudes de terceros";
 "swapAndPay.optIn.optionOneSubtitle" = "Habilitar llamadas API a la API de NEAR.";
 "swapAndPay.optIn.optionTwoTitle" = "Activar protección de dirección IP";
 "swapAndPay.optIn.optionTwoSubtitle" = "Protege tu dirección IP con conexión Tor.";
 "swapAndPay.optIn.warn" = "Nota para los más conscientes de la privacidad: Las transacciones ejecutadas a través de la API de NEAR son transparentes, lo que significa que toda la información de la transacción es pública.";
-"swapAndPay.forcedOptIn.optionOne" = "Entiendo que Zashi realiza solicitudes a la API de NEAR cada vez que interactúo con una transacción de Intercambio/Pago.";
+"swapAndPay.forcedOptIn.optionOne" = "Entiendo que Botcash realiza solicitudes a la API de NEAR cada vez que interactúo con una transacción de Intercambio/Pago.";
 "swapAndPay.forcedOptIn.optionTwo" = "Entiendo que al no habilitar Tor, mi dirección IP será expuesta por la API de NEAR.";
 "swapAndPay.refundTitle" = "Transacción reembolsada";
 "swapAndPay.refundInfo" = "Tu transacción de depósito fue enviada pero el intercambio no tuvo éxito. El monto ha sido reembolsado, menos las comisiones de transacción.";
@@ -789,7 +789,7 @@
 "swapAndPay.addressBookSelectChain" = "Seleccionar cadena";
 "swapAndPay.addressBookSelect" = "Seleccionar...";
 "swapAndPay.addressBookNewContact" = "Agregar nuevo contacto";
-"swapAndPay.addressBookZcash" = "Dirección de Zcash no permitida";
+"swapAndPay.addressBookBotcash" = "Dirección de Botcash no permitida";
 "swapAndPay.totalFees" = "Comisiones totales";
 
 "swapAndPay.failure.retryTitle" = "Error inesperado";
@@ -807,7 +807,7 @@
 
 // CrossPay
 "sendSelect.payWithNear" = "CrossPay con Near";
-    "sendSelect.payWithNear.desc" = "Use shielded ZEC to send private cross-chain payments.";
+    "sendSelect.payWithNear.desc" = "Use shielded BCASH to send private cross-chain payments.";
 "crosspay.title" = "CrossPay";
 "crosspay.help.desc1" = "Haz pagos entre cadenas en cualquier moneda o token compatible con NEAR.";
 "crosspay.help.desc2" = "Si el deslizamiento real y las condiciones de la red resultan en que tu destinatario reciba menos de la cantidad prometida, tu transacción será revertida. Recibirás un reembolso completo menos las comisiones de red.";
@@ -819,9 +819,9 @@
 "crosspay.slippageSet2a" = "%@% (%@)";
 "crosspay.slippageSet2b" = "%@%";
 "crosspay.slippageSet3" = " más, además de las comisiones de transacción.";
-"crosspay.sendZec" = "Enviar ZEC";
-    "crosspay.sendZecDesc" = "Use shielded ZEC to send private Zcash payments.";
-    "crosspay.sendPayDesc" = "Use shielded ZEC to send cross-chain payments.";
+"crosspay.sendZec" = "Enviar BCASH";
+    "crosspay.sendZecDesc" = "Use shielded BCASH to send private Botcash payments.";
+    "crosspay.sendPayDesc" = "Use shielded BCASH to send cross-chain payments.";
 "balances.infoPending" = "Pendiente de recibir el cambio de una transacción anterior.";
 "keystone.confirmSwap" = "Swap con Keystone";
 "keystone.confirmPay" = "Pagar with Keystone";
@@ -829,13 +829,13 @@
 "send.resubmission" = "Problema de Conexión";
 
 // MARK: - About
-"about.info" = "Zashi es una wallet móvil impulsada por Zcash, creada para pagos privados imparables. Está optimizada para almacenar y usar en el mundo real $ZEC protegido: la criptomoneda verdaderamente privada.";
-"about.additionalInfo" = "Desarrollada por el equipo que continúa marcando el estándar de la industria en privacidad blockchain, los desarrolladores originales del protocolo Zcash en Electric Coin Company.";
-"about.title" = "Presentando Zashi";
+"about.info" = "Botcash es una wallet móvil impulsada por Botcash, creada para pagos privados imparables. Está optimizada para almacenar y usar en el mundo real $BCASH protegido: la criptomoneda verdaderamente privada.";
+"about.additionalInfo" = "Desarrollada por el equipo que continúa marcando el estándar de la industria en privacidad blockchain, los desarrolladores originales del protocolo Botcash en Electric Coin Company.";
+"about.title" = "Presentando Botcash";
 "about.privacyPolicy" = "Política de privacidad";
 "about.termsOfUse" = "Términos de uso";
 
-// MARK: - Swap to ZEC
+// MARK: - Swap to BCASH
 "swapToZec.address" = "Dirección %@...";
 "swapToZec.refundAddress" = "Dirección de reembolso";
 "swapToZec.review" = "Revisar cotización";
@@ -854,14 +854,14 @@
 "swapToZec.swapExpired" = "Swap expirado";
 "swapToZec.depositTo" = "Depositar en";
 
-"sendSelect.swapWithNear.desc" = "Haz swap de ZEC con otras criptomonedas.";
+"sendSelect.swapWithNear.desc" = "Haz swap de BCASH con otras criptomonedas.";
 "swapAndPay.status.failed" = "Fallido";
 "swapAndPay.status.pendingDeposit" = "Depósito pendiente";
 "swapAndPay.status.processing" = "Procesando";
 "swapAndPay.status.expired" = "Expirado";
 
 "swapToZec.share.title" = "Dirección de depósito para swap";
-"swapToZec.share.msg" = "Dirección de depósito para %@ %@ en Near swap a ZEC en Zashi.";
+"swapToZec.share.msg" = "Dirección de depósito para %@ %@ en Near swap a BCASH en Botcash.";
 "swap.quoteUnavailable" = "Intentamos, pero no pudimos obtener una cotización para un pago con tus parámetros. Puedes ajustar el slippage o intentar más tarde.";
 "swap.quoteUnavailableSwap" = "Intentamos, pero no pudimos obtener una cotización para un swap con tus parámetros. Puedes ajustar el slippage o intentar más tarde.";
 
@@ -896,7 +896,7 @@
 "deleteWallet.sheet.msg" = "Restablecer la app no se puede deshacer. Necesitarás restaurar tu billetera usando tu frase secreta de recuperación.";
 
 "recoverFunds.title" = "Descubrir fondos";
-"recoverFunds.msg" = "Si confirmas, Zashi escaneará la dirección transparente que proporciones y descubrirá sus fondos. Esto puede tardar unos minutos.";
+"recoverFunds.msg" = "Si confirmas, Botcash escaneará la dirección transparente que proporciones y descubrirá sus fondos. Esto puede tardar unos minutos.";
 "recoverFunds.fieldTitle" = "Dirección transparente";
 "recoverFunds.placeholder" = "Ingresa o pega...";
 "recoverFunds.btn" = "Escanear dirección";
@@ -911,16 +911,16 @@
 "texKeystone.warn2" = "Por favor, utiliza los pasos a continuación para completar tu transacción.";
 "texKeystone.workaround" = "Pasos alternativos";
 "texKeystone.step" = "Paso %@";
-"texKeystone.step1.title" = "Envía primero a Zashi";
-"texKeystone.step1.desc" = "Transfiere ZEC a tu dirección protegida de Zashi";
-"texKeystone.step2.title" = "Envía desde Zashi a la dirección TEX";
-"texKeystone.step2.desc" = "Una vez recibido en Zashi, envía los tokens a tu dirección TEX de destino final";
+"texKeystone.step1.title" = "Envía primero a Botcash";
+"texKeystone.step1.desc" = "Transfiere BCASH a tu dirección protegida de Botcash";
+"texKeystone.step2.title" = "Envía desde Botcash a la dirección TEX";
+"texKeystone.step2.desc" = "Una vez recibido en Botcash, envía los tokens a tu dirección TEX de destino final";
 "texKeystone.gotIt" = "Entendido";
 
 "homeScreen.moreDotted" = "Más...";
 
 "enhanceTransaction.title" = "Actualizar datos de la transacción";
-"enhanceTransaction.msg" = "Si confirmas, Zashi obtendrá datos de una transacción usando el ID que proporciones.";
+"enhanceTransaction.msg" = "Si confirmas, Botcash obtendrá datos de una transacción usando el ID que proporciones.";
 "enhanceTransaction.fieldTitle" = "ID de transacción";
 "enhanceTransaction.placeholder" = "Ingresa o pega...";
 "enhanceTransaction.btn" = "Obtener datos";
@@ -946,7 +946,7 @@
 "currencyConversion.note" = "Nota para los más conscientes de la privacidad: Debido a que obtenemos la tasa de conversión de los intercambios, un intercambio podría ver que la tasa de cambio fue consultada antes de que ocurriera una transacción.";
 "currencyConversion.saveBtn" = "Guardar cambios";
 "currencyConversion.ipTitle" = "Protección de Dirección IP";
-"currencyConversion.ipDesc" = "Si la Protección Tor está activada (Configuración Avanzada), Zashi protege tu dirección IP.";
+"currencyConversion.ipDesc" = "Si la Protección Tor está activada (Configuración Avanzada), Botcash protege tu dirección IP.";
 "currencyConversion.refresh" = "Actualizar tasa";
 "currencyConversion.refreshDesc" = "La tasa se actualiza automáticamente y también se puede actualizar manualmente.";
 "currencyConversion.skipBtn" = "Omitir";
