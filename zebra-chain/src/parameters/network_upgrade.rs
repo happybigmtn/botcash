@@ -173,6 +173,23 @@ const FAKE_TESTNET_ACTIVATION_HEIGHTS: &[(block::Height, NetworkUpgrade)] = &[
     (block::Height(50), Nu7),
 ];
 
+/// Botcash mainnet network upgrade activation heights.
+///
+/// Botcash activates all upgrades at genesis to start with full Zcash protocol features.
+/// This enables Sapling shielded transactions and all subsequent improvements from block 0.
+#[allow(unused)]
+pub(super) const BOTCASH_ACTIVATION_HEIGHTS: &[(block::Height, NetworkUpgrade)] = &[
+    (block::Height(0), Genesis),
+    (block::Height(1), BeforeOverwinter),
+    (block::Height(1), Overwinter),
+    (block::Height(1), Sapling),
+    (block::Height(1), Blossom),
+    (block::Height(1), Heartwood),
+    (block::Height(1), Canopy),
+    (block::Height(1), Nu5),
+    (block::Height(1), Nu6),
+];
+
 /// The Consensus Branch Id, used to bind transactions and blocks to a
 /// particular network upgrade.
 #[derive(Copy, Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -331,6 +348,8 @@ impl Network {
             Testnet(_) if std::env::var_os("TEST_FAKE_ACTIVATION_HEIGHTS").is_some() => {
                 FAKE_TESTNET_ACTIVATION_HEIGHTS.iter().cloned().collect()
             }
+            // Botcash uses fixed activation heights (all upgrades at genesis/height 1)
+            Botcash => BOTCASH_ACTIVATION_HEIGHTS.iter().cloned().collect(),
             Mainnet => MAINNET_ACTIVATION_HEIGHTS.iter().cloned().collect(),
             Testnet(params) => params.activation_heights().clone(),
         }
@@ -503,6 +522,8 @@ impl NetworkUpgrade {
                 None
             }
             (Network::Mainnet, _) => None,
+            // Botcash does not use minimum difficulty adjustments
+            (Network::Botcash, _) => None,
             (Network::Testnet(_params), _) => {
                 let network_upgrade = NetworkUpgrade::current(network, height);
                 Some(network_upgrade.target_spacing() * TESTNET_MINIMUM_DIFFICULTY_GAP_MULTIPLIER)

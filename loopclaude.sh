@@ -38,15 +38,25 @@ fi
 mkdir -p "$LOG_DIR"
 
 count_remaining() {
-    grep '^- \[ \]' "$PLAN_FILE" 2>/dev/null | wc -l || true
+    # Support both checkbox format (- [ ]) and table format (⬜ TODO)
+    local checkbox_count table_count
+    checkbox_count=$(grep -c '^- \[ \]' "$PLAN_FILE" 2>/dev/null) || checkbox_count=0
+    table_count=$(grep -c '⬜ TODO' "$PLAN_FILE" 2>/dev/null) || table_count=0
+    echo $((checkbox_count + table_count))
 }
 
 count_completed() {
-    grep '^- \[x\]' "$PLAN_FILE" 2>/dev/null | wc -l || true
+    # Support both checkbox format (- [x]) and table format (✅ DONE)
+    local checkbox_count table_count
+    checkbox_count=$(grep -c '^- \[x\]' "$PLAN_FILE" 2>/dev/null) || checkbox_count=0
+    table_count=$(grep -c '✅ DONE' "$PLAN_FILE" 2>/dev/null) || table_count=0
+    echo $((checkbox_count + table_count))
 }
 
 count_blocked() {
-    grep 'Blocked:' "$PLAN_FILE" 2>/dev/null | wc -l || true
+    local count
+    count=$(grep -c 'Blocked:' "$PLAN_FILE" 2>/dev/null) || count=0
+    echo "$count"
 }
 
 # Verify files exist

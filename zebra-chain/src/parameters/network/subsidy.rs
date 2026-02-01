@@ -53,6 +53,14 @@ pub(crate) const FIRST_HALVING_TESTNET: Height = Height(1_116_000);
 /// The first halving height in the regtest is at block height `287`.
 const FIRST_HALVING_REGTEST: Height = Height(287);
 
+/// Botcash halving interval - 840,000 blocks (~1.6 years at 60s block time).
+/// This matches the Zcash post-Blossom halving interval.
+pub const BOTCASH_HALVING_INTERVAL: HeightDiff = 840_000;
+
+/// The first halving height in Botcash is at block height `840_000`.
+/// Unlike Zcash, Botcash has no pre-Blossom era, so halving starts from genesis.
+pub(crate) const FIRST_HALVING_BOTCASH: Height = Height(840_000);
+
 /// The funding stream receiver categories.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FundingStreamReceiver {
@@ -461,6 +469,8 @@ impl ParameterSubsidy for Network {
                     height_for_halving(1, self).expect("first halving height should be available")
                 }
             }
+            // Botcash halving starts at block 840,000
+            Network::Botcash => FIRST_HALVING_BOTCASH,
         }
     }
 
@@ -468,6 +478,8 @@ impl ParameterSubsidy for Network {
         match self {
             Network::Mainnet => POST_BLOSSOM_HALVING_INTERVAL,
             Network::Testnet(params) => params.post_blossom_halving_interval(),
+            // Botcash uses a fixed halving interval (no pre/post Blossom distinction)
+            Network::Botcash => BOTCASH_HALVING_INTERVAL,
         }
     }
 
@@ -475,6 +487,8 @@ impl ParameterSubsidy for Network {
         match self {
             Network::Mainnet => PRE_BLOSSOM_HALVING_INTERVAL,
             Network::Testnet(params) => params.pre_blossom_halving_interval(),
+            // Botcash has no pre-Blossom era, use same interval
+            Network::Botcash => BOTCASH_HALVING_INTERVAL,
         }
     }
 

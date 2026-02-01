@@ -61,6 +61,10 @@ pub enum Network {
     /// A test network such as the default public testnet,
     /// a configured testnet, or Regtest.
     Testnet(Arc<testnet::Parameters>),
+
+    /// Botcash mainnet - Privacy + Social blockchain for AI agents.
+    /// Uses RandomX PoW, 60-second block time, 3.125 BCASH initial reward.
+    Botcash,
 }
 
 impl NetworkKind {
@@ -135,6 +139,7 @@ impl<'a> From<&'a Network> for &'a str {
         match network {
             Network::Mainnet => "Mainnet",
             Network::Testnet(params) => params.network_name(),
+            Network::Botcash => "Botcash",
         }
     }
 }
@@ -157,6 +162,7 @@ impl std::fmt::Debug for Network {
                 write!(f, "{self}")
             }
             Self::Testnet(params) => f.debug_tuple("ConfiguredTestnet").field(params).finish(),
+            Self::Botcash => write!(f, "{self}"),
         }
     }
 }
@@ -205,27 +211,30 @@ impl Network {
             Network::Mainnet => NetworkKind::Mainnet,
             Network::Testnet(params) if params.is_regtest() => NetworkKind::Regtest,
             Network::Testnet(_) => NetworkKind::Testnet,
+            Network::Botcash => NetworkKind::Botcash,
         }
     }
 
-    /// Returns [`NetworkKind::Testnet`] on Testnet and Regtest, or [`NetworkKind::Mainnet`] on Mainnet.
+    /// Returns [`NetworkKind::Testnet`] on Testnet and Regtest, [`NetworkKind::Mainnet`] on Mainnet,
+    /// or [`NetworkKind::Botcash`] on Botcash.
     ///
     /// This is used for transparent addresses, as the address prefix is the same on Regtest as it is on Testnet.
     pub fn t_addr_kind(&self) -> NetworkKind {
         match self {
             Network::Mainnet => NetworkKind::Mainnet,
             Network::Testnet(_) => NetworkKind::Testnet,
+            Network::Botcash => NetworkKind::Botcash,
         }
     }
 
     /// Returns an iterator over [`Network`] variants.
     pub fn iter() -> impl Iterator<Item = Self> {
-        [Self::Mainnet, Self::new_default_testnet()].into_iter()
+        [Self::Mainnet, Self::new_default_testnet(), Self::Botcash].into_iter()
     }
 
     /// Returns true if the maximum block time rule is active for `network` and `height`.
     ///
-    /// Always returns true if `network` is the Mainnet.
+    /// Always returns true if `network` is the Mainnet or Botcash.
     /// If `network` is the Testnet, the `height` should be at least
     /// TESTNET_MAX_TIME_START_HEIGHT to return true.
     /// Returns false otherwise.
@@ -233,7 +242,7 @@ impl Network {
     /// Part of the consensus rules at <https://zips.z.cash/protocol/protocol.pdf#blockheader>
     pub fn is_max_block_time_enforced(&self, height: block::Height) -> bool {
         match self {
-            Network::Mainnet => true,
+            Network::Mainnet | Network::Botcash => true,
             // TODO: Move `TESTNET_MAX_TIME_START_HEIGHT` to a field on testnet::Parameters (#8364)
             Network::Testnet(_params) => height >= super::TESTNET_MAX_TIME_START_HEIGHT,
         }
@@ -245,6 +254,8 @@ impl Network {
             Network::Mainnet => 8233,
             // TODO: Add a `default_port` field to `testnet::Parameters` to return here. (zcashd uses 18344 for Regtest)
             Network::Testnet(_params) => 18233,
+            // Botcash uses port 8533 for mainnet P2P
+            Network::Botcash => 8533,
         }
     }
 
@@ -303,6 +314,8 @@ impl Network {
                 subsidy::EXPECTED_NU6_1_LOCKBOX_DISBURSEMENTS_TOTAL_TESTNET
             }
             Self::Testnet(params) => params.lockbox_disbursement_total_amount(),
+            // Botcash has no lockbox disbursements (100% to miners)
+            Self::Botcash => Amount::zero(),
         }
     }
 
@@ -321,6 +334,8 @@ impl Network {
                 subsidy::NU6_1_LOCKBOX_DISBURSEMENTS_TESTNET.to_vec()
             }
             Self::Testnet(params) => return params.lockbox_disbursements(),
+            // Botcash has no lockbox disbursements (100% to miners)
+            Self::Botcash => return Vec::new(),
         };
 
         expected_lockbox_disbursements
@@ -343,6 +358,7 @@ impl FromStr for Network {
         match string.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "testnet" => Ok(Network::new_default_testnet()),
+            "botcash" => Ok(Network::Botcash),
             _ => Err(InvalidNetworkError(string.to_owned())),
         }
     }

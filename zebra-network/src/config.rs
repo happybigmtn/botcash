@@ -245,6 +245,8 @@ impl Config {
         match &self.network {
             Network::Mainnet => self.initial_mainnet_peers.clone(),
             Network::Testnet(_params) => self.initial_testnet_peers.clone(),
+            // Botcash has no initial peers yet - this will be populated at launch
+            Network::Botcash => IndexSet::new(),
         }
     }
 

@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASE 1 IN PROGRESS
 
-**Last Updated:** 2026-01-31 (Phase 1.1 Complete)
+**Last Updated:** 2026-01-31 (Phase 1.2 Complete)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1 (NetworkKind::Botcash) complete.
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is in progress: P1.1 (NetworkKind::Botcash) and P1.2 (Network::Botcash) complete.
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -44,7 +44,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | Priority | Task | Status | Files (with line numbers) | Test Command |
 |----------|------|--------|---------------------------|--------------|
 | **P1.1** | Add `NetworkKind::Botcash` variant | ✅ DONE | `zebra-chain/src/parameters/network.rs:26-39` | `cargo test -p zebra-chain -- network_kind` |
-| **P1.2** | Add `Network::Botcash` variant | ⬜ TODO | `zebra-chain/src/parameters/network.rs:53-61` | `cargo test -p zebra-chain -- network_variant` |
+| **P1.2** | Add `Network::Botcash` variant | ✅ DONE | `zebra-chain/src/parameters/network.rs:53-67` | `cargo test -p zebra-chain -- botcash_network_variant` |
 | **P1.3** | Add BOTCASH magic bytes (0x42434153) | ⬜ TODO | `zebra-chain/src/parameters/constants.rs:20-29` | `cargo test -p zebra-chain -- magic` |
 | **P1.4** | Update Network::magic() impl | ⬜ TODO | `zebra-chain/src/parameters/network/magic.rs:21-28` | `cargo test -p zebra-chain -- network_magic` |
 | **P1.5** | Set network ports (8533/18533) | ⬜ TODO | `zebra-chain/src/parameters/network.rs:236-241` | `cargo test -p zebra-chain -- default_port` |

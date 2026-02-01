@@ -722,6 +722,9 @@ impl ParameterDifficulty for Network {
             Network::Mainnet => (U256::one() << 243) - 1,
             // 2^251 - 1 for the default testnet, see `testnet::ParametersBuilder::default`()
             Network::Testnet(params) => return params.target_difficulty_limit(),
+            // Botcash uses RandomX PoW with a higher initial difficulty limit (2^256 - 1)
+            // This will be adjusted after genesis mining is complete
+            Network::Botcash => (U256::one() << 243) - 1,
         };
 
         // `zcashd` converts the PoWLimit into a compact representation before

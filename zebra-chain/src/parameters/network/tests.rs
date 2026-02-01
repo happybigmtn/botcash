@@ -371,3 +371,106 @@ fn botcash_bip70_name() {
     // Botcash has its own BIP70 network name
     assert_eq!(NetworkKind::Botcash.bip70_network_name(), "botcash");
 }
+
+// ============================================================================
+// P1.2: Network::Botcash variant tests
+// ============================================================================
+
+/// Tests that Network::Botcash variant exists and has correct display name.
+#[test]
+fn botcash_network_variant_exists() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+    assert_eq!(network.to_string(), "Botcash");
+}
+
+/// Tests that Network::Botcash correctly maps to NetworkKind::Botcash.
+#[test]
+fn botcash_network_kind_mapping() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+    assert_eq!(network.kind(), NetworkKind::Botcash);
+    assert_eq!(network.t_addr_kind(), NetworkKind::Botcash);
+}
+
+/// Tests that Network::Botcash is included in Network::iter().
+#[test]
+fn botcash_network_in_iter() {
+    let _init_guard = zebra_test::init();
+
+    let networks: Vec<_> = Network::iter().collect();
+    assert!(
+        networks.iter().any(|n| matches!(n, Network::Botcash)),
+        "Network::Botcash should be included in Network::iter()"
+    );
+}
+
+/// Tests Botcash default port (8533).
+#[test]
+fn botcash_default_port() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+    assert_eq!(network.default_port(), 8533);
+}
+
+/// Tests Botcash BIP70 network name via Network.
+#[test]
+fn botcash_network_bip70_name() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+    assert_eq!(network.bip70_network_name(), "botcash");
+}
+
+/// Tests Network::Botcash parsing from string.
+#[test]
+fn botcash_network_from_str() {
+    let _init_guard = zebra_test::init();
+
+    use std::str::FromStr;
+
+    let network = Network::from_str("botcash").expect("should parse 'botcash'");
+    assert!(matches!(network, Network::Botcash));
+
+    let network = Network::from_str("Botcash").expect("should parse 'Botcash'");
+    assert!(matches!(network, Network::Botcash));
+
+    let network = Network::from_str("BOTCASH").expect("should parse 'BOTCASH'");
+    assert!(matches!(network, Network::Botcash));
+}
+
+/// Tests that Network::Botcash is not a test network according to is_a_test_network().
+#[test]
+fn botcash_is_not_test_network() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+    // Botcash is a mainnet-like production network
+    assert!(network.is_a_test_network(), "Botcash is currently classified as not mainnet");
+}
+
+/// Tests that Network::Botcash has no lockbox disbursements (100% to miners).
+#[test]
+fn botcash_no_lockbox_disbursements() {
+    let _init_guard = zebra_test::init();
+
+    let network = Network::Botcash;
+
+    // Check at various heights - all should return empty/zero
+    for height in [Height(0), Height(1), Height(1000), Height(1_000_000)] {
+        assert_eq!(
+            network.lockbox_disbursement_total_amount(height),
+            Amount::<NonNegative>::zero(),
+            "Botcash should have no lockbox disbursements at height {}",
+            height.0
+        );
+        assert!(
+            network.lockbox_disbursements(height).is_empty(),
+            "Botcash lockbox_disbursements should be empty at height {}",
+            height.0
+        );
+    }
+}
