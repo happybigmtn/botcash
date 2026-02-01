@@ -4,8 +4,8 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>co.electriccoin.power_wifi_sync</string>
-		<string>co.electriccoin.scheduler</string>
+		<string>com.botcash.power_wifi_sync</string>
+		<string>com.botcash.scheduler</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>

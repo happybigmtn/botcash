@@ -17,8 +17,8 @@ import UserNotifications
 
 // swiftlint:disable indentation_width
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    private let bcgTaskId = "co.electriccoin.power_wifi_sync"
-    private let bcgSchedulerTaskId = "co.electriccoin.scheduler"
+    private let bcgTaskId = "com.botcash.power_wifi_sync"
+    private let bcgSchedulerTaskId = "com.botcash.scheduler"
     private var monitor: NWPathMonitor?
     private let workerQueue = DispatchQueue(label: "Monitor")
     private var isConnectedToWifi = false
