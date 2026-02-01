@@ -78,7 +78,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P3.3** | Update bundle identifiers (6 targets) | ✅ DONE | `zashi-ios/secant.xcodeproj/project.pbxproj` | `xcodebuild -showBuildSettings` |
 | **P3.4** | Update CFBundleDisplayName (5 plists) | ✅ DONE | `zashi-ios/secant/*-Info.plist:12-13` | Visual verification |
 | **P3.5** | Update background task identifiers | ✅ DONE | `zashi-ios/secant/AppDelegate.swift:20-21` | Build verification |
-| **P3.6** | Replace app icons (3 iconsets) | ⬜ TODO | `zashi-ios/secant/Resources/Assets.xcassets/AppIcon*.appiconset/` | Visual verification |
+| **P3.6** | Replace app icons (3 iconsets) | ✅ DONE | `zashi-ios/secant/Resources/Assets.xcassets/AppIcon*.appiconset/` | Visual verification |
 | **P3.7** | Update localization strings (~50 refs) | ⬜ TODO | `zashi-ios/modules/Sources/Generated/Resources/*/Localizable.strings` | String verification |
 
 ### ⬜ Phase 4: Android Wallet (zashi-android)
