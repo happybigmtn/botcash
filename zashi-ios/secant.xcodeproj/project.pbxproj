@@ -1674,7 +1674,7 @@
 				);
 				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-mainnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-mainnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UNREDACTED SECANT_MAINNET";
 				SWIFT_VERSION = 5.0;
@@ -1704,7 +1704,7 @@
 				);
 				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-mainnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-mainnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_MAINNET;
 				SWIFT_VERSION = 5.0;
@@ -1856,7 +1856,7 @@
 				);
 				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.ecc.zashi-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UNREDACTED SECANT_TESTNET";
 				SWIFT_VERSION = 5.0;
@@ -1885,7 +1885,7 @@
 				);
 				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.ecc.zashi-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_TESTNET;
 				SWIFT_VERSION = 5.0;
@@ -1912,7 +1912,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.electriccoin.secantTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.botcash.walletTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UNREDACTED";
 				SWIFT_VERSION = 5.0;
@@ -1935,7 +1935,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.electriccoin.secantTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.botcash.walletTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1956,7 +1956,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.electriccoin.secantUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.botcash.walletUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SWIFT_VERSION = 5.0;
@@ -1978,7 +1978,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.electriccoin.secantUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.botcash.walletUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SWIFT_VERSION = 5.0;
@@ -2009,7 +2009,7 @@
 				);
 				MARKETING_VERSION = 2.1;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.ecc.zashi-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UNREDACTED SECANT_TESTNET";
 				SWIFT_VERSION = 5.0;
@@ -2039,7 +2039,7 @@
 				);
 				MARKETING_VERSION = 2.1;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.ecc.zashi-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_TESTNET;
 				SWIFT_VERSION = 5.0;
@@ -2069,7 +2069,7 @@
 				);
 				MARKETING_VERSION = 2.1;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.ecc.zashi-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_TESTNET;
 				SWIFT_VERSION = 5.0;
@@ -2100,7 +2100,7 @@
 				);
 				MARKETING_VERSION = 2.4.11;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-mainnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-mainnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UNREDACTED SECANT_MAINNET";
 				SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE = NO;
@@ -2140,7 +2140,7 @@
 				);
 				MARKETING_VERSION = 2.4.11;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-mainnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-mainnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_MAINNET;
 				SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE = NO;
@@ -2237,7 +2237,7 @@
 				);
 				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.ecc.zashi-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_TESTNET;
 				SWIFT_VERSION = 5.0;
@@ -2267,7 +2267,7 @@
 				);
 				MARKETING_VERSION = 1.2;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-mainnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-mainnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_MAINNET;
 				SWIFT_VERSION = 5.0;
@@ -2290,7 +2290,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.electriccoin.secantTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.botcash.walletTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2311,7 +2311,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = co.electriccoin.secantUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.botcash.walletUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SWIFT_VERSION = 5.0;
@@ -2341,7 +2341,7 @@
 				);
 				MARKETING_VERSION = 2.4.11;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-mainnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-mainnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "SECANT_MAINNET SECANT_DISTRIB";
 				SWIFT_UPCOMING_FEATURE_CONCISE_MAGIC_FILE = NO;
@@ -2382,7 +2382,7 @@
 				);
 				MARKETING_VERSION = 0.9.9;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG UNREDACTED SECANT_MAINNET";
 				SWIFT_VERSION = 5.0;
@@ -2412,7 +2412,7 @@
 				);
 				MARKETING_VERSION = 0.9.9;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_MAINNET;
 				SWIFT_VERSION = 5.0;
@@ -2442,7 +2442,7 @@
 				);
 				MARKETING_VERSION = 0.9.9;
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = "co.electriccoin.secant-testnet";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.botcash.wallet-testnet";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SECANT_MAINNET;
 				SWIFT_VERSION = 5.0;

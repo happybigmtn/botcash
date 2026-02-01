@@ -75,7 +75,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 |----------|------|--------|-------|--------------|
 | **P3.1** | Update endpoint constants (9 URLs) | ✅ DONE | `zashi-ios/modules/Sources/Dependencies/ZcashSDKEnvironment/ZcashSDKEnvironmentInterface.swift:24-27,94-106` | `xcodebuild test -scheme Botcash -only-testing:SecantTests/NetworkTests` |
 | **P3.2** | Update legacy migration paths | ✅ DONE | `zashi-ios/modules/Sources/Dependencies/ZcashSDKEnvironment/ZcashSDKEnvironmentLiveKey.swift:89,93` | Build verification |
-| **P3.3** | Update bundle identifiers (6 targets) | ⬜ TODO | `zashi-ios/secant.xcodeproj/project.pbxproj` | `xcodebuild -showBuildSettings` |
+| **P3.3** | Update bundle identifiers (6 targets) | ✅ DONE | `zashi-ios/secant.xcodeproj/project.pbxproj` | `xcodebuild -showBuildSettings` |
 | **P3.4** | Update CFBundleDisplayName (5 plists) | ⬜ TODO | `zashi-ios/secant/*-Info.plist:12-13` | Visual verification |
 | **P3.5** | Update background task identifiers | ⬜ TODO | `zashi-ios/secant/AppDelegate.swift:20-21` | Build verification |
 | **P3.6** | Replace app icons (3 iconsets) | ⬜ TODO | `zashi-ios/secant/Resources/Assets.xcassets/AppIcon*.appiconset/` | Visual verification |
