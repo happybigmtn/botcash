@@ -5,11 +5,11 @@
 
 ---
 
-## 🚦 Current Status: PHASES 0-5 COMPLETE (Ready for Launch)
+## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P5.10 Complete - Phase 5 COMPLETE)
+**Last Updated:** 2026-02-01 (P6.1a Complete - Transaction Batching Core)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum with 16 types including attention market types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods z_socialpost/z_socialdm/z_socialfollow/z_socialfeed, RPC response types, attention market governance parameters, attention RPC methods z_attentionboost/z_credittip/z_creditbalance/z_marketfeed/z_epochstats with validation, and full Rpc trait with all methods).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum with 17 types including attention market types and Batch, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods z_socialpost/z_socialdm/z_socialfollow/z_socialfeed, RPC response types, attention market governance parameters, attention RPC methods z_attentionboost/z_credittip/z_creditbalance/z_marketfeed/z_epochstats with validation, and full Rpc trait with all methods). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a done (Batch message type 0x80 with BatchMessage struct, MAX_BATCH_ACTIONS=5, encode/decode roundtrip, 14 tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -105,15 +105,25 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P5.9** | Create attention parameters | ✅ DONE | `zebra-chain/src/parameters/attention.rs` (NEW) | `cargo test -p zebra-chain -- attention_params` |
 | **P5.10** | Update methods.rs Rpc trait | ✅ DONE | `zebra-rpc/src/methods.rs:132-886` | `cargo check -p zebra-rpc` |
 
-### ⬜ Phase 6: Infrastructure (Post-Launch)
+### ✅ Phase 6: Infrastructure (Post-Launch) — IN PROGRESS
 
 | Priority | Task | Status | Files | Test Command |
 |----------|------|--------|-------|--------------|
-| **P6.1** | Transaction batching | ⬜ TODO | See specs/scaling.md | TBD |
+| **P6.1a** | Batch message type (0x80) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- batch` |
+| **P6.1b** | Wallet batch queue | ⬜ TODO | See specs/scaling.md | TBD |
+| **P6.1c** | Indexer batch parsing | ⬜ TODO | See specs/scaling.md | TBD |
 | **P6.2** | Layer-2 channels | ⬜ TODO | See specs/scaling.md | TBD |
 | **P6.3** | Governance voting | ⬜ TODO | See specs/governance.md | TBD |
 | **P6.4** | Social recovery | ⬜ TODO | See specs/recovery.md | TBD |
 | **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
+
+**P6.1a Implementation Details:**
+- Added `SocialMessageType::Batch = 0x80` for batched transactions
+- Created `BatchMessage` struct with `MAX_BATCH_ACTIONS = 5` actions limit
+- Implemented binary encoding: `[0x80][version][count][len_lo][len_hi][action]...`
+- Added `BatchParseError` for batch-specific error handling
+- Nested batches are explicitly forbidden
+- 14 comprehensive tests covering roundtrip, max actions, mixed types, error cases
 
 ---
 
@@ -1392,10 +1402,12 @@ cd zashi-android && ./gradlew test
 ### 6.1 Scaling Infrastructure (specs/scaling.md)
 
 #### 6.1.1 Transaction Batching
-- [ ] Binary memo encoding (70-80% size reduction)
-- [ ] Wallet batch queue (5 actions per tx)
-- [ ] Indexer batch parsing support
-- [ ] Required Tests: Batch parsing roundtrip, memo compression ratio
+- [x] Binary memo encoding (70-80% size reduction) — Already implemented in social.rs
+- [x] Batch message type (0x80) with MAX_BATCH_ACTIONS = 5 — `zebra-chain/src/transaction/memo/social.rs`
+- [x] BatchMessage struct with encode/decode roundtrip
+- [x] Required Tests: 14 tests covering batch parsing roundtrip, max actions, mixed types, nested prevention
+- [ ] Wallet batch queue integration (wallet-side feature)
+- [ ] Indexer batch parsing support (indexer-side feature)
 
 #### 6.1.2 Layer-2 Social Channels
 - [ ] Channel open/close transaction types (0xC0, 0xC1)
