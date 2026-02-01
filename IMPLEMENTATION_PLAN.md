@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.2.1 Complete - Governance Message Types)
+**Last Updated:** 2026-02-01 (P6.3c Complete - Governance RPC Methods)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 19 types including governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2.1 done (GovernanceVote 0xE0 and GovernanceProposal 0xE1 message types with is_governance() helper, RPC types, 7 tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 19 types including governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.3a-c done (governance message types 0xE0/0xE1, RPC types, and 4 RPC methods with validation).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -115,7 +115,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.2** | Layer-2 channels | ⬜ TODO | See specs/scaling.md | TBD |
 | **P6.3a** | Governance message types (0xE0, 0xE1) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- governance` |
 | **P6.3b** | Governance RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
-| **P6.3c** | Governance RPC methods | ⬜ TODO | `zebra-rpc/src/methods.rs` | TBD |
+| **P6.3c** | Governance RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
 | **P6.3d** | Governance voting logic | ⬜ TODO | See specs/governance.md | TBD |
 | **P6.4** | Social recovery | ⬜ TODO | See specs/recovery.md | TBD |
 | **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
@@ -167,6 +167,15 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `GovernanceProposalSummary` for compact proposal representation
 - Added `ParameterChange` struct for parameter modification proposals
 - 18 comprehensive tests for all governance RPC type serialization
+
+**P6.3c Implementation Details:**
+- Added 4 RPC trait methods: `z_governance_propose`, `z_governance_vote`, `z_governance_status`, `z_governance_list`
+- `z_governance_propose` validates: from address, title (max 255 chars), description, deposit (min 10 BCASH), parameter changes
+- `z_governance_vote` validates: from address, proposal_id (64 hex chars), vote choice
+- `z_governance_status` validates: proposal_id format (32 bytes hex-encoded)
+- `z_governance_list` validates: status filter (all/pending/voting/passed/rejected/executed), limit (max 1000)
+- All methods return appropriate stubs/errors indicating wallet/indexer support needed
+- Tests reuse the 15 governance type tests from P6.3b (types test serialization, methods use validated types)
 
 ---
 

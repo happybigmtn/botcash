@@ -976,6 +976,115 @@ pub trait Rpc {
         &self,
         request: types::social::BatchClearRequest,
     ) -> Result<types::social::BatchClearResponse>;
+
+    // ==================== Botcash Governance RPC Methods ====================
+
+    /// Creates a new governance proposal.
+    ///
+    /// Proposals require a minimum deposit (default 10 BCASH) that is returned
+    /// if the proposal receives sufficient support (>10% of votes). Proposals
+    /// go through three phases: PROPOSAL (7 days for discussion), VOTING (14 days),
+    /// and EXECUTION (30-day timelock if passed).
+    ///
+    /// method: post
+    /// tags: governance
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The proposal request containing:
+    ///   - `from`: (string) The proposer's unified or shielded address
+    ///   - `proposalType`: (string, optional) Type: "parameter", "upgrade", "spending", "other"
+    ///   - `title`: (string) Proposal title (max 255 chars)
+    ///   - `description`: (string) Full proposal description
+    ///   - `parameters`: (array, optional) Parameter changes for "parameter" proposals
+    ///   - `deposit`: (u64, optional) Deposit amount in zatoshis (default: 10 BCASH)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Creates a GovernanceProposal (0xE1) message in the memo field.
+    /// See specs/governance.md for the full governance system design.
+    #[method(name = "z_governancepropose")]
+    async fn z_governance_propose(
+        &self,
+        request: types::social::GovernanceProposalRequest,
+    ) -> Result<types::social::GovernanceProposalResponse>;
+
+    /// Casts a vote on an existing governance proposal.
+    ///
+    /// Voting power is calculated based on karma (social reputation) and BCASH
+    /// balance using the formula: sqrt(karma) + sqrt(bcash_balance). Votes can
+    /// be changed until the voting period ends.
+    ///
+    /// method: post
+    /// tags: governance
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The vote request containing:
+    ///   - `from`: (string) The voter's unified or shielded address
+    ///   - `proposalId`: (string) The proposal ID to vote on (hex-encoded, 32 bytes)
+    ///   - `vote`: (string) Vote choice: "yes", "no", or "abstain"
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Creates a GovernanceVote (0xE0) message in the memo field.
+    /// Abstain votes count towards quorum but not towards the approval threshold.
+    #[method(name = "z_governancevote")]
+    async fn z_governance_vote(
+        &self,
+        request: types::social::GovernanceVoteRequest,
+    ) -> Result<types::social::GovernanceVoteResponse>;
+
+    /// Gets the current status of a governance proposal.
+    ///
+    /// Returns detailed information about a proposal including vote tallies,
+    /// quorum progress, approval percentage, and execution status.
+    ///
+    /// method: post
+    /// tags: governance
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `proposalId`: (string) The proposal ID to query (hex-encoded, 32 bytes)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track proposal and vote transactions.
+    /// Status values: "pending", "voting", "passed", "rejected", "executed".
+    #[method(name = "z_governancestatus")]
+    async fn z_governance_status(
+        &self,
+        request: types::social::GovernanceProposalStatusRequest,
+    ) -> Result<types::social::GovernanceProposalStatusResponse>;
+
+    /// Lists governance proposals with optional filtering.
+    ///
+    /// Returns a paginated list of proposals matching the specified criteria.
+    /// Proposals are ordered by creation height (newest first).
+    ///
+    /// method: post
+    /// tags: governance
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The list request containing:
+    ///   - `status`: (string, optional) Filter: "all", "pending", "voting", "passed", "rejected", "executed"
+    ///   - `limit`: (u32, optional) Maximum proposals to return (default: 50)
+    ///   - `offset`: (u32, optional) Pagination offset (default: 0)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track proposal transactions.
+    #[method(name = "z_governancelist")]
+    async fn z_governance_list(
+        &self,
+        request: types::social::GovernanceListRequest,
+    ) -> Result<types::social::GovernanceListResponse>;
 }
 
 /// RPC method implementations.
@@ -3786,6 +3895,291 @@ where
         Ok(types::social::BatchClearResponse::new(
             0,    // cleared
             true, // success
+        ))
+    }
+
+    // ==================== Governance RPC Method Implementations ====================
+
+    async fn z_governance_propose(
+        &self,
+        request: types::social::GovernanceProposalRequest,
+    ) -> Result<types::social::GovernanceProposalResponse> {
+        // Validate the proposer address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate title length (max 255 chars as per spec)
+        const MAX_TITLE_LENGTH: usize = 255;
+        if request.title.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "title is required",
+                None::<()>,
+            ));
+        }
+        if request.title.len() > MAX_TITLE_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "title exceeds maximum length of {} characters (got {})",
+                    MAX_TITLE_LENGTH,
+                    request.title.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate description is not empty
+        if request.description.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "description is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate description length (must fit in memo field, ~500 bytes after encoding)
+        const MAX_DESCRIPTION_LENGTH: usize = 65535; // u16 max for length field
+        if request.description.len() > MAX_DESCRIPTION_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "description exceeds maximum length of {} characters",
+                    MAX_DESCRIPTION_LENGTH
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate deposit amount (minimum 10 BCASH = 1,000,000,000 zatoshis)
+        const MIN_PROPOSAL_DEPOSIT: u64 = 1_000_000_000; // 10 BCASH
+        if request.deposit < MIN_PROPOSAL_DEPOSIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "deposit must be at least {} zatoshis (10 BCASH), got {}",
+                    MIN_PROPOSAL_DEPOSIT, request.deposit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate parameter changes for Parameter proposals
+        if request.proposal_type == types::social::GovernanceProposalType::Parameter
+            && request.parameters.is_empty()
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "parameter proposals require at least one parameter change",
+                None::<()>,
+            ));
+        }
+
+        // Validate each parameter change
+        for param in &request.parameters {
+            if param.param.is_empty() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "parameter name cannot be empty",
+                    None::<()>,
+                ));
+            }
+            if param.value.is_empty() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!("parameter '{}' value cannot be empty", param.param),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Create a GovernanceProposal (0xE1) memo message
+        // - Send the deposit to a governance escrow address
+        // - Sign and broadcast the transaction
+        // - Calculate voting timeline based on current block height
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_governancepropose requires wallet support which is not yet implemented in Zebra. \
+                Would create {:?} proposal '{}' with {} zatoshi deposit",
+                request.proposal_type, request.title, request.deposit
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_governance_vote(
+        &self,
+        request: types::social::GovernanceVoteRequest,
+    ) -> Result<types::social::GovernanceVoteResponse> {
+        // Validate the voter address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate proposal ID format (should be 64 hex chars = 32 bytes)
+        if request.proposal_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proposalId is required",
+                None::<()>,
+            ));
+        }
+
+        const PROPOSAL_ID_HEX_LENGTH: usize = 64; // 32 bytes as hex
+        if request.proposal_id.len() != PROPOSAL_ID_HEX_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "proposalId must be {} hex characters (32 bytes), got {}",
+                    PROPOSAL_ID_HEX_LENGTH,
+                    request.proposal_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate proposal ID is valid hex
+        if !request
+            .proposal_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proposalId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Verify the proposal exists and is in voting phase
+        // - Calculate voting power: sqrt(karma) + sqrt(bcash_balance)
+        // - Create a GovernanceVote (0xE0) memo message
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_governancevote requires wallet support which is not yet implemented in Zebra. \
+                Would cast {:?} vote on proposal {}",
+                request.vote, request.proposal_id
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_governance_status(
+        &self,
+        request: types::social::GovernanceProposalStatusRequest,
+    ) -> Result<types::social::GovernanceProposalStatusResponse> {
+        // Validate proposal ID format (should be 64 hex chars = 32 bytes)
+        if request.proposal_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proposalId is required",
+                None::<()>,
+            ));
+        }
+
+        const PROPOSAL_ID_HEX_LENGTH: usize = 64; // 32 bytes as hex
+        if request.proposal_id.len() != PROPOSAL_ID_HEX_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "proposalId must be {} hex characters (32 bytes), got {}",
+                    PROPOSAL_ID_HEX_LENGTH,
+                    request.proposal_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate proposal ID is valid hex
+        if !request
+            .proposal_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proposalId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Look up the proposal by ID
+        // - Aggregate all votes for the proposal
+        // - Calculate quorum and approval percentages
+        // - Determine current status based on voting period and thresholds
+        //
+        // For now, return an error indicating indexer support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_governancestatus requires indexer support which is not yet implemented. \
+                Would query status for proposal {}",
+                request.proposal_id
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_governance_list(
+        &self,
+        request: types::social::GovernanceListRequest,
+    ) -> Result<types::social::GovernanceListResponse> {
+        // Validate status filter
+        const VALID_STATUSES: [&str; 6] =
+            ["all", "pending", "voting", "passed", "rejected", "executed"];
+        if !VALID_STATUSES.contains(&request.status.as_str()) {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "invalid status filter '{}'. Valid values: {:?}",
+                    request.status, VALID_STATUSES
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate limit (reasonable bounds)
+        const MAX_LIST_LIMIT: u32 = 1000;
+        if request.limit > MAX_LIST_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    MAX_LIST_LIMIT, request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Query all proposals from the chain
+        // - Filter by status
+        // - Apply pagination (offset/limit)
+        // - Return proposal summaries with vote tallies
+        //
+        // For now, return an empty list (no indexer = no proposals visible).
+        Ok(types::social::GovernanceListResponse::new(
+            vec![], // proposals
+            0,      // total_count
         ))
     }
 }
