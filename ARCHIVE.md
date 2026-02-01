@@ -33,3 +33,5 @@
 
 |**P0.3**|Add`pubmodbotcash;`toconstants.rs|✅DONE|`librustzcash/components/zcash_protocol/src/constants.rs:1-6`|`cdlibrustzcash&&cargotest-pzcash_protocol--botcash`|
 
+|**P0.4**|Implement`NetworkConstants`trait(12matcharms)|✅DONE|`librustzcash/components/zcash_protocol/src/consensus.rs:236-330`|`cdlibrustzcash&&cargotest-pzcash_protocol--botcash`|
+
