@@ -20,3 +20,5 @@
 
 |**P0.9**|UpdateUnifiedAddresscontainer|✅DONE|`librustzcash/components/zcash_address/src/kind/unified/address.rs:137-158`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
 
+|**P0.10**|UpdateUnifiedFVKcontainer|✅DONE|`librustzcash/components/zcash_address/src/kind/unified/fvk.rs:132-146`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
+
