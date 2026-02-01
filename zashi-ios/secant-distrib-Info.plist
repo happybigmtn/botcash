@@ -10,7 +10,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Zashi</string>
+	<string>Botcash</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -29,10 +29,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>None</string>
 			<key>CFBundleURLName</key>
-			<string>co-electriccoin.secant-mainnet</string>
+			<string>com.botcash.wallet-mainnet</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>zcash</string>
+				<string>botcash</string>
 			</array>
 		</dict>
 	</array>
@@ -48,12 +48,12 @@
 	<string>To access sensitive wallet data which should never be shared with anyone. For example backup phrase seed that can restore the wallet and gain access to funds.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
-		<key>iCloud.com.electriccoinco.zashi</key>
+		<key>iCloud.com.botcash.wallet</key>
 		<dict>
 			<key>NSUbiquitousContainerIsDocumentStorage</key>
 			<true/>
 			<key>NSUbiquitousContainerName</key>
-			<string>Zashi Address Book</string>
+			<string>Botcash Address Book</string>
 		</dict>
 	</dict>
 	<key>UIAppFonts</key>
