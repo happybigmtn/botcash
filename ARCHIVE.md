@@ -10,3 +10,5 @@
 
 |**P0.4**|Implement`NetworkConstants`trait(12matcharms)|✅DONE|`librustzcash/components/zcash_protocol/src/consensus.rs:236-330`|`cdlibrustzcash&&cargotest-pzcash_protocol--botcash`|
 
+|**P0.5**|UpdateSaplingaddressparsing|✅DONE|`librustzcash/components/zcash_address/src/encoding.rs:76-86`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
+
