@@ -7,6 +7,7 @@ pub mod get_mining_info;
 pub mod get_raw_mempool;
 pub mod long_poll;
 pub mod peer_info;
+pub mod social;
 pub mod submit_block;
 pub mod subsidy;
 pub mod transaction;

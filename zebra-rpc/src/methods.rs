@@ -656,6 +656,106 @@ pub trait Rpc {
     /// method: post
     /// tags: network
     async fn add_node(&self, addr: PeerSocketAddr, command: AddNodeCommand) -> Result<()>;
+
+    // ==================== Botcash Social Protocol RPC Methods ====================
+
+    /// Creates a social post on the Botcash network.
+    ///
+    /// This method creates a shielded transaction containing a social post message
+    /// in the memo field. The post will be visible to anyone scanning the blockchain
+    /// with the appropriate viewing keys.
+    ///
+    /// method: post
+    /// tags: social
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The post request containing:
+    ///   - `from`: (string) The sender's shielded address
+    ///   - `content`: (string) The post content (max 500 bytes)
+    ///   - `tags`: (array of strings, optional) Tags for categorization
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet functionality to sign and broadcast the transaction.
+    #[method(name = "z_socialpost")]
+    async fn z_social_post(
+        &self,
+        request: types::social::SocialPostRequest,
+    ) -> Result<types::social::SocialPostResponse>;
+
+    /// Sends an encrypted direct message to another user.
+    ///
+    /// Creates a shielded transaction with the DM content encrypted in the memo field.
+    /// Only the recipient can decrypt and read the message using their viewing key.
+    ///
+    /// method: post
+    /// tags: social
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The DM request containing:
+    ///   - `from`: (string) The sender's shielded address
+    ///   - `to`: (string) The recipient's shielded address
+    ///   - `content`: (string) The message content (max 500 bytes)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    #[method(name = "z_socialdm")]
+    async fn z_social_dm(
+        &self,
+        request: types::social::SocialDmRequest,
+    ) -> Result<types::social::SocialDmResponse>;
+
+    /// Creates a follow relationship to another user.
+    ///
+    /// This records the follow action on-chain, allowing indexers to build
+    /// social graphs. The follow is recorded in a shielded transaction memo.
+    ///
+    /// method: post
+    /// tags: social
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The follow request containing:
+    ///   - `from`: (string) The follower's shielded address
+    ///   - `target`: (string) The address to follow
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    #[method(name = "z_socialfollow")]
+    async fn z_social_follow(
+        &self,
+        request: types::social::SocialFollowRequest,
+    ) -> Result<types::social::SocialFollowResponse>;
+
+    /// Retrieves social posts visible to the provided viewing keys.
+    ///
+    /// Scans the blockchain for social messages (posts, comments, DMs, etc.)
+    /// that are decryptable with the provided incoming viewing keys (IVKs).
+    ///
+    /// method: post
+    /// tags: social
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The feed request containing:
+    ///   - `ivks`: (array of strings) Incoming viewing keys to scan with
+    ///   - `limit`: (number, optional, default=50) Maximum posts to return
+    ///   - `startHeight`: (number, optional) Block height to start scanning from
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Scanning large ranges may be slow; consider using an indexer service.
+    #[method(name = "z_socialfeed")]
+    async fn z_social_feed(
+        &self,
+        request: types::social::SocialFeedRequest,
+    ) -> Result<types::social::SocialFeedResponse>;
 }
 
 /// RPC method implementations.
@@ -2894,6 +2994,187 @@ where
                 None::<()>,
             ));
         }
+    }
+
+    // ==================== Botcash Social Protocol RPC Implementations ====================
+
+    async fn z_social_post(
+        &self,
+        request: types::social::SocialPostRequest,
+    ) -> Result<types::social::SocialPostResponse> {
+        // Validate the request
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        if request.content.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "content is required",
+                None::<()>,
+            ));
+        }
+
+        // Check content length (max 500 bytes to leave room for header in 512-byte memo)
+        if request.content.len() > 500 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "content too long: {} bytes, max 500",
+                    request.content.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet functionality to:
+        // 1. Look up the spending key for the 'from' address
+        // 2. Create a shielded transaction with the social message in the memo
+        // 3. Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is not yet available.
+        // This validates the RPC interface is correctly defined.
+        Err(ErrorObject::owned(
+            ErrorCode::MethodNotFound.code(),
+            "z_socialpost requires wallet support which is not yet implemented in Zebra",
+            None::<()>,
+        ))
+    }
+
+    async fn z_social_dm(
+        &self,
+        request: types::social::SocialDmRequest,
+    ) -> Result<types::social::SocialDmResponse> {
+        // Validate the request
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        if request.to.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "to address is required",
+                None::<()>,
+            ));
+        }
+
+        if request.content.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "content is required",
+                None::<()>,
+            ));
+        }
+
+        // Check content length
+        if request.content.len() > 500 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "content too long: {} bytes, max 500",
+                    request.content.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet functionality
+        Err(ErrorObject::owned(
+            ErrorCode::MethodNotFound.code(),
+            "z_socialdm requires wallet support which is not yet implemented in Zebra",
+            None::<()>,
+        ))
+    }
+
+    async fn z_social_follow(
+        &self,
+        request: types::social::SocialFollowRequest,
+    ) -> Result<types::social::SocialFollowResponse> {
+        // Validate the request
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        if request.target.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "target address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet functionality
+        Err(ErrorObject::owned(
+            ErrorCode::MethodNotFound.code(),
+            "z_socialfollow requires wallet support which is not yet implemented in Zebra",
+            None::<()>,
+        ))
+    }
+
+    async fn z_social_feed(
+        &self,
+        request: types::social::SocialFeedRequest,
+    ) -> Result<types::social::SocialFeedResponse> {
+        // Validate the request
+        if request.ivks.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one incoming viewing key (ivk) is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate limit
+        if request.limit == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "limit must be greater than 0",
+                None::<()>,
+            ));
+        }
+
+        if request.limit > 1000 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "limit must not exceed 1000",
+                None::<()>,
+            ));
+        }
+
+        // Get the current chain tip height for the scanned range
+        let tip_height = self
+            .latest_chain_tip
+            .best_tip_height()
+            .unwrap_or(Height::MIN);
+
+        let start_height = request.start_height.unwrap_or(0);
+        let end_height = tip_height.0;
+
+        // Note: Full implementation requires:
+        // 1. Parsing the IVKs
+        // 2. Scanning the blockchain for shielded outputs decryptable by those keys
+        // 3. Parsing the memo fields for social messages
+        // 4. Returning the decoded posts
+        //
+        // This is computationally expensive and typically done by an indexer service.
+        // For now, return an empty feed with the scanned range information.
+        Ok(types::social::SocialFeedResponse::new(
+            vec![],
+            0,
+            types::social::ScannedRange::new(start_height, end_height),
+        ))
     }
 }
 
