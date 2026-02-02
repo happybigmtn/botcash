@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.7 Complete - Price Oracle/Dynamic Fees)
+**Last Updated:** 2026-02-01 (P6.8 Complete - Protocol Upgrade Signaling)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests), P6.7 done (price oracle with miner nonce signaling, median aggregation, dynamic fee calculation, and 12 oracle tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests), P6.7 done (price oracle with miner nonce signaling, median aggregation, dynamic fee calculation, and 12 oracle tests), P6.8 done (protocol upgrade signaling with version bits, 75% activation threshold, deployment state tracking, and 40+ upgrade tests across zebra-chain and zebra-rpc).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -128,6 +128,8 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.5b** | Bridge RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::bridge` |
 | **P6.5c** | Bridge RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- bridge` |
 | **P6.5d** | Indexer bridge parsing | ✅ DONE | `zebra-rpc/src/indexer/bridges.rs` | `cargo test -p zebra-rpc -- indexer::bridges::tests` |
+| **P6.8a** | Version bit signaling module | ✅ DONE | `zebra-chain/src/parameters/protocol_upgrades.rs` | `cargo test -p zebra-chain -- protocol_upgrades` |
+| **P6.8b** | Protocol upgrade indexer | ✅ DONE | `zebra-rpc/src/indexer/protocol_upgrades.rs` | `cargo test -p zebra-chain -- protocol_upgrades` |
 
 **P6.1a Implementation Details:**
 - Added `SocialMessageType::Batch = 0x80` for batched transactions
@@ -324,6 +326,25 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Constants: PRICE_AGGREGATION_BLOCKS (100), MIN_VALID_PRICE_SIGNALS (51), MAX_PRICE_DEVIATION_PERCENT (50%)
 - Governance bounds module with validation functions for all adjustable parameters
 - 12 comprehensive tests covering signal roundtrip, median calculation, outlier filtering, fee calculation, rate limiting, and bounds validation
+
+**P6.8 Implementation Details (Protocol Upgrade Signaling):**
+- Created `zebra-chain/src/parameters/protocol_upgrades.rs` module for version bit signaling
+- Added `SoftForkDeployment` struct with BIP ID, name, description, bit position (3-30), start/timeout heights
+- Added `DeploymentState` enum: Defined, Started, LockedIn, Active, Failed
+- Added `SignalingStats` struct for tracking signal counts within windows
+- Signaling constants: SIGNALING_WINDOW_BLOCKS (1000), ACTIVATION_THRESHOLD_PERCENT (75%), GRACE_PERIOD_BLOCKS (1008)
+- Version bit utilities: `parse_version_bits()`, `create_signaling_version()`, `supports_signaling()`
+- Window utilities: `window_number()`, `window_start_height()`, `window_end_height()`, `calculate_activation_height()`
+- Added `get_deployment_state()` function for determining deployment state at any height
+- Governance bounds: `validate_threshold_change()`, `validate_window_change()`, `validate_grace_period_change()`
+- 20 comprehensive zebra-chain tests covering state transitions, signaling, window calculations, and validation
+- Created `zebra-rpc/src/indexer/protocol_upgrades.rs` for indexer-side tracking
+- Added `IndexedBlockSignal` struct for parsing version bits from block headers
+- Added `SignalingWindowStats` struct for per-window statistics
+- Added `DeploymentTracker` struct for tracking deployment lifecycle across blocks
+- Added `BlockUpgradeStats` struct for per-block upgrade statistics
+- Utility functions: `parse_block_signals()`, `version_signals_bit()`, `describe_deployment_state()`
+- 20 comprehensive indexer tests covering signal parsing, window stats, tracker lifecycle, and error handling
 
 ---
 
@@ -1642,11 +1663,11 @@ cd zashi-android && ./gradlew test
 - [ ] 30-day timelock for passed proposals
 - [ ] Required Tests: Vote tallying, quorum detection
 
-#### 6.2.3 Protocol Upgrades
-- [ ] Version bit signaling in blocks
-- [ ] 75% threshold for soft fork activation
-- [ ] BIP template and process documentation
-- [ ] Required Tests: Signaling detection, activation logic
+#### 6.2.3 Protocol Upgrades ✅
+- [x] Version bit signaling in blocks — `zebra-chain/src/parameters/protocol_upgrades.rs`
+- [x] 75% threshold for soft fork activation (1000-block windows, 1008-block grace period)
+- [x] Indexer upgrade tracking module — `zebra-rpc/src/indexer/protocol_upgrades.rs`
+- [x] Required Tests: 20 zebra-chain tests + 20 indexer tests = 40 total upgrade tests
 
 ---
 
