@@ -49,3 +49,8 @@
 
 |**P0.11**|UpdateUnifiedIVKcontainer|✅DONE|`librustzcash/components/zcash_address/src/kind/unified/ivk.rs:137-147`|`cdlibrustzcash&&cargotest-pzcash_address--botcash`|
 
+
+## Review Signoff (2026-02-02) - SIGNED OFF
+
+-[x]Binarymemoencoding(70-80%sizereduction)—Alreadyimplementedinsocial.rs
+
