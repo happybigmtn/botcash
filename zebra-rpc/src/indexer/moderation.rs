@@ -55,6 +55,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use zebra_chain::transaction::{
     social::{
+        BlockListAction as ChainBlockListAction, BlockListPublishMessage,
+        BlockListSubscribeMessage, BlockListSubscriptionAction as ChainSubscriptionAction,
         ReportCategory as ChainReportCategory, ReportMessage, SocialMessage, SocialMessageType,
         SocialParseError, TrustLevel as ChainTrustLevel, TrustMessage,
     },
@@ -420,6 +422,220 @@ impl fmt::Display for IndexedReport {
     }
 }
 
+// ============================================================================
+// Block List Types (0xD2, 0xD3)
+// ============================================================================
+
+/// Block list action for indexing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BlockListAction {
+    /// Create a new block list.
+    Create,
+    /// Add entries to an existing list.
+    AddEntries,
+    /// Remove entries from a list.
+    RemoveEntries,
+    /// Deprecate a list (no longer maintained).
+    Deprecate,
+}
+
+impl From<ChainBlockListAction> for BlockListAction {
+    fn from(action: ChainBlockListAction) -> Self {
+        match action {
+            ChainBlockListAction::Create => Self::Create,
+            ChainBlockListAction::AddEntries => Self::AddEntries,
+            ChainBlockListAction::RemoveEntries => Self::RemoveEntries,
+            ChainBlockListAction::Deprecate => Self::Deprecate,
+        }
+    }
+}
+
+impl fmt::Display for BlockListAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Create => write!(f, "create"),
+            Self::AddEntries => write!(f, "add_entries"),
+            Self::RemoveEntries => write!(f, "remove_entries"),
+            Self::Deprecate => write!(f, "deprecate"),
+        }
+    }
+}
+
+/// Block list subscription action for indexing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BlockListSubscriptionAction {
+    /// Subscribe to a block list.
+    Subscribe,
+    /// Unsubscribe from a block list.
+    Unsubscribe,
+}
+
+impl From<ChainSubscriptionAction> for BlockListSubscriptionAction {
+    fn from(action: ChainSubscriptionAction) -> Self {
+        match action {
+            ChainSubscriptionAction::Subscribe => Self::Subscribe,
+            ChainSubscriptionAction::Unsubscribe => Self::Unsubscribe,
+        }
+    }
+}
+
+impl fmt::Display for BlockListSubscriptionAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Subscribe => write!(f, "subscribe"),
+            Self::Unsubscribe => write!(f, "unsubscribe"),
+        }
+    }
+}
+
+/// An indexed block list publish event (0xD2).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct IndexedBlockListPublish {
+    /// The transaction ID containing this publish.
+    pub tx_id: String,
+
+    /// Block height where this was published.
+    pub block_height: u32,
+
+    /// The publisher's address.
+    pub publisher_address: String,
+
+    /// The action performed.
+    pub action: BlockListAction,
+
+    /// The list ID (32 bytes as hex).
+    /// For Create actions, this is derived from the transaction hash.
+    pub list_id: String,
+
+    /// List name (only for Create actions).
+    pub name: Option<String>,
+
+    /// List description (only for Create actions).
+    pub description: Option<String>,
+
+    /// Entries added or removed.
+    pub entries: Vec<String>,
+
+    /// Protocol version.
+    pub version: u8,
+}
+
+impl IndexedBlockListPublish {
+    /// Creates a new indexed block list publish.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        tx_id: &str,
+        block_height: u32,
+        publisher_address: String,
+        action: BlockListAction,
+        list_id: String,
+        name: Option<String>,
+        description: Option<String>,
+        entries: Vec<String>,
+        version: u8,
+    ) -> Self {
+        Self {
+            tx_id: tx_id.to_string(),
+            block_height,
+            publisher_address,
+            action,
+            list_id,
+            name,
+            description,
+            entries,
+            version,
+        }
+    }
+
+    /// Returns true if this is a create action.
+    pub fn is_create(&self) -> bool {
+        self.action == BlockListAction::Create
+    }
+
+    /// Returns true if this is a deprecate action.
+    pub fn is_deprecate(&self) -> bool {
+        self.action == BlockListAction::Deprecate
+    }
+}
+
+impl fmt::Display for IndexedBlockListPublish {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BlockListPublish {{ {} {} list {}... ({} entries) }}",
+            &self.publisher_address[..8.min(self.publisher_address.len())],
+            self.action,
+            &self.list_id[..8.min(self.list_id.len())],
+            self.entries.len()
+        )
+    }
+}
+
+/// An indexed block list subscription event (0xD3).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct IndexedBlockListSubscribe {
+    /// The transaction ID containing this subscription.
+    pub tx_id: String,
+
+    /// Block height where this was submitted.
+    pub block_height: u32,
+
+    /// The subscriber's address.
+    pub subscriber_address: String,
+
+    /// The list ID being subscribed to (32 bytes as hex).
+    pub list_id: String,
+
+    /// The subscription action.
+    pub action: BlockListSubscriptionAction,
+
+    /// Protocol version.
+    pub version: u8,
+}
+
+impl IndexedBlockListSubscribe {
+    /// Creates a new indexed block list subscription.
+    pub fn new(
+        tx_id: &str,
+        block_height: u32,
+        subscriber_address: String,
+        list_id: String,
+        action: BlockListSubscriptionAction,
+        version: u8,
+    ) -> Self {
+        Self {
+            tx_id: tx_id.to_string(),
+            block_height,
+            subscriber_address,
+            list_id,
+            action,
+            version,
+        }
+    }
+
+    /// Returns true if this is a subscribe action.
+    pub fn is_subscribe(&self) -> bool {
+        self.action == BlockListSubscriptionAction::Subscribe
+    }
+
+    /// Returns true if this is an unsubscribe action.
+    pub fn is_unsubscribe(&self) -> bool {
+        self.action == BlockListSubscriptionAction::Unsubscribe
+    }
+}
+
+impl fmt::Display for IndexedBlockListSubscribe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "BlockListSubscribe {{ {} {} list {}... }}",
+            &self.subscriber_address[..8.min(self.subscriber_address.len())],
+            self.action,
+            &self.list_id[..8.min(self.list_id.len())]
+        )
+    }
+}
+
 /// Unified moderation event type for indexing.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum IndexedModeration {
@@ -427,6 +643,10 @@ pub enum IndexedModeration {
     Trust(IndexedTrust),
     /// A content report.
     Report(IndexedReport),
+    /// A block list publish event.
+    BlockListPublish(IndexedBlockListPublish),
+    /// A block list subscription event.
+    BlockListSubscribe(IndexedBlockListSubscribe),
 }
 
 impl IndexedModeration {
@@ -435,6 +655,8 @@ impl IndexedModeration {
         match self {
             Self::Trust(t) => &t.tx_id,
             Self::Report(r) => &r.tx_id,
+            Self::BlockListPublish(b) => &b.tx_id,
+            Self::BlockListSubscribe(s) => &s.tx_id,
         }
     }
 
@@ -443,6 +665,8 @@ impl IndexedModeration {
         match self {
             Self::Trust(t) => t.block_height,
             Self::Report(r) => r.block_height,
+            Self::BlockListPublish(b) => b.block_height,
+            Self::BlockListSubscribe(s) => s.block_height,
         }
     }
 
@@ -455,6 +679,21 @@ impl IndexedModeration {
     pub fn is_report(&self) -> bool {
         matches!(self, Self::Report(_))
     }
+
+    /// Returns true if this is a block list publish event.
+    pub fn is_block_list_publish(&self) -> bool {
+        matches!(self, Self::BlockListPublish(_))
+    }
+
+    /// Returns true if this is a block list subscribe event.
+    pub fn is_block_list_subscribe(&self) -> bool {
+        matches!(self, Self::BlockListSubscribe(_))
+    }
+
+    /// Returns true if this is any block list event.
+    pub fn is_block_list(&self) -> bool {
+        matches!(self, Self::BlockListPublish(_) | Self::BlockListSubscribe(_))
+    }
 }
 
 impl fmt::Display for IndexedModeration {
@@ -462,6 +701,8 @@ impl fmt::Display for IndexedModeration {
         match self {
             Self::Trust(t) => write!(f, "{}", t),
             Self::Report(r) => write!(f, "{}", r),
+            Self::BlockListPublish(b) => write!(f, "{}", b),
+            Self::BlockListSubscribe(s) => write!(f, "{}", s),
         }
     }
 }
@@ -512,14 +753,17 @@ impl From<SocialParseError> for ModerationIndexError {
     }
 }
 
-/// Checks if a memo is a moderation message (Trust or Report).
+/// Checks if a memo is a moderation message (Trust, Report, BlockListPublish, or BlockListSubscribe).
 pub fn is_moderation_memo(memo: &Memo) -> bool {
     let bytes = memo.as_bytes();
     if bytes.is_empty() {
         return false;
     }
     let msg_type = bytes[0];
-    msg_type == SocialMessageType::Trust as u8 || msg_type == SocialMessageType::Report as u8
+    msg_type == SocialMessageType::Trust as u8
+        || msg_type == SocialMessageType::Report as u8
+        || msg_type == SocialMessageType::BlockListPublish as u8
+        || msg_type == SocialMessageType::BlockListSubscribe as u8
 }
 
 /// Parses a moderation memo into an indexed moderation event.
@@ -563,6 +807,16 @@ pub fn parse_moderation_memo(
         SocialMessageType::Report => {
             let report = parse_report_payload(payload, tx_id, block_height, from_address, version)?;
             Ok(IndexedModeration::Report(report))
+        }
+        SocialMessageType::BlockListPublish => {
+            let publish =
+                parse_block_list_publish_payload(payload, tx_id, block_height, from_address, version)?;
+            Ok(IndexedModeration::BlockListPublish(publish))
+        }
+        SocialMessageType::BlockListSubscribe => {
+            let subscribe =
+                parse_block_list_subscribe_payload(payload, tx_id, block_height, from_address, version)?;
+            Ok(IndexedModeration::BlockListSubscribe(subscribe))
         }
         _ => Err(ModerationIndexError::NotModeration),
     }
@@ -619,6 +873,59 @@ fn parse_report_payload(
         report_msg.category().into(),
         stake,
         report_msg.evidence().map(String::from),
+        version,
+    ))
+}
+
+/// Parses a block list publish message payload (0xD2).
+fn parse_block_list_publish_payload(
+    payload: &[u8],
+    tx_id: &str,
+    block_height: u32,
+    from_address: &str,
+    version: u8,
+) -> Result<IndexedBlockListPublish, ModerationIndexError> {
+    let msg = BlockListPublishMessage::parse(payload).map_err(|e| {
+        ModerationIndexError::MalformedPayload(format!("failed to parse block list publish: {}", e))
+    })?;
+
+    // For Create actions, the list ID is derived from the transaction hash
+    // For other actions, it's extracted from the message
+    let list_id = hex::encode(msg.list_id());
+
+    Ok(IndexedBlockListPublish::new(
+        tx_id,
+        block_height,
+        from_address.to_string(),
+        msg.action().into(),
+        list_id,
+        msg.name().map(String::from),
+        msg.description().map(String::from),
+        msg.entries().iter().map(|s| s.to_string()).collect(),
+        version,
+    ))
+}
+
+/// Parses a block list subscribe message payload (0xD3).
+fn parse_block_list_subscribe_payload(
+    payload: &[u8],
+    tx_id: &str,
+    block_height: u32,
+    from_address: &str,
+    version: u8,
+) -> Result<IndexedBlockListSubscribe, ModerationIndexError> {
+    let msg = BlockListSubscribeMessage::parse(payload).map_err(|e| {
+        ModerationIndexError::MalformedPayload(format!("failed to parse block list subscribe: {}", e))
+    })?;
+
+    let list_id = hex::encode(msg.list_id());
+
+    Ok(IndexedBlockListSubscribe::new(
+        tx_id,
+        block_height,
+        from_address.to_string(),
+        list_id,
+        msg.action().into(),
         version,
     ))
 }
@@ -1390,5 +1697,275 @@ mod tests {
         );
         let result = parse_moderation_memo(&memo, "txid", 100, "bs1sender");
         assert_eq!(result, Err(ModerationIndexError::NotModeration));
+    }
+
+    // ========================================================================
+    // Tests for Block List types
+    // ========================================================================
+
+    #[test]
+    fn test_block_list_action_from_chain() {
+        assert_eq!(
+            BlockListAction::from(ChainBlockListAction::Create),
+            BlockListAction::Create
+        );
+        assert_eq!(
+            BlockListAction::from(ChainBlockListAction::AddEntries),
+            BlockListAction::AddEntries
+        );
+        assert_eq!(
+            BlockListAction::from(ChainBlockListAction::RemoveEntries),
+            BlockListAction::RemoveEntries
+        );
+        assert_eq!(
+            BlockListAction::from(ChainBlockListAction::Deprecate),
+            BlockListAction::Deprecate
+        );
+    }
+
+    #[test]
+    fn test_block_list_action_display() {
+        assert_eq!(format!("{}", BlockListAction::Create), "create");
+        assert_eq!(format!("{}", BlockListAction::AddEntries), "add_entries");
+        assert_eq!(format!("{}", BlockListAction::RemoveEntries), "remove_entries");
+        assert_eq!(format!("{}", BlockListAction::Deprecate), "deprecate");
+    }
+
+    #[test]
+    fn test_block_list_subscription_action_from_chain() {
+        assert_eq!(
+            BlockListSubscriptionAction::from(ChainSubscriptionAction::Subscribe),
+            BlockListSubscriptionAction::Subscribe
+        );
+        assert_eq!(
+            BlockListSubscriptionAction::from(ChainSubscriptionAction::Unsubscribe),
+            BlockListSubscriptionAction::Unsubscribe
+        );
+    }
+
+    #[test]
+    fn test_block_list_subscription_action_display() {
+        assert_eq!(
+            format!("{}", BlockListSubscriptionAction::Subscribe),
+            "subscribe"
+        );
+        assert_eq!(
+            format!("{}", BlockListSubscriptionAction::Unsubscribe),
+            "unsubscribe"
+        );
+    }
+
+    #[test]
+    fn test_indexed_block_list_publish_new() {
+        let publish = IndexedBlockListPublish::new(
+            "txid123",
+            1000,
+            "bs1publisher".to_string(),
+            BlockListAction::Create,
+            "abcd1234".repeat(8),
+            Some("My Block List".to_string()),
+            Some("Description".to_string()),
+            vec!["badactor1".to_string(), "badactor2".to_string()],
+            1,
+        );
+
+        assert_eq!(publish.tx_id, "txid123");
+        assert_eq!(publish.block_height, 1000);
+        assert_eq!(publish.publisher_address, "bs1publisher");
+        assert_eq!(publish.action, BlockListAction::Create);
+        assert!(publish.is_create());
+        assert!(!publish.is_deprecate());
+        assert_eq!(publish.name, Some("My Block List".to_string()));
+        assert_eq!(publish.entries.len(), 2);
+        assert_eq!(publish.version, 1);
+    }
+
+    #[test]
+    fn test_indexed_block_list_publish_display() {
+        let publish = IndexedBlockListPublish::new(
+            "txid123",
+            1000,
+            "bs1publisher".to_string(),
+            BlockListAction::AddEntries,
+            "abcd1234".repeat(8),
+            None,
+            None,
+            vec!["entry1".to_string()],
+            1,
+        );
+
+        let display = format!("{}", publish);
+        assert!(display.contains("BlockListPublish"));
+        assert!(display.contains("add_entries"));
+        assert!(display.contains("1 entries"));
+    }
+
+    #[test]
+    fn test_indexed_block_list_subscribe_new() {
+        let subscribe = IndexedBlockListSubscribe::new(
+            "txid456",
+            2000,
+            "bs1subscriber".to_string(),
+            "listid123".repeat(8),
+            BlockListSubscriptionAction::Subscribe,
+            1,
+        );
+
+        assert_eq!(subscribe.tx_id, "txid456");
+        assert_eq!(subscribe.block_height, 2000);
+        assert_eq!(subscribe.subscriber_address, "bs1subscriber");
+        assert!(subscribe.is_subscribe());
+        assert!(!subscribe.is_unsubscribe());
+        assert_eq!(subscribe.version, 1);
+    }
+
+    #[test]
+    fn test_indexed_block_list_subscribe_display() {
+        let subscribe = IndexedBlockListSubscribe::new(
+            "txid456",
+            2000,
+            "bs1subscriber".to_string(),
+            "listid123".repeat(8),
+            BlockListSubscriptionAction::Unsubscribe,
+            1,
+        );
+
+        let display = format!("{}", subscribe);
+        assert!(display.contains("BlockListSubscribe"));
+        assert!(display.contains("unsubscribe"));
+    }
+
+    #[test]
+    fn test_indexed_moderation_block_list_variants() {
+        let publish = IndexedBlockListPublish::new(
+            "tx1",
+            100,
+            "publisher".to_string(),
+            BlockListAction::Create,
+            "list123".to_string(),
+            None,
+            None,
+            vec![],
+            1,
+        );
+        let subscribe = IndexedBlockListSubscribe::new(
+            "tx2",
+            200,
+            "subscriber".to_string(),
+            "list123".to_string(),
+            BlockListSubscriptionAction::Subscribe,
+            1,
+        );
+
+        let mod_publish = IndexedModeration::BlockListPublish(publish);
+        let mod_subscribe = IndexedModeration::BlockListSubscribe(subscribe);
+
+        assert!(mod_publish.is_block_list_publish());
+        assert!(!mod_publish.is_block_list_subscribe());
+        assert!(mod_publish.is_block_list());
+        assert!(!mod_publish.is_trust());
+        assert!(!mod_publish.is_report());
+        assert_eq!(mod_publish.tx_id(), "tx1");
+        assert_eq!(mod_publish.block_height(), 100);
+
+        assert!(!mod_subscribe.is_block_list_publish());
+        assert!(mod_subscribe.is_block_list_subscribe());
+        assert!(mod_subscribe.is_block_list());
+        assert_eq!(mod_subscribe.tx_id(), "tx2");
+        assert_eq!(mod_subscribe.block_height(), 200);
+    }
+
+    #[test]
+    fn test_is_moderation_memo_block_list_publish() {
+        let memo = create_social_memo(SocialMessageType::BlockListPublish, &[]);
+        assert!(is_moderation_memo(&memo));
+    }
+
+    #[test]
+    fn test_is_moderation_memo_block_list_subscribe() {
+        let memo = create_social_memo(SocialMessageType::BlockListSubscribe, &[]);
+        assert!(is_moderation_memo(&memo));
+    }
+
+    #[test]
+    fn test_parse_moderation_memo_block_list_publish() {
+        // Create a valid block list publish payload
+        use zebra_chain::transaction::social::{BlockListPublishMessage, BLOCK_LIST_ID_SIZE};
+
+        let list_id = [0xab; BLOCK_LIST_ID_SIZE];
+        let msg = BlockListPublishMessage::new_create(
+            list_id,
+            "Test List".to_string(),
+            Some("Test Description".to_string()),
+            vec!["badactor1".to_string()],
+        );
+        let payload = msg.encode();
+
+        let memo = create_social_memo(SocialMessageType::BlockListPublish, &payload);
+        let result = parse_moderation_memo(&memo, "txid123", 1000, "bs1publisher");
+
+        assert!(result.is_ok());
+        let moderation = result.unwrap();
+        assert!(moderation.is_block_list_publish());
+
+        if let IndexedModeration::BlockListPublish(publish) = moderation {
+            assert_eq!(publish.tx_id, "txid123");
+            assert_eq!(publish.block_height, 1000);
+            assert_eq!(publish.publisher_address, "bs1publisher");
+            assert_eq!(publish.action, BlockListAction::Create);
+            assert_eq!(publish.name, Some("Test List".to_string()));
+            assert_eq!(publish.description, Some("Test Description".to_string()));
+            assert_eq!(publish.entries, vec!["badactor1".to_string()]);
+        } else {
+            panic!("Expected BlockListPublish variant");
+        }
+    }
+
+    #[test]
+    fn test_parse_moderation_memo_block_list_subscribe() {
+        // Create a valid block list subscribe payload
+        use zebra_chain::transaction::social::{BlockListSubscribeMessage, BLOCK_LIST_ID_SIZE};
+
+        let list_id = [0xcd; BLOCK_LIST_ID_SIZE];
+        let msg = BlockListSubscribeMessage::new_subscribe(list_id);
+        let payload = msg.encode();
+
+        let memo = create_social_memo(SocialMessageType::BlockListSubscribe, &payload);
+        let result = parse_moderation_memo(&memo, "txid456", 2000, "bs1subscriber");
+
+        assert!(result.is_ok());
+        let moderation = result.unwrap();
+        assert!(moderation.is_block_list_subscribe());
+
+        if let IndexedModeration::BlockListSubscribe(subscribe) = moderation {
+            assert_eq!(subscribe.tx_id, "txid456");
+            assert_eq!(subscribe.block_height, 2000);
+            assert_eq!(subscribe.subscriber_address, "bs1subscriber");
+            assert_eq!(subscribe.action, BlockListSubscriptionAction::Subscribe);
+            assert_eq!(subscribe.list_id, hex::encode([0xcd; BLOCK_LIST_ID_SIZE]));
+        } else {
+            panic!("Expected BlockListSubscribe variant");
+        }
+    }
+
+    #[test]
+    fn test_parse_moderation_memo_block_list_unsubscribe() {
+        use zebra_chain::transaction::social::{BlockListSubscribeMessage, BLOCK_LIST_ID_SIZE};
+
+        let list_id = [0xef; BLOCK_LIST_ID_SIZE];
+        let msg = BlockListSubscribeMessage::new_unsubscribe(list_id);
+        let payload = msg.encode();
+
+        let memo = create_social_memo(SocialMessageType::BlockListSubscribe, &payload);
+        let result = parse_moderation_memo(&memo, "txid789", 3000, "bs1unsubscriber");
+
+        assert!(result.is_ok());
+        let moderation = result.unwrap();
+
+        if let IndexedModeration::BlockListSubscribe(subscribe) = moderation {
+            assert_eq!(subscribe.action, BlockListSubscriptionAction::Unsubscribe);
+        } else {
+            panic!("Expected BlockListSubscribe variant");
+        }
     }
 }

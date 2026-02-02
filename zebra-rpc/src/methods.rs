@@ -2042,6 +2042,171 @@ pub trait Rpc {
         &self,
         request: types::social::ReportListRequest,
     ) -> Result<types::social::ReportListResponse>;
+
+    // ================== Block List Methods ==================
+
+    /// Publishes or updates a community block list.
+    ///
+    /// Creates a new block list, adds/removes entries, or deprecates an existing list.
+    /// Block lists are shared moderation tools that allow community members to
+    /// collaborate on identifying problematic addresses or content.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The publish request containing:
+    ///   - `from`: (string) Address of the list owner/publisher
+    ///   - `action`: (string) One of "create", "add_entries", "remove_entries", "deprecate"
+    ///   - `name`: (string, optional) List name (required for create, max 64 chars)
+    ///   - `description`: (string, optional) List description (max 256 chars)
+    ///   - `listId`: (string, optional) Existing list ID (required except for create)
+    ///   - `entries`: (array, optional) Entries to add/remove (max 50 per tx)
+    ///
+    /// # Returns
+    ///
+    /// A `BlockListPublishResponse` object containing:
+    /// - `txid`: (string) Transaction ID
+    /// - `listId`: (string) The block list ID (hash of creation tx for new lists)
+    /// - `action`: (string) The action performed
+    /// - `version`: (u32) List version number
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension for community moderation.
+    /// Requires wallet support to sign and submit the transaction.
+    #[method(name = "z_blocklistpublish")]
+    async fn z_blocklist_publish(
+        &self,
+        request: types::social::BlockListPublishRequest,
+    ) -> Result<types::social::BlockListPublishResponse>;
+
+    /// Subscribes to or unsubscribes from a community block list.
+    ///
+    /// When subscribed, entries on the block list will be applied to the user's
+    /// local filtering. Subscriptions are recorded on-chain for transparency.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The subscription request containing:
+    ///   - `from`: (string) Subscriber's address
+    ///   - `listId`: (string) ID of the block list to subscribe/unsubscribe
+    ///   - `action`: (string) Either "subscribe" or "unsubscribe"
+    ///
+    /// # Returns
+    ///
+    /// A `BlockListSubscribeResponse` object containing:
+    /// - `txid`: (string) Transaction ID
+    /// - `listId`: (string) The block list ID
+    /// - `action`: (string) The subscription action
+    /// - `subscriberCount`: (u32, optional) Updated subscriber count
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires wallet support.
+    #[method(name = "z_blocklistsubscribe")]
+    async fn z_blocklist_subscribe(
+        &self,
+        request: types::social::BlockListSubscribeRequest,
+    ) -> Result<types::social::BlockListSubscribeResponse>;
+
+    /// Queries available block lists.
+    ///
+    /// Returns block lists matching the filter criteria, including metadata
+    /// and optionally the list entries.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The query request containing:
+    ///   - `publisher`: (string, optional) Filter by publisher address
+    ///   - `subscriber`: (string, optional) Filter by subscriber address
+    ///   - `includeEntries`: (bool, optional) Include full entry list (default: false)
+    ///   - `status`: (string, optional) Filter by status: "active", "deprecated"
+    ///   - `limit`: (u32, optional) Max results (default: 50, max: 1000)
+    ///   - `offset`: (u32, optional) Pagination offset
+    ///
+    /// # Returns
+    ///
+    /// A `BlockListQueryResponse` object containing:
+    /// - `lists`: (array) Array of BlockListSummary objects
+    /// - `totalCount`: (u32) Total matching lists
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_blocklistquery")]
+    async fn z_blocklist_query(
+        &self,
+        request: types::social::BlockListQueryRequest,
+    ) -> Result<types::social::BlockListQueryResponse>;
+
+    /// Checks if addresses are on any subscribed block lists.
+    ///
+    /// Useful for quickly filtering content based on community block lists
+    /// the user has subscribed to.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The check request containing:
+    ///   - `subscriberAddress`: (string) Address to check subscriptions for
+    ///   - `targetAddresses`: (array) Addresses to check against block lists
+    ///
+    /// # Returns
+    ///
+    /// A `BlockListCheckResponse` object containing:
+    /// - `subscriberAddress`: (string) The address that was checked
+    /// - `results`: (array) Array of BlockListCheckResult objects, each with:
+    ///   - `address`: (string) The checked address
+    ///   - `blocked`: (bool) Whether address is on any subscribed list
+    ///   - `listIds`: (array) List IDs that contain this address
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_blocklistcheck")]
+    async fn z_blocklist_check(
+        &self,
+        request: types::social::BlockListCheckRequest,
+    ) -> Result<types::social::BlockListCheckResponse>;
+
+    /// Gets the block list subscriptions for an address.
+    ///
+    /// Returns all block lists that the given address is subscribed to.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The subscriptions request containing:
+    ///   - `address`: (string) Address to get subscriptions for
+    ///   - `limit`: (u32, optional) Max results (default: 50, max: 1000)
+    ///
+    /// # Returns
+    ///
+    /// A `BlockListSubscriptionsResponse` object containing:
+    /// - `address`: (string) The queried address
+    /// - `subscriptions`: (array) Array of subscribed BlockListSummary objects
+    /// - `totalCount`: (u32) Total subscriptions
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_blocklistsubscriptions")]
+    async fn z_blocklist_subscriptions(
+        &self,
+        request: types::social::BlockListSubscriptionsRequest,
+    ) -> Result<types::social::BlockListSubscriptionsResponse>;
 }
 
 /// RPC method implementations.
@@ -6911,6 +7076,353 @@ where
                 "z_reportlist requires indexer support which is not yet implemented. \
                 Would list reports with filters: target={:?}, reporter={:?}, category={:?}, status={:?}, limit={}",
                 request.target_txid, request.reporter_address, request.category, request.status, request.limit
+            ),
+            None::<()>,
+        ))
+    }
+
+    // ================== Block List Method Implementations ==================
+
+    async fn z_blocklist_publish(
+        &self,
+        request: types::social::BlockListPublishRequest,
+    ) -> Result<types::social::BlockListPublishResponse> {
+        // Validate the from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate based on action
+        match request.action {
+            types::social::BlockListAction::Create => {
+                // Name is required for create
+                if request.name.is_none() || request.name.as_ref().map(|n| n.is_empty()).unwrap_or(true) {
+                    return Err(ErrorObject::owned(
+                        ErrorCode::InvalidParams.code(),
+                        "name is required when creating a new block list",
+                        None::<()>,
+                    ));
+                }
+                // Validate name length
+                if let Some(ref name) = request.name {
+                    if name.len() > types::social::MAX_BLOCKLIST_NAME_LENGTH {
+                        return Err(ErrorObject::owned(
+                            ErrorCode::InvalidParams.code(),
+                            format!(
+                                "name exceeds maximum length of {} characters (got {})",
+                                types::social::MAX_BLOCKLIST_NAME_LENGTH,
+                                name.len()
+                            ),
+                            None::<()>,
+                        ));
+                    }
+                }
+                // Validate description length if provided
+                if let Some(ref desc) = request.description {
+                    if desc.len() > types::social::MAX_BLOCKLIST_DESCRIPTION_LENGTH {
+                        return Err(ErrorObject::owned(
+                            ErrorCode::InvalidParams.code(),
+                            format!(
+                                "description exceeds maximum length of {} characters (got {})",
+                                types::social::MAX_BLOCKLIST_DESCRIPTION_LENGTH,
+                                desc.len()
+                            ),
+                            None::<()>,
+                        ));
+                    }
+                }
+            }
+            types::social::BlockListAction::AddEntries
+            | types::social::BlockListAction::RemoveEntries
+            | types::social::BlockListAction::Deprecate => {
+                // List ID is required for non-create actions
+                if request.list_id.is_none() || request.list_id.as_ref().map(|id| id.is_empty()).unwrap_or(true) {
+                    return Err(ErrorObject::owned(
+                        ErrorCode::InvalidParams.code(),
+                        format!(
+                            "listId is required for {} action",
+                            request.action
+                        ),
+                        None::<()>,
+                    ));
+                }
+                // Validate list ID format (should be 64 hex chars = 32 bytes)
+                if let Some(ref list_id) = request.list_id {
+                    if list_id.len() != types::social::BLOCKLIST_ID_SIZE * 2 {
+                        return Err(ErrorObject::owned(
+                            ErrorCode::InvalidParams.code(),
+                            format!(
+                                "listId must be {} hex characters (got {})",
+                                types::social::BLOCKLIST_ID_SIZE * 2,
+                                list_id.len()
+                            ),
+                            None::<()>,
+                        ));
+                    }
+                    if hex::decode(list_id).is_err() {
+                        return Err(ErrorObject::owned(
+                            ErrorCode::InvalidParams.code(),
+                            "listId must be valid hex",
+                            None::<()>,
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Validate entries count
+        if request.entries.len() > types::social::MAX_BLOCKLIST_ENTRIES {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "entries exceed maximum of {} per transaction (got {})",
+                    types::social::MAX_BLOCKLIST_ENTRIES,
+                    request.entries.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // For add/remove actions, entries are required
+        if matches!(
+            request.action,
+            types::social::BlockListAction::AddEntries | types::social::BlockListAction::RemoveEntries
+        ) && request.entries.is_empty()
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "entries are required for {} action",
+                    request.action
+                ),
+                None::<()>,
+            ));
+        }
+
+        // In production, this would:
+        // 1. Create the block list message payload
+        // 2. Build a shielded transaction with the memo
+        // 3. Sign and broadcast via wallet
+        // 4. Return the transaction ID and list ID
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_blocklistpublish requires wallet support which is not yet implemented. \
+                Would publish block list action '{}' from {} with {} entries",
+                request.action, request.from, request.entries.len()
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_blocklist_subscribe(
+        &self,
+        request: types::social::BlockListSubscribeRequest,
+    ) -> Result<types::social::BlockListSubscribeResponse> {
+        // Validate the from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate list ID
+        if request.list_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "listId is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate list ID format
+        if request.list_id.len() != types::social::BLOCKLIST_ID_SIZE * 2 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "listId must be {} hex characters (got {})",
+                    types::social::BLOCKLIST_ID_SIZE * 2,
+                    request.list_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if hex::decode(&request.list_id).is_err() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "listId must be valid hex",
+                None::<()>,
+            ));
+        }
+
+        // In production, this would:
+        // 1. Create the subscription message payload
+        // 2. Build a shielded transaction with the memo
+        // 3. Sign and broadcast via wallet
+        // 4. Return the transaction ID
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_blocklistsubscribe requires wallet support which is not yet implemented. \
+                Would {} from {} for list {}",
+                request.action, request.from, request.list_id
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_blocklist_query(
+        &self,
+        request: types::social::BlockListQueryRequest,
+    ) -> Result<types::social::BlockListQueryResponse> {
+        // Validate limit
+        if request.limit > types::social::MAX_BLOCKLIST_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    types::social::MAX_BLOCKLIST_LIMIT,
+                    request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate publisher address if provided
+        if let Some(ref publisher) = request.publisher {
+            if publisher.is_empty() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "publisher cannot be empty if provided",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Validate subscriber address if provided
+        if let Some(ref subscriber) = request.subscriber {
+            if subscriber.is_empty() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "subscriber cannot be empty if provided",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // In production, this would query the indexer for:
+        // 1. Block lists matching filter criteria
+        // 2. List metadata (name, description, publisher, subscriber count)
+        // 3. Optionally include full entry lists
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_blocklistquery requires indexer support which is not yet implemented. \
+                Would query block lists with filters: publisher={:?}, subscriber={:?}, status={:?}, limit={}",
+                request.publisher, request.subscriber, request.status, request.limit
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_blocklist_check(
+        &self,
+        request: types::social::BlockListCheckRequest,
+    ) -> Result<types::social::BlockListCheckResponse> {
+        // Validate subscriber address
+        if request.subscriber_address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "subscriberAddress is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate target addresses
+        if request.target_addresses.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one targetAddress is required to check",
+                None::<()>,
+            ));
+        }
+
+        // Validate target addresses count
+        if request.target_addresses.len() > types::social::MAX_BLOCKLIST_ENTRIES {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "targetAddresses exceed maximum of {} per request (got {})",
+                    types::social::MAX_BLOCKLIST_ENTRIES,
+                    request.target_addresses.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // In production, this would:
+        // 1. Get all block lists the subscriber is subscribed to
+        // 2. Check each target address against all subscribed lists
+        // 3. Return which addresses are blocked and by which lists
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_blocklistcheck requires indexer support which is not yet implemented. \
+                Would check {} addresses against subscribed block lists for {}",
+                request.target_addresses.len(), request.subscriber_address
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_blocklist_subscriptions(
+        &self,
+        request: types::social::BlockListSubscriptionsRequest,
+    ) -> Result<types::social::BlockListSubscriptionsResponse> {
+        // Validate subscriber address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate limit
+        if request.limit > types::social::MAX_BLOCKLIST_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    types::social::MAX_BLOCKLIST_LIMIT,
+                    request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // In production, this would query the indexer for:
+        // 1. All subscription transactions from this address
+        // 2. Filter out unsubscribed lists
+        // 3. Return list summaries
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_blocklistsubscriptions requires indexer support which is not yet implemented. \
+                Would get subscriptions for {} (limit: {})",
+                request.address, request.limit
             ),
             None::<()>,
         ))

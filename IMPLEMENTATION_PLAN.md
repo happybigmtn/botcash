@@ -9,7 +9,7 @@
 
 **Last Updated:** 2026-02-02 (Phase 6 Protocol Layer Complete - Checklists Synchronized)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge with 63+ tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge with 63+ tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -1709,12 +1709,14 @@ cd zashi-android && ./gradlew test
 - [ ] Content warning tags (author-applied)
 - [ ] Required Tests: Filter persistence, feed exclusion
 
-#### 6.3.2 Community Lists
-- [ ] Shared block list format specification
-- [ ] List publishing via PROFILE memo extension
-- [ ] List subscription in wallet
-- [ ] Multi-list aggregation with allow-list overrides
-- [ ] Required Tests: List parsing, subscription sync
+#### 6.3.2 Community Block Lists ✅ DONE
+- [x] Shared block list format specification — BlockListPublish (0xD2), BlockListSubscribe (0xD3) message types
+- [x] List publishing via memo — BlockListPublishMessage with Create/AddEntries/RemoveEntries/Deprecate actions
+- [x] List subscription format — BlockListSubscribeMessage with Subscribe/Unsubscribe actions
+- [x] RPC types — BlockListPublishRequest/Response, BlockListSubscribeRequest/Response, BlockListQueryRequest/Response, BlockListCheckRequest/Response
+- [x] RPC methods — z_blocklistpublish, z_blocklistsubscribe, z_blocklistquery, z_blocklistcheck, z_blocklistsubscriptions
+- [x] Indexer parsing — IndexedBlockListPublish, IndexedBlockListSubscribe in moderation.rs
+- [x] Required Tests: 27 zebra-chain tests + 22 RPC type tests + 14 indexer tests = 63 block list tests
 
 #### 6.3.3 Reputation System ✅
 - [x] Karma calculation: `Σ(upvotes) + Σ(tips) - Σ(downvotes)`

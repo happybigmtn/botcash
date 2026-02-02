@@ -312,6 +312,22 @@ pub enum SocialMessageType {
     /// Format: [target_txid(32)][category(1)][stake(8)][evidence_len(1)][evidence]
     /// Categories: 0 = spam, 1 = scam, 2 = harassment, 3 = illegal, 4 = other
     Report = 0xD1,
+
+    /// Publish or update a shared block list (0xD2).
+    ///
+    /// Allows users to create and share curated block lists that others can subscribe to.
+    /// Lists are versioned and can be updated by the original publisher.
+    /// Format: [list_id(32)][version(4)][action(1)][entries_count(2)][entry1_len(1)][entry1]...[name_len(1)][name][desc_len(2)][desc]
+    /// Actions: 0 = create, 1 = update (add entries), 2 = remove entries, 3 = deprecate
+    BlockListPublish = 0xD2,
+
+    /// Subscribe or unsubscribe from a shared block list (0xD3).
+    ///
+    /// Users can subscribe to block lists published by trusted curators.
+    /// Subscriptions are used by indexers and wallets to filter content.
+    /// Format: [list_id(32)][action(1)]
+    /// Actions: 0 = subscribe, 1 = unsubscribe
+    BlockListSubscribe = 0xD3,
 }
 
 impl SocialMessageType {
@@ -360,6 +376,8 @@ impl SocialMessageType {
             Self::MultisigAction => "MultisigAction",
             Self::Trust => "Trust",
             Self::Report => "Report",
+            Self::BlockListPublish => "BlockListPublish",
+            Self::BlockListSubscribe => "BlockListSubscribe",
         }
     }
 
@@ -442,11 +460,20 @@ impl SocialMessageType {
 
     /// Returns true if this is a moderation message type.
     ///
-    /// Moderation messages are used for the reputation system (trust/vouch)
-    /// and stake-weighted content reports. They enable community-driven
-    /// moderation without central authority.
+    /// Moderation messages are used for the reputation system (trust/vouch),
+    /// stake-weighted content reports, and community block lists. They enable
+    /// community-driven moderation without central authority.
     pub const fn is_moderation(&self) -> bool {
-        matches!(self, Self::Trust | Self::Report)
+        matches!(self, Self::Trust | Self::Report | Self::BlockListPublish | Self::BlockListSubscribe)
+    }
+
+    /// Returns true if this is a block list message type.
+    ///
+    /// Block list messages are used for community-curated moderation lists.
+    /// Publishers can create and update lists, while users can subscribe to
+    /// lists maintained by trusted curators.
+    pub const fn is_block_list(&self) -> bool {
+        matches!(self, Self::BlockListPublish | Self::BlockListSubscribe)
     }
 }
 
@@ -491,6 +518,8 @@ impl TryFrom<u8> for SocialMessageType {
             0xF6 => Ok(Self::MultisigAction),
             0xD0 => Ok(Self::Trust),
             0xD1 => Ok(Self::Report),
+            0xD2 => Ok(Self::BlockListPublish),
+            0xD3 => Ok(Self::BlockListSubscribe),
             _ => Err(SocialParseError::UnknownMessageType(value)),
         }
     }
@@ -1260,6 +1289,44 @@ pub enum ModerationParseError {
         /// The actual stake.
         actual: u64,
     },
+
+    /// Invalid block list action value.
+    InvalidBlockListAction(u8),
+
+    /// Invalid block list subscription action value.
+    InvalidBlockListSubscriptionAction(u8),
+
+    /// Too many entries in a block list update.
+    TooManyBlockListEntries {
+        /// The maximum allowed entries.
+        max_entries: usize,
+        /// The actual number of entries.
+        actual_entries: usize,
+    },
+
+    /// A block list entry is too long.
+    BlockListEntryTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
+
+    /// A block list name is too long.
+    BlockListNameTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
+
+    /// A block list description is too long.
+    BlockListDescriptionTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
 }
 
 impl fmt::Display for ModerationParseError {
@@ -1304,6 +1371,40 @@ impl fmt::Display for ModerationParseError {
                     f,
                     "report stake too low: {} zatoshis, minimum {} required",
                     actual, minimum
+                )
+            }
+            Self::InvalidBlockListAction(byte) => {
+                write!(f, "invalid block list action: 0x{:02X}", byte)
+            }
+            Self::InvalidBlockListSubscriptionAction(byte) => {
+                write!(f, "invalid block list subscription action: 0x{:02X}", byte)
+            }
+            Self::TooManyBlockListEntries { max_entries, actual_entries } => {
+                write!(
+                    f,
+                    "too many block list entries: {} entries, maximum {} allowed",
+                    actual_entries, max_entries
+                )
+            }
+            Self::BlockListEntryTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "block list entry too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
+                )
+            }
+            Self::BlockListNameTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "block list name too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
+                )
+            }
+            Self::BlockListDescriptionTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "block list description too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
                 )
             }
         }
@@ -1620,6 +1721,520 @@ impl ReportMessage {
             stake,
             evidence,
         })
+    }
+}
+
+// ========================= BLOCK LIST TYPES =========================
+
+/// Maximum length for block list names.
+pub const MAX_BLOCK_LIST_NAME_LENGTH: usize = 64;
+
+/// Maximum length for block list descriptions.
+pub const MAX_BLOCK_LIST_DESCRIPTION_LENGTH: usize = 256;
+
+/// Maximum number of entries in a single block list update.
+pub const MAX_BLOCK_LIST_ENTRIES: usize = 50;
+
+/// Maximum length for a single block list entry (address).
+pub const MAX_BLOCK_LIST_ENTRY_LENGTH: usize = 128;
+
+/// Block list ID size (32 bytes, derived from publisher address + nonce).
+pub const BLOCK_LIST_ID_SIZE: usize = 32;
+
+/// Actions that can be performed on a block list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum BlockListAction {
+    /// Create a new block list (0x00).
+    Create = 0x00,
+
+    /// Add entries to an existing list (0x01).
+    AddEntries = 0x01,
+
+    /// Remove entries from a list (0x02).
+    RemoveEntries = 0x02,
+
+    /// Deprecate a list (0x03).
+    /// Signals that the list is no longer maintained.
+    Deprecate = 0x03,
+}
+
+impl BlockListAction {
+    /// Returns the byte value of this action.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Returns a human-readable name for this action.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Create => "Create",
+            Self::AddEntries => "AddEntries",
+            Self::RemoveEntries => "RemoveEntries",
+            Self::Deprecate => "Deprecate",
+        }
+    }
+}
+
+impl TryFrom<u8> for BlockListAction {
+    type Error = ModerationParseError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::Create),
+            0x01 => Ok(Self::AddEntries),
+            0x02 => Ok(Self::RemoveEntries),
+            0x03 => Ok(Self::Deprecate),
+            _ => Err(ModerationParseError::InvalidBlockListAction(value)),
+        }
+    }
+}
+
+impl fmt::Display for BlockListAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+/// Actions that can be performed for block list subscriptions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum BlockListSubscriptionAction {
+    /// Subscribe to a block list (0x00).
+    Subscribe = 0x00,
+
+    /// Unsubscribe from a block list (0x01).
+    Unsubscribe = 0x01,
+}
+
+impl BlockListSubscriptionAction {
+    /// Returns the byte value of this action.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Returns a human-readable name for this action.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Subscribe => "Subscribe",
+            Self::Unsubscribe => "Unsubscribe",
+        }
+    }
+}
+
+impl TryFrom<u8> for BlockListSubscriptionAction {
+    type Error = ModerationParseError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::Subscribe),
+            0x01 => Ok(Self::Unsubscribe),
+            _ => Err(ModerationParseError::InvalidBlockListSubscriptionAction(value)),
+        }
+    }
+}
+
+impl fmt::Display for BlockListSubscriptionAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+/// A parsed block list publish message from a transaction memo.
+///
+/// Block list publish messages allow users to create and update shared moderation
+/// lists. These lists can contain addresses that should be blocked/muted, and
+/// other users can subscribe to receive updates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockListPublishMessage {
+    /// The unique identifier for this block list (32 bytes).
+    /// Derived from publisher address + nonce for new lists.
+    list_id: [u8; BLOCK_LIST_ID_SIZE],
+
+    /// The version number of this list update.
+    version: u32,
+
+    /// The action being performed.
+    action: BlockListAction,
+
+    /// The entries (addresses) being added, removed, or initial set.
+    entries: Vec<String>,
+
+    /// The list name (only required for Create action).
+    name: Option<String>,
+
+    /// The list description (only used for Create action).
+    description: Option<String>,
+}
+
+impl BlockListPublishMessage {
+    /// Creates a new block list publish message for creating a list.
+    pub fn new_create(
+        list_id: [u8; BLOCK_LIST_ID_SIZE],
+        name: String,
+        description: Option<String>,
+        initial_entries: Vec<String>,
+    ) -> Self {
+        Self {
+            list_id,
+            version: 1,
+            action: BlockListAction::Create,
+            entries: initial_entries,
+            name: Some(name),
+            description,
+        }
+    }
+
+    /// Creates a new block list publish message for adding entries.
+    pub fn new_add_entries(
+        list_id: [u8; BLOCK_LIST_ID_SIZE],
+        version: u32,
+        entries: Vec<String>,
+    ) -> Self {
+        Self {
+            list_id,
+            version,
+            action: BlockListAction::AddEntries,
+            entries,
+            name: None,
+            description: None,
+        }
+    }
+
+    /// Creates a new block list publish message for removing entries.
+    pub fn new_remove_entries(
+        list_id: [u8; BLOCK_LIST_ID_SIZE],
+        version: u32,
+        entries: Vec<String>,
+    ) -> Self {
+        Self {
+            list_id,
+            version,
+            action: BlockListAction::RemoveEntries,
+            entries,
+            name: None,
+            description: None,
+        }
+    }
+
+    /// Creates a new block list publish message to deprecate a list.
+    pub fn new_deprecate(list_id: [u8; BLOCK_LIST_ID_SIZE], version: u32) -> Self {
+        Self {
+            list_id,
+            version,
+            action: BlockListAction::Deprecate,
+            entries: Vec::new(),
+            name: None,
+            description: None,
+        }
+    }
+
+    /// Returns the list ID.
+    pub fn list_id(&self) -> &[u8; BLOCK_LIST_ID_SIZE] {
+        &self.list_id
+    }
+
+    /// Returns the version number.
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    /// Returns the action.
+    pub fn action(&self) -> BlockListAction {
+        self.action
+    }
+
+    /// Returns the entries.
+    pub fn entries(&self) -> &[String] {
+        &self.entries
+    }
+
+    /// Returns the list name (if present).
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Returns the list description (if present).
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    /// Encodes this block list publish message to bytes for inclusion in a memo.
+    ///
+    /// Format: [list_id(32)][version(4)][action(1)][entries_count(2)][entry1_len(1)][entry1]...[name_len(1)][name][desc_len(2)][desc]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        // List ID (32 bytes)
+        bytes.extend_from_slice(&self.list_id);
+
+        // Version (4 bytes, little-endian)
+        bytes.extend_from_slice(&self.version.to_le_bytes());
+
+        // Action (1 byte)
+        bytes.push(self.action.as_u8());
+
+        // Entries count (2 bytes, little-endian)
+        let entries_count = self.entries.len().min(MAX_BLOCK_LIST_ENTRIES) as u16;
+        bytes.extend_from_slice(&entries_count.to_le_bytes());
+
+        // Entries
+        for entry in self.entries.iter().take(MAX_BLOCK_LIST_ENTRIES) {
+            let entry_bytes = entry.as_bytes();
+            let entry_len = entry_bytes.len().min(MAX_BLOCK_LIST_ENTRY_LENGTH) as u8;
+            bytes.push(entry_len);
+            bytes.extend_from_slice(&entry_bytes[..entry_len as usize]);
+        }
+
+        // Name (optional, only for Create)
+        if let Some(ref name) = self.name {
+            let name_bytes = name.as_bytes();
+            let name_len = name_bytes.len().min(MAX_BLOCK_LIST_NAME_LENGTH) as u8;
+            bytes.push(name_len);
+            bytes.extend_from_slice(&name_bytes[..name_len as usize]);
+        } else {
+            bytes.push(0);
+        }
+
+        // Description (optional, only for Create)
+        if let Some(ref desc) = self.description {
+            let desc_bytes = desc.as_bytes();
+            let desc_len = desc_bytes.len().min(MAX_BLOCK_LIST_DESCRIPTION_LENGTH) as u16;
+            bytes.extend_from_slice(&desc_len.to_le_bytes());
+            bytes.extend_from_slice(&desc_bytes[..desc_len as usize]);
+        } else {
+            bytes.extend_from_slice(&0u16.to_le_bytes());
+        }
+
+        bytes
+    }
+
+    /// Parses a block list publish message from a payload.
+    ///
+    /// The payload should NOT include the message type and version bytes.
+    /// Note: Trailing zeros for optional fields (name_len, desc_len) may be trimmed by memo parsing.
+    pub fn parse(payload: &[u8]) -> Result<Self, ModerationParseError> {
+        // Minimum: list_id(32) + version(4) + action(1) + entries_count(2) = 39
+        // Note: name_len(1) and desc_len(2) may be trimmed if they are zero
+        if payload.len() < 39 {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: 39,
+                actual: payload.len(),
+            });
+        }
+
+        let mut pos = 0;
+
+        // List ID
+        let mut list_id = [0u8; BLOCK_LIST_ID_SIZE];
+        list_id.copy_from_slice(&payload[pos..pos + BLOCK_LIST_ID_SIZE]);
+        pos += BLOCK_LIST_ID_SIZE;
+
+        // Version
+        let version = u32::from_le_bytes([
+            payload[pos],
+            payload[pos + 1],
+            payload[pos + 2],
+            payload[pos + 3],
+        ]);
+        pos += 4;
+
+        // Action
+        let action = BlockListAction::try_from(payload[pos])?;
+        pos += 1;
+
+        // Entries count
+        let entries_count = u16::from_le_bytes([payload[pos], payload[pos + 1]]) as usize;
+        pos += 2;
+
+        if entries_count > MAX_BLOCK_LIST_ENTRIES {
+            return Err(ModerationParseError::TooManyBlockListEntries {
+                max_entries: MAX_BLOCK_LIST_ENTRIES,
+                actual_entries: entries_count,
+            });
+        }
+
+        // Parse entries
+        let mut entries = Vec::with_capacity(entries_count);
+        for _ in 0..entries_count {
+            if pos >= payload.len() {
+                return Err(ModerationParseError::PayloadTooShort {
+                    minimum: pos + 1,
+                    actual: payload.len(),
+                });
+            }
+
+            let entry_len = payload[pos] as usize;
+            pos += 1;
+
+            if entry_len > MAX_BLOCK_LIST_ENTRY_LENGTH {
+                return Err(ModerationParseError::BlockListEntryTooLong {
+                    max_len: MAX_BLOCK_LIST_ENTRY_LENGTH,
+                    actual_len: entry_len,
+                });
+            }
+
+            if pos + entry_len > payload.len() {
+                return Err(ModerationParseError::PayloadTooShort {
+                    minimum: pos + entry_len,
+                    actual: payload.len(),
+                });
+            }
+
+            let entry = String::from_utf8_lossy(&payload[pos..pos + entry_len]).to_string();
+            entries.push(entry);
+            pos += entry_len;
+        }
+
+        // Name (optional - trailing zeros may be trimmed from memo)
+        let name = if pos < payload.len() {
+            let name_len = payload[pos] as usize;
+            pos += 1;
+
+            if name_len > 0 {
+                if name_len > MAX_BLOCK_LIST_NAME_LENGTH {
+                    return Err(ModerationParseError::BlockListNameTooLong {
+                        max_len: MAX_BLOCK_LIST_NAME_LENGTH,
+                        actual_len: name_len,
+                    });
+                }
+
+                if pos + name_len > payload.len() {
+                    return Err(ModerationParseError::PayloadTooShort {
+                        minimum: pos + name_len,
+                        actual: payload.len(),
+                    });
+                }
+
+                let n = String::from_utf8_lossy(&payload[pos..pos + name_len]).to_string();
+                pos += name_len;
+                Some(n)
+            } else {
+                None
+            }
+        } else {
+            // Trailing zeros trimmed - treat as no name
+            None
+        };
+
+        // Description (optional - trailing zeros may be trimmed from memo)
+        let description = if pos + 2 <= payload.len() {
+            let desc_len = u16::from_le_bytes([payload[pos], payload[pos + 1]]) as usize;
+            pos += 2;
+
+            if desc_len > 0 {
+                if desc_len > MAX_BLOCK_LIST_DESCRIPTION_LENGTH {
+                    return Err(ModerationParseError::BlockListDescriptionTooLong {
+                        max_len: MAX_BLOCK_LIST_DESCRIPTION_LENGTH,
+                        actual_len: desc_len,
+                    });
+                }
+
+                if pos + desc_len > payload.len() {
+                    return Err(ModerationParseError::PayloadTooShort {
+                        minimum: pos + desc_len,
+                        actual: payload.len(),
+                    });
+                }
+
+                Some(String::from_utf8_lossy(&payload[pos..pos + desc_len]).to_string())
+            } else {
+                None
+            }
+        } else {
+            // Trailing zeros trimmed - treat as no description
+            None
+        };
+
+        Ok(Self {
+            list_id,
+            version,
+            action,
+            entries,
+            name,
+            description,
+        })
+    }
+}
+
+/// A parsed block list subscribe message from a transaction memo.
+///
+/// Block list subscribe messages allow users to subscribe or unsubscribe
+/// from shared moderation lists created by other users.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlockListSubscribeMessage {
+    /// The unique identifier of the block list to subscribe/unsubscribe from.
+    list_id: [u8; BLOCK_LIST_ID_SIZE],
+
+    /// The subscription action.
+    action: BlockListSubscriptionAction,
+}
+
+impl BlockListSubscribeMessage {
+    /// Creates a new subscribe message.
+    pub fn new_subscribe(list_id: [u8; BLOCK_LIST_ID_SIZE]) -> Self {
+        Self {
+            list_id,
+            action: BlockListSubscriptionAction::Subscribe,
+        }
+    }
+
+    /// Creates a new unsubscribe message.
+    pub fn new_unsubscribe(list_id: [u8; BLOCK_LIST_ID_SIZE]) -> Self {
+        Self {
+            list_id,
+            action: BlockListSubscriptionAction::Unsubscribe,
+        }
+    }
+
+    /// Returns the list ID.
+    pub fn list_id(&self) -> &[u8; BLOCK_LIST_ID_SIZE] {
+        &self.list_id
+    }
+
+    /// Returns the subscription action.
+    pub fn action(&self) -> BlockListSubscriptionAction {
+        self.action
+    }
+
+    /// Encodes this subscribe message to bytes for inclusion in a memo.
+    ///
+    /// Format: [list_id(32)][action(1)]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(33);
+        bytes.extend_from_slice(&self.list_id);
+        bytes.push(self.action.as_u8());
+        bytes
+    }
+
+    /// Parses a block list subscribe message from a payload.
+    ///
+    /// The payload should NOT include the message type and version bytes.
+    /// Note: If trailing zeros are trimmed from the memo, we require at least the list_id.
+    /// A missing action byte (trimmed zero) defaults to Subscribe (0x00).
+    pub fn parse(payload: &[u8]) -> Result<Self, ModerationParseError> {
+        // Minimum: list_id(32) - action byte may be trimmed if it's 0 (Subscribe)
+        if payload.len() < BLOCK_LIST_ID_SIZE {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: BLOCK_LIST_ID_SIZE,
+                actual: payload.len(),
+            });
+        }
+
+        let mut list_id = [0u8; BLOCK_LIST_ID_SIZE];
+        list_id.copy_from_slice(&payload[0..BLOCK_LIST_ID_SIZE]);
+
+        // Action byte may be trimmed if it was 0 (Subscribe)
+        let action = if payload.len() > BLOCK_LIST_ID_SIZE {
+            BlockListSubscriptionAction::try_from(payload[BLOCK_LIST_ID_SIZE])?
+        } else {
+            // Trailing zero trimmed - defaults to Subscribe (0x00)
+            BlockListSubscriptionAction::Subscribe
+        };
+
+        Ok(Self { list_id, action })
     }
 }
 
@@ -4806,5 +5421,512 @@ mod tests {
         assert_eq!(decoded.msg_type(), SocialMessageType::MultisigSetup);
         // 1 (key_count) + 2*33 (keys) + 1 (threshold) = 68 bytes
         assert_eq!(decoded.payload().len(), 68);
+    }
+
+    // ========================= BLOCK LIST TESTS =========================
+
+    #[test]
+    fn block_list_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(SocialMessageType::BlockListPublish.as_u8(), 0xD2);
+        assert_eq!(SocialMessageType::BlockListSubscribe.as_u8(), 0xD3);
+    }
+
+    #[test]
+    fn block_list_message_type_parsing() {
+        let _init_guard = zebra_test::init();
+
+        let publish = SocialMessageType::try_from(0xD2).expect("should parse BlockListPublish");
+        assert_eq!(publish, SocialMessageType::BlockListPublish);
+
+        let subscribe = SocialMessageType::try_from(0xD3).expect("should parse BlockListSubscribe");
+        assert_eq!(subscribe, SocialMessageType::BlockListSubscribe);
+    }
+
+    #[test]
+    fn block_list_message_type_is_moderation() {
+        let _init_guard = zebra_test::init();
+
+        assert!(SocialMessageType::BlockListPublish.is_moderation());
+        assert!(SocialMessageType::BlockListSubscribe.is_moderation());
+        assert!(SocialMessageType::BlockListPublish.is_block_list());
+        assert!(SocialMessageType::BlockListSubscribe.is_block_list());
+    }
+
+    #[test]
+    fn block_list_message_type_is_not_other_categories() {
+        let _init_guard = zebra_test::init();
+
+        // Block list types should not match other categories
+        assert!(!SocialMessageType::BlockListPublish.is_channel());
+        assert!(!SocialMessageType::BlockListPublish.is_bridge());
+        assert!(!SocialMessageType::BlockListPublish.is_recovery());
+        assert!(!SocialMessageType::BlockListPublish.is_governance());
+        assert!(!SocialMessageType::BlockListPublish.is_batch());
+        assert!(!SocialMessageType::BlockListPublish.is_value_transfer());
+        assert!(!SocialMessageType::BlockListPublish.is_attention_market());
+        assert!(!SocialMessageType::BlockListPublish.is_multisig());
+    }
+
+    #[test]
+    fn block_list_message_type_names() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(SocialMessageType::BlockListPublish.name(), "BlockListPublish");
+        assert_eq!(SocialMessageType::BlockListSubscribe.name(), "BlockListSubscribe");
+        assert_eq!(format!("{}", SocialMessageType::BlockListPublish), "BlockListPublish");
+        assert_eq!(format!("{}", SocialMessageType::BlockListSubscribe), "BlockListSubscribe");
+    }
+
+    #[test]
+    fn block_list_action_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(BlockListAction::Create.as_u8(), 0x00);
+        assert_eq!(BlockListAction::AddEntries.as_u8(), 0x01);
+        assert_eq!(BlockListAction::RemoveEntries.as_u8(), 0x02);
+        assert_eq!(BlockListAction::Deprecate.as_u8(), 0x03);
+    }
+
+    #[test]
+    fn block_list_action_parsing() {
+        let _init_guard = zebra_test::init();
+
+        let actions = [
+            (0x00, BlockListAction::Create),
+            (0x01, BlockListAction::AddEntries),
+            (0x02, BlockListAction::RemoveEntries),
+            (0x03, BlockListAction::Deprecate),
+        ];
+
+        for (byte, expected) in actions {
+            let parsed = BlockListAction::try_from(byte).expect("should parse");
+            assert_eq!(parsed, expected);
+        }
+    }
+
+    #[test]
+    fn block_list_action_invalid_parsing() {
+        let _init_guard = zebra_test::init();
+
+        for byte in [0x04, 0x10, 0xFF] {
+            let result = BlockListAction::try_from(byte);
+            assert!(result.is_err());
+            if let Err(ModerationParseError::InvalidBlockListAction(b)) = result {
+                assert_eq!(b, byte);
+            } else {
+                panic!("Expected InvalidBlockListAction error");
+            }
+        }
+    }
+
+    #[test]
+    fn block_list_action_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", BlockListAction::Create), "Create");
+        assert_eq!(format!("{}", BlockListAction::AddEntries), "AddEntries");
+        assert_eq!(format!("{}", BlockListAction::RemoveEntries), "RemoveEntries");
+        assert_eq!(format!("{}", BlockListAction::Deprecate), "Deprecate");
+    }
+
+    #[test]
+    fn block_list_subscription_action_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(BlockListSubscriptionAction::Subscribe.as_u8(), 0x00);
+        assert_eq!(BlockListSubscriptionAction::Unsubscribe.as_u8(), 0x01);
+    }
+
+    #[test]
+    fn block_list_subscription_action_parsing() {
+        let _init_guard = zebra_test::init();
+
+        let subscribe = BlockListSubscriptionAction::try_from(0x00).expect("should parse");
+        assert_eq!(subscribe, BlockListSubscriptionAction::Subscribe);
+
+        let unsubscribe = BlockListSubscriptionAction::try_from(0x01).expect("should parse");
+        assert_eq!(unsubscribe, BlockListSubscriptionAction::Unsubscribe);
+    }
+
+    #[test]
+    fn block_list_subscription_action_invalid_parsing() {
+        let _init_guard = zebra_test::init();
+
+        for byte in [0x02, 0x10, 0xFF] {
+            let result = BlockListSubscriptionAction::try_from(byte);
+            assert!(result.is_err());
+            if let Err(ModerationParseError::InvalidBlockListSubscriptionAction(b)) = result {
+                assert_eq!(b, byte);
+            } else {
+                panic!("Expected InvalidBlockListSubscriptionAction error");
+            }
+        }
+    }
+
+    #[test]
+    fn block_list_publish_create_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0xAB; BLOCK_LIST_ID_SIZE];
+        let name = "Spam Blockers".to_string();
+        let description = Some("A list of known spam addresses".to_string());
+        let entries = vec![
+            "B1testaddr1abc".to_string(),
+            "B1testaddr2def".to_string(),
+        ];
+
+        let msg = BlockListPublishMessage::new_create(
+            list_id,
+            name.clone(),
+            description.clone(),
+            entries.clone(),
+        );
+
+        assert_eq!(msg.list_id(), &list_id);
+        assert_eq!(msg.version(), 1);
+        assert_eq!(msg.action(), BlockListAction::Create);
+        assert_eq!(msg.entries(), &entries);
+        assert_eq!(msg.name(), Some(name.as_str()));
+        assert_eq!(msg.description(), description.as_deref());
+
+        // Encode and decode
+        let encoded = msg.encode();
+        let decoded = BlockListPublishMessage::parse(&encoded).expect("should parse");
+
+        assert_eq!(decoded.list_id(), msg.list_id());
+        assert_eq!(decoded.version(), msg.version());
+        assert_eq!(decoded.action(), msg.action());
+        assert_eq!(decoded.entries(), msg.entries());
+        assert_eq!(decoded.name(), msg.name());
+        assert_eq!(decoded.description(), msg.description());
+    }
+
+    #[test]
+    fn block_list_publish_add_entries_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0xCD; BLOCK_LIST_ID_SIZE];
+        let entries = vec![
+            "B1newspammer1".to_string(),
+            "B1newspammer2".to_string(),
+            "B1newspammer3".to_string(),
+        ];
+
+        let msg = BlockListPublishMessage::new_add_entries(list_id, 5, entries.clone());
+
+        assert_eq!(msg.list_id(), &list_id);
+        assert_eq!(msg.version(), 5);
+        assert_eq!(msg.action(), BlockListAction::AddEntries);
+        assert_eq!(msg.entries(), &entries);
+        assert!(msg.name().is_none());
+        assert!(msg.description().is_none());
+
+        let encoded = msg.encode();
+        let decoded = BlockListPublishMessage::parse(&encoded).expect("should parse");
+
+        assert_eq!(decoded.list_id(), msg.list_id());
+        assert_eq!(decoded.version(), msg.version());
+        assert_eq!(decoded.action(), msg.action());
+        assert_eq!(decoded.entries(), msg.entries());
+    }
+
+    #[test]
+    fn block_list_publish_remove_entries_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0xEF; BLOCK_LIST_ID_SIZE];
+        let entries = vec!["B1removethis".to_string()];
+
+        let msg = BlockListPublishMessage::new_remove_entries(list_id, 10, entries.clone());
+
+        assert_eq!(msg.action(), BlockListAction::RemoveEntries);
+
+        let encoded = msg.encode();
+        let decoded = BlockListPublishMessage::parse(&encoded).expect("should parse");
+
+        assert_eq!(decoded.action(), BlockListAction::RemoveEntries);
+        assert_eq!(decoded.entries(), &entries);
+    }
+
+    #[test]
+    fn block_list_publish_deprecate_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0x12; BLOCK_LIST_ID_SIZE];
+
+        let msg = BlockListPublishMessage::new_deprecate(list_id, 99);
+
+        assert_eq!(msg.action(), BlockListAction::Deprecate);
+        assert!(msg.entries().is_empty());
+
+        let encoded = msg.encode();
+        let decoded = BlockListPublishMessage::parse(&encoded).expect("should parse");
+
+        assert_eq!(decoded.action(), BlockListAction::Deprecate);
+        assert_eq!(decoded.version(), 99);
+        assert!(decoded.entries().is_empty());
+    }
+
+    #[test]
+    fn block_list_publish_empty_entries() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0x34; BLOCK_LIST_ID_SIZE];
+        let msg = BlockListPublishMessage::new_create(
+            list_id,
+            "Empty List".to_string(),
+            None,
+            Vec::new(),
+        );
+
+        let encoded = msg.encode();
+        let decoded = BlockListPublishMessage::parse(&encoded).expect("should parse");
+
+        assert!(decoded.entries().is_empty());
+        assert_eq!(decoded.name(), Some("Empty List"));
+    }
+
+    #[test]
+    fn block_list_publish_payload_too_short() {
+        let _init_guard = zebra_test::init();
+
+        // Less than minimum 39 bytes (list_id + version + action + entries_count)
+        let short_payload = vec![0u8; 30];
+        let result = BlockListPublishMessage::parse(&short_payload);
+
+        assert!(result.is_err());
+        if let Err(ModerationParseError::PayloadTooShort { minimum, actual }) = result {
+            assert_eq!(minimum, 39);
+            assert_eq!(actual, 30);
+        } else {
+            panic!("Expected PayloadTooShort error");
+        }
+    }
+
+    #[test]
+    fn block_list_publish_too_many_entries() {
+        let _init_guard = zebra_test::init();
+
+        // Create a payload with too many entries (more than MAX_BLOCK_LIST_ENTRIES)
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&[0u8; BLOCK_LIST_ID_SIZE]); // list_id
+        payload.extend_from_slice(&1u32.to_le_bytes()); // version
+        payload.push(BlockListAction::Create.as_u8()); // action
+        payload.extend_from_slice(&100u16.to_le_bytes()); // entries_count > MAX
+
+        // Add minimal entry data to make it parseable up to the count check
+        for _ in 0..100 {
+            payload.push(4);
+            payload.extend_from_slice(b"test");
+        }
+        payload.push(0); // name_len
+        payload.extend_from_slice(&0u16.to_le_bytes()); // desc_len
+
+        let result = BlockListPublishMessage::parse(&payload);
+        assert!(result.is_err());
+        if let Err(ModerationParseError::TooManyBlockListEntries { max_entries, actual_entries }) = result {
+            assert_eq!(max_entries, MAX_BLOCK_LIST_ENTRIES);
+            assert_eq!(actual_entries, 100);
+        } else {
+            panic!("Expected TooManyBlockListEntries error");
+        }
+    }
+
+    #[test]
+    fn block_list_subscribe_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0x56; BLOCK_LIST_ID_SIZE];
+
+        let subscribe_msg = BlockListSubscribeMessage::new_subscribe(list_id);
+        assert_eq!(subscribe_msg.list_id(), &list_id);
+        assert_eq!(subscribe_msg.action(), BlockListSubscriptionAction::Subscribe);
+
+        let encoded = subscribe_msg.encode();
+        assert_eq!(encoded.len(), 33); // 32 + 1
+
+        let decoded = BlockListSubscribeMessage::parse(&encoded).expect("should parse");
+        assert_eq!(decoded.list_id(), &list_id);
+        assert_eq!(decoded.action(), BlockListSubscriptionAction::Subscribe);
+    }
+
+    #[test]
+    fn block_list_unsubscribe_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0x78; BLOCK_LIST_ID_SIZE];
+
+        let unsubscribe_msg = BlockListSubscribeMessage::new_unsubscribe(list_id);
+        assert_eq!(unsubscribe_msg.action(), BlockListSubscriptionAction::Unsubscribe);
+
+        let encoded = unsubscribe_msg.encode();
+        let decoded = BlockListSubscribeMessage::parse(&encoded).expect("should parse");
+        assert_eq!(decoded.action(), BlockListSubscriptionAction::Unsubscribe);
+    }
+
+    #[test]
+    fn block_list_subscribe_payload_too_short() {
+        let _init_guard = zebra_test::init();
+
+        // Less than minimum 32 bytes (list_id only, action may be trimmed)
+        let short_payload = vec![0u8; 20];
+        let result = BlockListSubscribeMessage::parse(&short_payload);
+
+        assert!(result.is_err());
+        if let Err(ModerationParseError::PayloadTooShort { minimum, actual }) = result {
+            assert_eq!(minimum, BLOCK_LIST_ID_SIZE); // 32 bytes
+            assert_eq!(actual, 20);
+        } else {
+            panic!("Expected PayloadTooShort error");
+        }
+    }
+
+    #[test]
+    fn block_list_as_social_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // Test that block list messages can be wrapped as SocialMessages
+        let list_id = [0x9A; BLOCK_LIST_ID_SIZE];
+        let publish_msg = BlockListPublishMessage::new_create(
+            list_id,
+            "Test List".to_string(),
+            None,
+            vec!["B1blocked1".to_string()],
+        );
+        let payload = publish_msg.encode();
+
+        // Create a memo with BlockListPublish type
+        let mut memo_bytes = vec![SocialMessageType::BlockListPublish.as_u8(), SOCIAL_PROTOCOL_VERSION];
+        memo_bytes.extend_from_slice(&payload);
+        let memo = create_memo(&memo_bytes);
+
+        let social_msg = SocialMessage::try_from(&memo).expect("should parse");
+        assert_eq!(social_msg.msg_type(), SocialMessageType::BlockListPublish);
+        assert!(social_msg.msg_type().is_moderation());
+        assert!(social_msg.msg_type().is_block_list());
+
+        // Parse the inner payload
+        let inner = BlockListPublishMessage::parse(social_msg.payload()).expect("should parse inner");
+        assert_eq!(inner.name(), Some("Test List"));
+    }
+
+    #[test]
+    fn block_list_subscribe_as_social_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0xBC; BLOCK_LIST_ID_SIZE];
+        let subscribe_msg = BlockListSubscribeMessage::new_subscribe(list_id);
+        let payload = subscribe_msg.encode();
+
+        let mut memo_bytes = vec![SocialMessageType::BlockListSubscribe.as_u8(), SOCIAL_PROTOCOL_VERSION];
+        memo_bytes.extend_from_slice(&payload);
+        let memo = create_memo(&memo_bytes);
+
+        let social_msg = SocialMessage::try_from(&memo).expect("should parse");
+        assert_eq!(social_msg.msg_type(), SocialMessageType::BlockListSubscribe);
+        assert!(social_msg.msg_type().is_block_list());
+
+        let inner = BlockListSubscribeMessage::parse(social_msg.payload()).expect("should parse inner");
+        assert_eq!(inner.list_id(), &list_id);
+    }
+
+    #[test]
+    fn block_list_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Block list messages can be batched (publish + unsubscribe in one tx)
+        // Note: We use Unsubscribe (0x01) instead of Subscribe (0x00) because
+        // trailing zeros in the memo get trimmed, and Subscribe ends with 0x00.
+        let list_id = [0xDE; BLOCK_LIST_ID_SIZE];
+
+        // Create a publish message
+        let publish_payload = BlockListPublishMessage::new_create(
+            list_id,
+            "My List".to_string(),
+            None,
+            vec!["B1addr1".to_string()],
+        ).encode();
+
+        // Create an unsubscribe message (uses 0x01, won't be trimmed)
+        let unsubscribe_payload = BlockListSubscribeMessage::new_unsubscribe(list_id).encode();
+
+        let actions = vec![
+            SocialMessage::new(SocialMessageType::BlockListPublish, SOCIAL_PROTOCOL_VERSION, publish_payload),
+            SocialMessage::new(SocialMessageType::BlockListSubscribe, SOCIAL_PROTOCOL_VERSION, unsubscribe_payload),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("batch should be valid");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should parse batch");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded.actions()[0].msg_type(), SocialMessageType::BlockListPublish);
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::BlockListSubscribe);
+
+        // Parse the inner subscribe message and verify it's Unsubscribe
+        let inner = BlockListSubscribeMessage::parse(decoded.actions()[1].payload()).expect("should parse");
+        assert_eq!(inner.action(), BlockListSubscriptionAction::Unsubscribe);
+    }
+
+    #[test]
+    fn block_list_max_entries() {
+        let _init_guard = zebra_test::init();
+
+        let list_id = [0xF0; BLOCK_LIST_ID_SIZE];
+        let entries: Vec<String> = (0..MAX_BLOCK_LIST_ENTRIES)
+            .map(|i| format!("B1entry{:03}", i))
+            .collect();
+
+        let msg = BlockListPublishMessage::new_create(
+            list_id,
+            "Max Entries List".to_string(),
+            None,
+            entries.clone(),
+        );
+
+        assert_eq!(msg.entries().len(), MAX_BLOCK_LIST_ENTRIES);
+
+        let encoded = msg.encode();
+        let decoded = BlockListPublishMessage::parse(&encoded).expect("should parse");
+        assert_eq!(decoded.entries().len(), MAX_BLOCK_LIST_ENTRIES);
+    }
+
+    #[test]
+    fn block_list_moderation_parse_error_display() {
+        let _init_guard = zebra_test::init();
+
+        // Test Display implementations for new error variants
+        let err1 = ModerationParseError::InvalidBlockListAction(0xFF);
+        assert!(format!("{}", err1).contains("invalid block list action"));
+
+        let err2 = ModerationParseError::InvalidBlockListSubscriptionAction(0x10);
+        assert!(format!("{}", err2).contains("invalid block list subscription action"));
+
+        let err3 = ModerationParseError::TooManyBlockListEntries {
+            max_entries: 50,
+            actual_entries: 100,
+        };
+        assert!(format!("{}", err3).contains("too many block list entries"));
+
+        let err4 = ModerationParseError::BlockListEntryTooLong {
+            max_len: 128,
+            actual_len: 200,
+        };
+        assert!(format!("{}", err4).contains("block list entry too long"));
+
+        let err5 = ModerationParseError::BlockListNameTooLong {
+            max_len: 64,
+            actual_len: 100,
+        };
+        assert!(format!("{}", err5).contains("block list name too long"));
+
+        let err6 = ModerationParseError::BlockListDescriptionTooLong {
+            max_len: 256,
+            actual_len: 500,
+        };
+        assert!(format!("{}", err6).contains("block list description too long"));
     }
 }

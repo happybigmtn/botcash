@@ -2953,6 +2953,362 @@ pub const MAX_TRUST_LIMIT: u32 = 1000;
 /// Maximum report list limit.
 pub const MAX_REPORT_LIMIT: u32 = 1000;
 
+// ========================= BLOCK LIST TYPES =========================
+
+/// Maximum length for block list names.
+pub const MAX_BLOCKLIST_NAME_LENGTH: usize = 64;
+
+/// Maximum length for block list descriptions.
+pub const MAX_BLOCKLIST_DESCRIPTION_LENGTH: usize = 256;
+
+/// Maximum number of entries per block list update.
+pub const MAX_BLOCKLIST_ENTRIES: usize = 50;
+
+/// Maximum block list query limit.
+pub const MAX_BLOCKLIST_LIMIT: u32 = 1000;
+
+/// Block list ID size (32 bytes, hex-encoded = 64 chars).
+pub const BLOCKLIST_ID_SIZE: usize = 32;
+
+/// Actions for block list publishing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockListAction {
+    /// Create a new block list.
+    Create,
+    /// Add entries to an existing list.
+    AddEntries,
+    /// Remove entries from a list.
+    RemoveEntries,
+    /// Deprecate a list (no longer maintained).
+    Deprecate,
+}
+
+impl std::fmt::Display for BlockListAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Create => write!(f, "create"),
+            Self::AddEntries => write!(f, "add_entries"),
+            Self::RemoveEntries => write!(f, "remove_entries"),
+            Self::Deprecate => write!(f, "deprecate"),
+        }
+    }
+}
+
+impl BlockListAction {
+    /// Returns the byte value for encoding this action.
+    pub const fn as_u8(&self) -> u8 {
+        match self {
+            Self::Create => 0,
+            Self::AddEntries => 1,
+            Self::RemoveEntries => 2,
+            Self::Deprecate => 3,
+        }
+    }
+}
+
+/// Actions for block list subscriptions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BlockListSubscriptionAction {
+    /// Subscribe to a block list.
+    Subscribe,
+    /// Unsubscribe from a block list.
+    Unsubscribe,
+}
+
+impl std::fmt::Display for BlockListSubscriptionAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Subscribe => write!(f, "subscribe"),
+            Self::Unsubscribe => write!(f, "unsubscribe"),
+        }
+    }
+}
+
+impl BlockListSubscriptionAction {
+    /// Returns the byte value for encoding this action.
+    pub const fn as_u8(&self) -> u8 {
+        match self {
+            Self::Subscribe => 0,
+            Self::Unsubscribe => 1,
+        }
+    }
+}
+
+/// Status of a block list.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BlockListStatus {
+    /// List is active and maintained.
+    Active,
+    /// List has been deprecated by the publisher.
+    Deprecated,
+    /// List is pending (newly created).
+    Pending,
+}
+
+impl std::fmt::Display for BlockListStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => write!(f, "active"),
+            Self::Deprecated => write!(f, "deprecated"),
+            Self::Pending => write!(f, "pending"),
+        }
+    }
+}
+
+/// Request for publishing a block list.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockListPublishRequest {
+    /// The address publishing the block list.
+    pub from: String,
+
+    /// The block list ID (32 bytes hex-encoded, 64 chars).
+    /// Required for update/remove/deprecate actions.
+    /// For create, can be generated from the transaction.
+    #[serde(rename = "listId")]
+    pub list_id: Option<String>,
+
+    /// The action to perform.
+    pub action: BlockListAction,
+
+    /// The list name (required for create action).
+    #[serde(default)]
+    pub name: Option<String>,
+
+    /// The list description (optional).
+    #[serde(default)]
+    pub description: Option<String>,
+
+    /// Addresses to add or remove (depending on action).
+    #[serde(default)]
+    pub entries: Vec<String>,
+}
+
+/// Response for publishing a block list.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListPublishResponse {
+    /// The transaction ID of the publish action.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The block list ID.
+    #[serde(rename = "listId")]
+    list_id: String,
+
+    /// The action that was performed.
+    action: BlockListAction,
+
+    /// The current version of the list.
+    #[getter(copy)]
+    version: u32,
+}
+
+/// Request for subscribing to or unsubscribing from a block list.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockListSubscribeRequest {
+    /// The address subscribing/unsubscribing.
+    pub from: String,
+
+    /// The block list ID to subscribe/unsubscribe from.
+    #[serde(rename = "listId")]
+    pub list_id: String,
+
+    /// The subscription action.
+    pub action: BlockListSubscriptionAction,
+}
+
+/// Response for subscribing to a block list.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListSubscribeResponse {
+    /// The transaction ID of the subscription action.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The block list ID.
+    #[serde(rename = "listId")]
+    list_id: String,
+
+    /// The action that was performed.
+    action: BlockListSubscriptionAction,
+}
+
+/// Request for querying block lists.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockListQueryRequest {
+    /// Optional publisher address to filter by.
+    #[serde(default)]
+    pub publisher: Option<String>,
+
+    /// Optional subscriber address to filter by.
+    #[serde(default)]
+    pub subscriber: Option<String>,
+
+    /// Optional status filter.
+    #[serde(default)]
+    pub status: Option<BlockListStatus>,
+
+    /// Whether to include list entries in the response.
+    #[serde(rename = "includeEntries", default)]
+    pub include_entries: bool,
+
+    /// Maximum number of lists to return.
+    #[serde(default = "default_blocklist_limit")]
+    pub limit: u32,
+
+    /// Offset for pagination.
+    #[serde(default)]
+    pub offset: u32,
+}
+
+fn default_blocklist_limit() -> u32 {
+    50
+}
+
+/// Summary of a block list for list/query responses.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListSummary {
+    /// The block list ID.
+    #[serde(rename = "listId")]
+    list_id: String,
+
+    /// The publisher's address.
+    #[serde(rename = "publisherAddress")]
+    publisher_address: String,
+
+    /// The list name.
+    name: String,
+
+    /// The list description.
+    description: Option<String>,
+
+    /// The current version number.
+    #[getter(copy)]
+    version: u32,
+
+    /// The current status of the list.
+    status: BlockListStatus,
+
+    /// Number of entries in the list.
+    #[serde(rename = "entryCount")]
+    #[getter(copy)]
+    entry_count: u32,
+
+    /// Number of subscribers.
+    #[serde(rename = "subscriberCount")]
+    #[getter(copy)]
+    subscriber_count: u32,
+
+    /// Block height when list was created.
+    #[serde(rename = "createdAtBlock")]
+    #[getter(copy)]
+    created_at_block: u32,
+
+    /// Block height of last update.
+    #[serde(rename = "lastUpdatedBlock")]
+    #[getter(copy)]
+    last_updated_block: u32,
+
+    /// Optional list of entries (if includeEntries was true).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entries: Option<Vec<String>>,
+}
+
+/// Response for querying block lists.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListQueryResponse {
+    /// List of block lists matching the query.
+    lists: Vec<BlockListSummary>,
+
+    /// Total number of lists matching the filter.
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
+/// Request for getting a specific block list's details.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockListStatusRequest {
+    /// The block list ID to query.
+    #[serde(rename = "listId")]
+    pub list_id: String,
+
+    /// Whether to include list entries in the response.
+    #[serde(rename = "includeEntries", default)]
+    pub include_entries: bool,
+}
+
+/// Response for getting a specific block list's details.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListStatusResponse {
+    /// The block list summary.
+    list: BlockListSummary,
+
+    /// List of subscribers (addresses).
+    subscribers: Vec<String>,
+}
+
+/// Request for checking if an address is in any subscribed block lists.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockListCheckRequest {
+    /// The address doing the check (to find their subscriptions).
+    #[serde(rename = "subscriberAddress")]
+    pub subscriber_address: String,
+
+    /// The address(es) to check.
+    #[serde(rename = "targetAddresses")]
+    pub target_addresses: Vec<String>,
+}
+
+/// Result of checking an address against block lists.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListCheckResult {
+    /// The address that was checked.
+    address: String,
+
+    /// Whether the address is blocked.
+    #[getter(copy)]
+    blocked: bool,
+
+    /// Block list IDs that contain this address.
+    #[serde(rename = "blockingLists", default)]
+    blocking_lists: Vec<String>,
+}
+
+/// Response for checking addresses against block lists.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListCheckResponse {
+    /// Results for each checked address.
+    results: Vec<BlockListCheckResult>,
+}
+
+/// Request for listing an address's subscriptions.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlockListSubscriptionsRequest {
+    /// The address to query subscriptions for.
+    pub address: String,
+
+    /// Maximum number of subscriptions to return.
+    #[serde(default = "default_blocklist_limit")]
+    pub limit: u32,
+}
+
+/// Response for listing an address's subscriptions.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BlockListSubscriptionsResponse {
+    /// The queried address.
+    address: String,
+
+    /// Block lists the address is subscribed to.
+    subscriptions: Vec<BlockListSummary>,
+
+    /// Total number of subscriptions.
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5500,5 +5856,269 @@ mod tests {
         assert_eq!(MAX_REPORT_EVIDENCE_LENGTH, 300);
         assert_eq!(MAX_TRUST_LIMIT, 1000);
         assert_eq!(MAX_REPORT_LIMIT, 1000);
+    }
+
+    // ========================= BLOCK LIST TESTS =========================
+
+    #[test]
+    fn blocklist_action_display() {
+        assert_eq!(format!("{}", BlockListAction::Create), "create");
+        assert_eq!(format!("{}", BlockListAction::AddEntries), "add_entries");
+        assert_eq!(format!("{}", BlockListAction::RemoveEntries), "remove_entries");
+        assert_eq!(format!("{}", BlockListAction::Deprecate), "deprecate");
+    }
+
+    #[test]
+    fn blocklist_action_as_u8() {
+        assert_eq!(BlockListAction::Create.as_u8(), 0);
+        assert_eq!(BlockListAction::AddEntries.as_u8(), 1);
+        assert_eq!(BlockListAction::RemoveEntries.as_u8(), 2);
+        assert_eq!(BlockListAction::Deprecate.as_u8(), 3);
+    }
+
+    #[test]
+    fn blocklist_subscription_action_display() {
+        assert_eq!(format!("{}", BlockListSubscriptionAction::Subscribe), "subscribe");
+        assert_eq!(format!("{}", BlockListSubscriptionAction::Unsubscribe), "unsubscribe");
+    }
+
+    #[test]
+    fn blocklist_subscription_action_as_u8() {
+        assert_eq!(BlockListSubscriptionAction::Subscribe.as_u8(), 0);
+        assert_eq!(BlockListSubscriptionAction::Unsubscribe.as_u8(), 1);
+    }
+
+    #[test]
+    fn blocklist_status_display() {
+        assert_eq!(format!("{}", BlockListStatus::Active), "active");
+        assert_eq!(format!("{}", BlockListStatus::Deprecated), "deprecated");
+        assert_eq!(format!("{}", BlockListStatus::Pending), "pending");
+    }
+
+    #[test]
+    fn blocklist_publish_request_deserialize_create() {
+        let json = r#"{
+            "from": "bs1publisher",
+            "action": "create",
+            "name": "Spam Blockers",
+            "description": "Known spammers",
+            "entries": ["B1spammer1", "B1spammer2"]
+        }"#;
+        let req: BlockListPublishRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1publisher");
+        assert_eq!(req.action, BlockListAction::Create);
+        assert_eq!(req.name, Some("Spam Blockers".to_string()));
+        assert_eq!(req.description, Some("Known spammers".to_string()));
+        assert_eq!(req.entries, vec!["B1spammer1", "B1spammer2"]);
+        assert!(req.list_id.is_none());
+    }
+
+    #[test]
+    fn blocklist_publish_request_deserialize_add_entries() {
+        let json = r#"{
+            "from": "bs1publisher",
+            "listId": "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+            "action": "add_entries",
+            "entries": ["B1newspammer"]
+        }"#;
+        let req: BlockListPublishRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.action, BlockListAction::AddEntries);
+        assert!(req.list_id.is_some());
+        assert_eq!(req.entries.len(), 1);
+    }
+
+    #[test]
+    fn blocklist_publish_response_serialize() {
+        let resp = BlockListPublishResponse::new(
+            "txid123".to_string(),
+            "listid456".to_string(),
+            BlockListAction::Create,
+            1,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid123\""));
+        assert!(json.contains("\"listId\":\"listid456\""));
+        assert!(json.contains("\"action\":\"create\""));
+        assert!(json.contains("\"version\":1"));
+    }
+
+    #[test]
+    fn blocklist_subscribe_request_deserialize() {
+        let json = r#"{
+            "from": "bs1subscriber",
+            "listId": "list123",
+            "action": "subscribe"
+        }"#;
+        let req: BlockListSubscribeRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1subscriber");
+        assert_eq!(req.list_id, "list123");
+        assert_eq!(req.action, BlockListSubscriptionAction::Subscribe);
+    }
+
+    #[test]
+    fn blocklist_subscribe_response_serialize() {
+        let resp = BlockListSubscribeResponse::new(
+            "txid789".to_string(),
+            "list123".to_string(),
+            BlockListSubscriptionAction::Subscribe,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid789\""));
+        assert!(json.contains("\"listId\":\"list123\""));
+        assert!(json.contains("\"action\":\"subscribe\""));
+    }
+
+    #[test]
+    fn blocklist_query_request_deserialize() {
+        let json = r#"{
+            "publisher": "bs1curator",
+            "status": "active",
+            "includeEntries": true,
+            "limit": 20
+        }"#;
+        let req: BlockListQueryRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.publisher, Some("bs1curator".to_string()));
+        assert_eq!(req.status, Some(BlockListStatus::Active));
+        assert!(req.include_entries);
+        assert_eq!(req.limit, 20);
+    }
+
+    #[test]
+    fn blocklist_query_request_defaults() {
+        let json = r#"{}"#;
+        let req: BlockListQueryRequest = serde_json::from_str(json).unwrap();
+        assert!(req.publisher.is_none());
+        assert!(req.subscriber.is_none());
+        assert!(req.status.is_none());
+        assert!(!req.include_entries);
+        assert_eq!(req.limit, 50); // default_blocklist_limit
+        assert_eq!(req.offset, 0);
+    }
+
+    #[test]
+    fn blocklist_summary_serialize() {
+        let summary = BlockListSummary::new(
+            "listid123".to_string(),
+            "bs1curator".to_string(),
+            "Spam Blockers".to_string(),
+            Some("Known spammers".to_string()),
+            5,
+            BlockListStatus::Active,
+            100,
+            50,
+            1000,
+            1500,
+            None,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"listId\":\"listid123\""));
+        assert!(json.contains("\"publisherAddress\":\"bs1curator\""));
+        assert!(json.contains("\"name\":\"Spam Blockers\""));
+        assert!(json.contains("\"version\":5"));
+        assert!(json.contains("\"status\":\"active\""));
+        assert!(json.contains("\"entryCount\":100"));
+        assert!(json.contains("\"subscriberCount\":50"));
+        assert!(json.contains("\"createdAtBlock\":1000"));
+        assert!(json.contains("\"lastUpdatedBlock\":1500"));
+        // entries should not be serialized when None
+        assert!(!json.contains("\"entries\""));
+    }
+
+    #[test]
+    fn blocklist_summary_with_entries() {
+        let summary = BlockListSummary::new(
+            "listid".to_string(),
+            "publisher".to_string(),
+            "List".to_string(),
+            None,
+            1,
+            BlockListStatus::Active,
+            2,
+            0,
+            100,
+            100,
+            Some(vec!["B1addr1".to_string(), "B1addr2".to_string()]),
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"entries\":[\"B1addr1\",\"B1addr2\"]"));
+    }
+
+    #[test]
+    fn blocklist_query_response_serialize() {
+        let resp = BlockListQueryResponse::new(vec![], 0);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"lists\":[]"));
+        assert!(json.contains("\"totalCount\":0"));
+    }
+
+    #[test]
+    fn blocklist_status_request_deserialize() {
+        let json = r#"{"listId": "listid", "includeEntries": true}"#;
+        let req: BlockListStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.list_id, "listid");
+        assert!(req.include_entries);
+    }
+
+    #[test]
+    fn blocklist_check_request_deserialize() {
+        let json = r#"{
+            "subscriberAddress": "bs1checker",
+            "targetAddresses": ["B1target1", "B1target2"]
+        }"#;
+        let req: BlockListCheckRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.subscriber_address, "bs1checker");
+        assert_eq!(req.target_addresses, vec!["B1target1", "B1target2"]);
+    }
+
+    #[test]
+    fn blocklist_check_result_serialize() {
+        let result = BlockListCheckResult::new(
+            "B1target".to_string(),
+            true,
+            vec!["list1".to_string(), "list2".to_string()],
+        );
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"address\":\"B1target\""));
+        assert!(json.contains("\"blocked\":true"));
+        assert!(json.contains("\"blockingLists\":[\"list1\",\"list2\"]"));
+    }
+
+    #[test]
+    fn blocklist_check_response_serialize() {
+        let result = BlockListCheckResult::new("B1addr".to_string(), false, vec![]);
+        let resp = BlockListCheckResponse::new(vec![result]);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"results\""));
+        assert!(json.contains("\"blocked\":false"));
+    }
+
+    #[test]
+    fn blocklist_subscriptions_request_deserialize() {
+        let json = r#"{"address": "bs1user", "limit": 100}"#;
+        let req: BlockListSubscriptionsRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1user");
+        assert_eq!(req.limit, 100);
+    }
+
+    #[test]
+    fn blocklist_subscriptions_response_serialize() {
+        let resp = BlockListSubscriptionsResponse::new(
+            "bs1user".to_string(),
+            vec![],
+            0,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"address\":\"bs1user\""));
+        assert!(json.contains("\"subscriptions\":[]"));
+        assert!(json.contains("\"totalCount\":0"));
+    }
+
+    #[test]
+    fn blocklist_constants() {
+        assert_eq!(MAX_BLOCKLIST_NAME_LENGTH, 64);
+        assert_eq!(MAX_BLOCKLIST_DESCRIPTION_LENGTH, 256);
+        assert_eq!(MAX_BLOCKLIST_ENTRIES, 50);
+        assert_eq!(MAX_BLOCKLIST_LIMIT, 1000);
+        assert_eq!(BLOCKLIST_ID_SIZE, 32);
     }
 }
