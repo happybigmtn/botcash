@@ -1465,6 +1465,143 @@ pub trait Rpc {
         request: types::social::GuardianListRequest,
     ) -> Result<types::social::GuardianListResponse>;
 
+    // ==================== Multi-Sig Identity Methods ====================
+
+    /// Sets up a multi-sig identity for an address.
+    ///
+    /// Configures an address to require M-of-N signatures for all future
+    /// social actions. Suitable for high-value accounts (influencers,
+    /// businesses, agents with significant stake).
+    ///
+    /// # method: post
+    /// # tags: multisig
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The setup request containing:
+    ///   - `address`: (string) The address to configure as multi-sig
+    ///   - `publicKeys`: (array) Compressed public keys (33 bytes hex each, 2-15 keys)
+    ///   - `threshold`: (number) Signatures required (1 to key count)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) The transaction ID of the setup
+    /// - `address`: (string) The multi-sig address
+    /// - `keyCount`: (number) Number of keys
+    /// - `threshold`: (number) Signatures required
+    /// - `setupBlock`: (number) Block height when setup was submitted
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires wallet support.
+    /// Once set up, all social actions from this address require multi-sig.
+    #[method(name = "z_multisigsetup")]
+    async fn z_multisig_setup(
+        &self,
+        request: types::social::MultisigSetupRequest,
+    ) -> Result<types::social::MultisigSetupResponse>;
+
+    /// Performs a social action with multi-sig authorization.
+    ///
+    /// Wraps a social action (post, follow, etc.) with the required
+    /// signatures from the multi-sig key holders.
+    ///
+    /// # method: post
+    /// # tags: multisig
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The action request containing:
+    ///   - `multisigAddress`: (string) The multi-sig address performing the action
+    ///   - `actionType`: (string) The action type ("post", "follow", "dm", etc.)
+    ///   - `actionPayload`: (object) The action-specific payload
+    ///   - `signatures`: (array) Array of signatures, each with:
+    ///     - `keyIndex`: (number) Index of signing key (0-based)
+    ///     - `signature`: (string) Schnorr signature (64 bytes hex)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) The transaction ID of the action
+    /// - `multisigAddress`: (string) The address that performed the action
+    /// - `actionType`: (string) The action type
+    /// - `signatureCount`: (number) Number of signatures used
+    /// - `actionBlock`: (number) Block height when submitted
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires wallet support
+    /// and coordination between key holders to gather signatures.
+    #[method(name = "z_multisigaction")]
+    async fn z_multisig_action(
+        &self,
+        request: types::social::MultisigActionRequest,
+    ) -> Result<types::social::MultisigActionResponse>;
+
+    /// Gets the multi-sig status of an address.
+    ///
+    /// Returns information about whether an address is configured as
+    /// a multi-sig identity and its configuration details.
+    ///
+    /// # method: post
+    /// # tags: multisig
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `address`: (string) The address to check
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `address`: (string) The queried address
+    /// - `isMultisig`: (bool) Whether configured as multi-sig
+    /// - `keyCount`: (number, optional) Number of keys (if multi-sig)
+    /// - `threshold`: (number, optional) Required signatures (if multi-sig)
+    /// - `setupBlock`: (number, optional) Setup block height (if multi-sig)
+    /// - `publicKeys`: (array, optional) The public keys (if multi-sig)
+    /// - `status`: (string) Status ("active", "pending", "notmultisig", "revoked")
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires an indexer.
+    #[method(name = "z_multisigstatus")]
+    async fn z_multisig_status(
+        &self,
+        request: types::social::MultisigStatusRequest,
+    ) -> Result<types::social::MultisigStatusResponse>;
+
+    /// Lists multi-sig identities.
+    ///
+    /// Returns a paginated list of multi-sig identity addresses
+    /// with optional filtering by status.
+    ///
+    /// # method: post
+    /// # tags: multisig
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The list request containing:
+    ///   - `status`: (string, optional) Filter by status
+    ///   - `limit`: (number, optional) Max results (default 50)
+    ///   - `offset`: (number, optional) Pagination offset
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `identities`: (array) List of multi-sig summaries
+    /// - `totalCount`: (number) Total matching identities
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires an indexer.
+    #[method(name = "z_multisiglist")]
+    async fn z_multisig_list(
+        &self,
+        request: types::social::MultisigListRequest,
+    ) -> Result<types::social::MultisigListResponse>;
+
     // ==================== Bridge Methods ====================
 
     /// Links an external platform identity to a Botcash address.
@@ -5610,6 +5747,185 @@ where
             vec![],             // guardians (empty - no recovery configured)
             0,                  // threshold
             0,                  // timelock_blocks
+        ))
+    }
+
+    // ==================== Multi-Sig RPC Method Implementations ====================
+
+    async fn z_multisig_setup(
+        &self,
+        request: types::social::MultisigSetupRequest,
+    ) -> Result<types::social::MultisigSetupResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate multi-sig parameters
+        if let Err(e) = request.validate() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                e,
+                None::<()>,
+            ));
+        }
+
+        // Check for duplicate keys
+        let mut seen_keys = std::collections::HashSet::new();
+        for key in &request.public_keys {
+            if !seen_keys.insert(key.to_lowercase()) {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "duplicate public keys are not allowed",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // 1. Create the multi-sig setup transaction (0xF5 message)
+        // 2. Sign and broadcast the transaction
+        // 3. Return the transaction details
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "multi-sig setup requires wallet support (not yet implemented)",
+            Some(serde_json::json!({
+                "address": request.address,
+                "keyCount": request.public_keys.len(),
+                "threshold": request.threshold,
+            })),
+        ))
+    }
+
+    async fn z_multisig_action(
+        &self,
+        request: types::social::MultisigActionRequest,
+    ) -> Result<types::social::MultisigActionResponse> {
+        // Validate multi-sig address
+        if request.multisig_address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "multisigAddress is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate action type
+        let valid_actions = ["post", "comment", "follow", "unfollow", "dm", "tip", "upvote"];
+        if !valid_actions.contains(&request.action_type.to_lowercase().as_str()) {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!("invalid action type: {}. Valid types: {:?}", request.action_type, valid_actions),
+                None::<()>,
+            ));
+        }
+
+        // Validate signatures
+        if request.signatures.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one signature is required",
+                None::<()>,
+            ));
+        }
+
+        for (i, sig) in request.signatures.iter().enumerate() {
+            if let Err(e) = sig.validate() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!("invalid signature at index {}: {}", i, e),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Check for duplicate key indices in signatures
+        let mut seen_indices = std::collections::HashSet::new();
+        for sig in &request.signatures {
+            if !seen_indices.insert(sig.key_index) {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!("duplicate signature from key index {}", sig.key_index),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires:
+        // 1. Look up the multi-sig configuration for the address (indexer)
+        // 2. Verify we have enough signatures (>= threshold)
+        // 3. Verify each signature is valid for the action payload
+        // 4. Create and broadcast the multi-sig action transaction (0xF6)
+        //
+        // For now, return an error indicating this requires indexer + wallet support.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "multi-sig action requires indexer and wallet support (not yet implemented)",
+            Some(serde_json::json!({
+                "multisigAddress": request.multisig_address,
+                "actionType": request.action_type,
+                "signatureCount": request.signatures.len(),
+            })),
+        ))
+    }
+
+    async fn z_multisig_status(
+        &self,
+        request: types::social::MultisigStatusRequest,
+    ) -> Result<types::social::MultisigStatusResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Look up whether this address has a multi-sig configuration
+        // - Return the configuration details if found
+        //
+        // For now, return "not multi-sig" status (no indexer = no multi-sig visible).
+        Ok(types::social::MultisigStatusResponse::new(
+            request.address,
+            false,                                      // is_multisig
+            None,                                       // key_count
+            None,                                       // threshold
+            None,                                       // setup_block
+            None,                                       // public_keys
+            types::social::MultisigStatus::NotMultisig, // status
+        ))
+    }
+
+    async fn z_multisig_list(
+        &self,
+        request: types::social::MultisigListRequest,
+    ) -> Result<types::social::MultisigListResponse> {
+        // Validate limit
+        if request.limit > 1000 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "limit cannot exceed 1000",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Scan for all multi-sig setup transactions
+        // - Filter by status if specified
+        // - Return paginated results
+        //
+        // For now, return an empty list (no indexer = no multi-sig visible).
+        Ok(types::social::MultisigListResponse::new(
+            vec![],  // identities (empty)
+            0,       // total_count
         ))
     }
 

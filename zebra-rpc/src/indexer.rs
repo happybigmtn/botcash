@@ -16,6 +16,7 @@ pub mod channels;
 pub mod governance;
 pub mod methods;
 pub mod moderation;
+pub mod multisig;
 pub mod protocol_upgrades;
 pub mod recovery;
 pub mod server;

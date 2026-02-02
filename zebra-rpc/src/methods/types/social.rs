@@ -1702,6 +1702,290 @@ impl std::fmt::Display for KeyRotationStatus {
     }
 }
 
+// ==================== Multi-Sig Identity Types ====================
+
+/// Minimum number of keys for a multi-sig identity (2).
+pub const MIN_MULTISIG_KEYS: u8 = 2;
+
+/// Maximum number of keys for a multi-sig identity (15).
+pub const MAX_MULTISIG_KEYS: u8 = 15;
+
+/// Size of a compressed public key in bytes.
+pub const COMPRESSED_PUBKEY_SIZE: usize = 33;
+
+/// Size of a Schnorr signature in bytes.
+pub const SCHNORR_SIGNATURE_SIZE: usize = 64;
+
+/// Request for setting up a multi-sig identity.
+///
+/// Multi-sig identities require M-of-N signatures to authorize actions.
+/// Suitable for high-value accounts (influencers, businesses, agents).
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct MultisigSetupRequest {
+    /// The address to configure as a multi-sig identity.
+    pub address: String,
+
+    /// Compressed public keys (33 bytes each, hex-encoded).
+    /// Must have 2-15 keys.
+    #[serde(rename = "publicKeys")]
+    pub public_keys: Vec<String>,
+
+    /// Number of signatures required to authorize actions (M in M-of-N).
+    /// Must be at least 1 and at most the number of keys.
+    pub threshold: u8,
+}
+
+impl MultisigSetupRequest {
+    /// Validates the multi-sig setup parameters.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let key_count = self.public_keys.len();
+
+        if key_count < MIN_MULTISIG_KEYS as usize {
+            return Err("multi-sig requires at least 2 keys");
+        }
+
+        if key_count > MAX_MULTISIG_KEYS as usize {
+            return Err("multi-sig allows at most 15 keys");
+        }
+
+        if self.threshold < 1 {
+            return Err("threshold must be at least 1");
+        }
+
+        if self.threshold as usize > key_count {
+            return Err("threshold cannot exceed number of keys");
+        }
+
+        // Validate key format (should be 66 hex chars = 33 bytes)
+        for key in &self.public_keys {
+            if key.len() != COMPRESSED_PUBKEY_SIZE * 2 {
+                return Err("public keys must be 33 bytes (66 hex chars)");
+            }
+            if !key.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err("public keys must be hex-encoded");
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Response for multi-sig setup.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct MultisigSetupResponse {
+    /// The transaction ID of the multi-sig setup.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The multi-sig address.
+    address: String,
+
+    /// Number of keys in the multi-sig.
+    #[serde(rename = "keyCount")]
+    #[getter(copy)]
+    key_count: u8,
+
+    /// Number of signatures required (threshold).
+    #[getter(copy)]
+    threshold: u8,
+
+    /// Block height at which the setup was submitted.
+    #[serde(rename = "setupBlock")]
+    #[getter(copy)]
+    setup_block: u32,
+}
+
+/// Request for signing a multi-sig action.
+///
+/// Wraps a social action (post, follow, etc.) with multiple signatures.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct MultisigActionRequest {
+    /// The multi-sig address performing the action.
+    #[serde(rename = "multisigAddress")]
+    pub multisig_address: String,
+
+    /// The type of action to perform (e.g., "post", "follow", "dm").
+    #[serde(rename = "actionType")]
+    pub action_type: String,
+
+    /// The action payload (JSON-encoded, will be converted to binary).
+    #[serde(rename = "actionPayload")]
+    pub action_payload: serde_json::Value,
+
+    /// Signatures from the multi-sig key holders.
+    /// Each signature includes the key index and the signature hex.
+    pub signatures: Vec<MultisigSignature>,
+}
+
+/// A single signature from a multi-sig key holder.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct MultisigSignature {
+    /// Index of the key that made this signature (0-based).
+    #[serde(rename = "keyIndex")]
+    pub key_index: u8,
+
+    /// The Schnorr signature (64 bytes, hex-encoded = 128 chars).
+    pub signature: String,
+}
+
+impl MultisigSignature {
+    /// Validates the signature format.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.signature.len() != SCHNORR_SIGNATURE_SIZE * 2 {
+            return Err("signature must be 64 bytes (128 hex chars)");
+        }
+        if !self.signature.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err("signature must be hex-encoded");
+        }
+        Ok(())
+    }
+}
+
+/// Response for a multi-sig action.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct MultisigActionResponse {
+    /// The transaction ID of the action.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The multi-sig address that performed the action.
+    #[serde(rename = "multisigAddress")]
+    multisig_address: String,
+
+    /// The action type that was performed.
+    #[serde(rename = "actionType")]
+    action_type: String,
+
+    /// Number of signatures used.
+    #[serde(rename = "signatureCount")]
+    #[getter(copy)]
+    signature_count: u8,
+
+    /// Block height at which the action was submitted.
+    #[serde(rename = "actionBlock")]
+    #[getter(copy)]
+    action_block: u32,
+}
+
+/// Request for querying multi-sig status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct MultisigStatusRequest {
+    /// The address to check multi-sig status for.
+    pub address: String,
+}
+
+/// Response for multi-sig status query.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct MultisigStatusResponse {
+    /// The queried address.
+    address: String,
+
+    /// Whether this address is configured as a multi-sig identity.
+    #[serde(rename = "isMultisig")]
+    #[getter(copy)]
+    is_multisig: bool,
+
+    /// Number of keys (if multi-sig).
+    #[serde(rename = "keyCount", skip_serializing_if = "Option::is_none")]
+    key_count: Option<u8>,
+
+    /// Threshold (if multi-sig).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    threshold: Option<u8>,
+
+    /// Block height when multi-sig was set up (if multi-sig).
+    #[serde(rename = "setupBlock", skip_serializing_if = "Option::is_none")]
+    setup_block: Option<u32>,
+
+    /// Public keys (hex-encoded, if multi-sig).
+    #[serde(rename = "publicKeys", skip_serializing_if = "Option::is_none")]
+    public_keys: Option<Vec<String>>,
+
+    /// Status of the multi-sig configuration.
+    status: MultisigStatus,
+}
+
+/// Status of a multi-sig identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MultisigStatus {
+    /// Multi-sig is active and all keys are valid.
+    Active,
+    /// Multi-sig setup is pending confirmation.
+    Pending,
+    /// Not a multi-sig address (standard single-key).
+    NotMultisig,
+    /// Multi-sig was disabled/revoked.
+    Revoked,
+}
+
+impl std::fmt::Display for MultisigStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => write!(f, "active"),
+            Self::Pending => write!(f, "pending"),
+            Self::NotMultisig => write!(f, "notmultisig"),
+            Self::Revoked => write!(f, "revoked"),
+        }
+    }
+}
+
+/// Request for listing multi-sig identities.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct MultisigListRequest {
+    /// Filter by status (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<MultisigStatus>,
+
+    /// Maximum number of results to return.
+    #[serde(default = "default_multisig_list_limit")]
+    pub limit: u32,
+
+    /// Offset for pagination.
+    #[serde(default)]
+    pub offset: u32,
+}
+
+fn default_multisig_list_limit() -> u32 {
+    50
+}
+
+/// Response for listing multi-sig identities.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct MultisigListResponse {
+    /// List of multi-sig identity summaries.
+    identities: Vec<MultisigSummary>,
+
+    /// Total count of matching identities.
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
+/// Summary of a multi-sig identity.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct MultisigSummary {
+    /// The multi-sig address.
+    address: String,
+
+    /// Number of keys.
+    #[serde(rename = "keyCount")]
+    #[getter(copy)]
+    key_count: u8,
+
+    /// Threshold (M of N).
+    #[getter(copy)]
+    threshold: u8,
+
+    /// Block height when set up.
+    #[serde(rename = "setupBlock")]
+    #[getter(copy)]
+    setup_block: u32,
+
+    /// Status of the multi-sig.
+    status: MultisigStatus,
+}
+
 // ==================== Bridge Types ====================
 
 /// Supported bridge platforms for cross-platform identity linking.
@@ -3864,6 +4148,284 @@ mod tests {
         assert_eq!(format!("{}", KeyRotationStatus::Pending), "pending");
         assert_eq!(format!("{}", KeyRotationStatus::Cancelled), "cancelled");
         assert_eq!(format!("{}", KeyRotationStatus::Migrated), "migrated");
+    }
+
+    // ==================== Multi-Sig Types Tests ====================
+
+    #[test]
+    fn multisig_setup_request_deserialize() {
+        let json = r#"{
+            "address": "bs1multisig...",
+            "publicKeys": ["02aabbccdd", "03eeff0011"],
+            "threshold": 2
+        }"#;
+        let req: MultisigSetupRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1multisig...");
+        assert_eq!(req.public_keys.len(), 2);
+        assert_eq!(req.threshold, 2);
+    }
+
+    #[test]
+    fn multisig_setup_request_validate_valid() {
+        // Valid 2-of-3 multi-sig with proper 33-byte keys
+        let key1 = "02".to_string() + &"aa".repeat(32);
+        let key2 = "03".to_string() + &"bb".repeat(32);
+        let key3 = "02".to_string() + &"cc".repeat(32);
+
+        let req = MultisigSetupRequest {
+            address: "bs1test".to_string(),
+            public_keys: vec![key1, key2, key3],
+            threshold: 2,
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn multisig_setup_request_validate_too_few_keys() {
+        let key1 = "02".to_string() + &"aa".repeat(32);
+
+        let req = MultisigSetupRequest {
+            address: "bs1test".to_string(),
+            public_keys: vec![key1],
+            threshold: 1,
+        };
+        assert!(req.validate().is_err());
+        assert!(req.validate().unwrap_err().contains("at least 2"));
+    }
+
+    #[test]
+    fn multisig_setup_request_validate_too_many_keys() {
+        let keys: Vec<String> = (0..16)
+            .map(|i| format!("02{:02x}", i) + &"aa".repeat(31))
+            .collect();
+
+        let req = MultisigSetupRequest {
+            address: "bs1test".to_string(),
+            public_keys: keys,
+            threshold: 10,
+        };
+        assert!(req.validate().is_err());
+        assert!(req.validate().unwrap_err().contains("at most 15"));
+    }
+
+    #[test]
+    fn multisig_setup_request_validate_threshold_exceeds_keys() {
+        let key1 = "02".to_string() + &"aa".repeat(32);
+        let key2 = "03".to_string() + &"bb".repeat(32);
+
+        let req = MultisigSetupRequest {
+            address: "bs1test".to_string(),
+            public_keys: vec![key1, key2],
+            threshold: 3, // More than 2 keys
+        };
+        assert!(req.validate().is_err());
+        assert!(req.validate().unwrap_err().contains("exceed"));
+    }
+
+    #[test]
+    fn multisig_setup_request_validate_invalid_key_length() {
+        let req = MultisigSetupRequest {
+            address: "bs1test".to_string(),
+            public_keys: vec!["02aabb".to_string(), "03ccdd".to_string()], // Too short
+            threshold: 1,
+        };
+        assert!(req.validate().is_err());
+        assert!(req.validate().unwrap_err().contains("33 bytes"));
+    }
+
+    #[test]
+    fn multisig_setup_response_serialize() {
+        let resp = MultisigSetupResponse::new(
+            "txid123".to_string(),
+            "bs1multisig".to_string(),
+            3,
+            2,
+            100000,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid123\""));
+        assert!(json.contains("\"keyCount\":3"));
+        assert!(json.contains("\"threshold\":2"));
+        assert!(json.contains("\"setupBlock\":100000"));
+    }
+
+    #[test]
+    fn multisig_signature_validate_valid() {
+        let sig = MultisigSignature {
+            key_index: 0,
+            signature: "aa".repeat(64), // 64 bytes = 128 hex chars
+        };
+        assert!(sig.validate().is_ok());
+    }
+
+    #[test]
+    fn multisig_signature_validate_invalid_length() {
+        let sig = MultisigSignature {
+            key_index: 0,
+            signature: "aabbcc".to_string(), // Too short
+        };
+        assert!(sig.validate().is_err());
+        assert!(sig.validate().unwrap_err().contains("64 bytes"));
+    }
+
+    #[test]
+    fn multisig_action_request_deserialize() {
+        let json = r#"{
+            "multisigAddress": "bs1multisig...",
+            "actionType": "post",
+            "actionPayload": {"content": "Hello!"},
+            "signatures": [
+                {"keyIndex": 0, "signature": "aabbccdd"},
+                {"keyIndex": 2, "signature": "eeff0011"}
+            ]
+        }"#;
+        let req: MultisigActionRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.multisig_address, "bs1multisig...");
+        assert_eq!(req.action_type, "post");
+        assert_eq!(req.signatures.len(), 2);
+        assert_eq!(req.signatures[0].key_index, 0);
+        assert_eq!(req.signatures[1].key_index, 2);
+    }
+
+    #[test]
+    fn multisig_action_response_serialize() {
+        let resp = MultisigActionResponse::new(
+            "txid456".to_string(),
+            "bs1multisig".to_string(),
+            "post".to_string(),
+            2,
+            100500,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid456\""));
+        assert!(json.contains("\"multisigAddress\":\"bs1multisig\""));
+        assert!(json.contains("\"actionType\":\"post\""));
+        assert!(json.contains("\"signatureCount\":2"));
+    }
+
+    #[test]
+    fn multisig_status_request_deserialize() {
+        let json = r#"{"address": "bs1test..."}"#;
+        let req: MultisigStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1test...");
+    }
+
+    #[test]
+    fn multisig_status_response_active_multisig() {
+        let resp = MultisigStatusResponse::new(
+            "bs1multisig".to_string(),
+            true,
+            Some(3),
+            Some(2),
+            Some(50000),
+            Some(vec![
+                "02aa".repeat(17).to_string(),
+                "03bb".repeat(17).to_string(),
+                "02cc".repeat(17).to_string(),
+            ]),
+            MultisigStatus::Active,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"isMultisig\":true"));
+        assert!(json.contains("\"keyCount\":3"));
+        assert!(json.contains("\"threshold\":2"));
+        assert!(json.contains("\"setupBlock\":50000"));
+    }
+
+    #[test]
+    fn multisig_status_response_not_multisig() {
+        let resp = MultisigStatusResponse::new(
+            "bs1regular".to_string(),
+            false,
+            None,
+            None,
+            None,
+            None,
+            MultisigStatus::NotMultisig,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"isMultisig\":false"));
+        // Optional fields should be omitted
+        assert!(!json.contains("keyCount"));
+        assert!(!json.contains("threshold"));
+        assert!(!json.contains("setupBlock"));
+    }
+
+    #[test]
+    fn multisig_status_serialize() {
+        assert_eq!(serde_json::to_string(&MultisigStatus::Active).unwrap(), "\"active\"");
+        assert_eq!(serde_json::to_string(&MultisigStatus::Pending).unwrap(), "\"pending\"");
+        assert_eq!(serde_json::to_string(&MultisigStatus::NotMultisig).unwrap(), "\"notmultisig\"");
+        assert_eq!(serde_json::to_string(&MultisigStatus::Revoked).unwrap(), "\"revoked\"");
+    }
+
+    #[test]
+    fn multisig_status_display() {
+        assert_eq!(format!("{}", MultisigStatus::Active), "active");
+        assert_eq!(format!("{}", MultisigStatus::Pending), "pending");
+        assert_eq!(format!("{}", MultisigStatus::NotMultisig), "notmultisig");
+        assert_eq!(format!("{}", MultisigStatus::Revoked), "revoked");
+    }
+
+    #[test]
+    fn multisig_list_request_deserialize() {
+        let json = r#"{
+            "status": "active",
+            "limit": 100,
+            "offset": 50
+        }"#;
+        let req: MultisigListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.status, Some(MultisigStatus::Active));
+        assert_eq!(req.limit, 100);
+        assert_eq!(req.offset, 50);
+    }
+
+    #[test]
+    fn multisig_list_request_defaults() {
+        let json = r#"{}"#;
+        let req: MultisigListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.status, None);
+        assert_eq!(req.limit, 50); // default
+        assert_eq!(req.offset, 0); // default
+    }
+
+    #[test]
+    fn multisig_summary_serialize() {
+        let summary = MultisigSummary::new(
+            "bs1multisig".to_string(),
+            3,
+            2,
+            100000,
+            MultisigStatus::Active,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"keyCount\":3"));
+        assert!(json.contains("\"threshold\":2"));
+        assert!(json.contains("\"setupBlock\":100000"));
+        assert!(json.contains("\"status\":\"active\""));
+    }
+
+    #[test]
+    fn multisig_list_response_serialize() {
+        let resp = MultisigListResponse::new(
+            vec![
+                MultisigSummary::new("bs1ms1".to_string(), 3, 2, 100, MultisigStatus::Active),
+                MultisigSummary::new("bs1ms2".to_string(), 5, 3, 200, MultisigStatus::Active),
+            ],
+            2,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"totalCount\":2"));
+        assert!(json.contains("\"bs1ms1\""));
+        assert!(json.contains("\"bs1ms2\""));
+    }
+
+    #[test]
+    fn multisig_constants() {
+        assert_eq!(MIN_MULTISIG_KEYS, 2);
+        assert_eq!(MAX_MULTISIG_KEYS, 15);
+        assert_eq!(COMPRESSED_PUBKEY_SIZE, 33);
+        assert_eq!(SCHNORR_SIGNATURE_SIZE, 64);
     }
 
     // ==================== Bridge Types Tests ====================

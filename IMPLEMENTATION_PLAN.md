@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.8 Complete - Protocol Upgrade Signaling)
+**Last Updated:** 2026-02-01 (P6.4.3 Complete - Multi-Sig Identities)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests), P6.7 done (price oracle with miner nonce signaling, median aggregation, dynamic fee calculation, and 12 oracle tests), P6.8 done (protocol upgrade signaling with version bits, 75% activation threshold, deployment state tracking, and 40+ upgrade tests across zebra-chain and zebra-rpc).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-e done (recovery message types 0xF0-0xF4 including key rotation, RPC types, 6 RPC methods with validation, indexer recovery parsing with 35+ tests, and P6.4.3 multi-sig identities with 0xF5/0xF6 message types and 11+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests), P6.7 done (price oracle with miner nonce signaling, median aggregation, dynamic fee calculation, and 12 oracle tests), P6.8 done (protocol upgrade signaling with version bits, 75% activation threshold, deployment state tracking, and 40+ upgrade tests across zebra-chain and zebra-rpc).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -261,6 +261,29 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `BlockRecoveryStats` for per-block recovery statistics tracking
 - Constants: DEFAULT/MIN/MAX_RECOVERY_TIMELOCK_BLOCKS, MIN/MAX_GUARDIANS
 - 35+ comprehensive tests covering parsing, state transitions, approval tracking, and edge cases
+
+**P6.4.3 Implementation Details (Multi-Sig Identities):**
+- Added `SocialMessageType::MultisigSetup = 0xF5` for M-of-N identity setup
+- Added `SocialMessageType::MultisigAction = 0xF6` for multi-sig signed actions
+- Binary format: MultisigSetup = [key_count(1)][pubkey1(33)]...[pubkeyN(33)][threshold(1)]
+- Binary format: MultisigAction = [action_type(1)][action_len(2)][action][sig_count(1)][sig1_idx(1)][sig1(64)]...
+- Added `is_multisig()` helper method on SocialMessageType
+- SocialMessageType enum now has 34 types (includes 0xF5, 0xF6)
+- Added Multi-Sig RPC types: MultisigSetupRequest/Response, MultisigActionRequest/Response, MultisigStatusRequest/Response, MultisigListRequest/Response
+- Added MultisigSignature struct with key_index and signature fields
+- Added MultisigStatus enum (Active, Pending, NotMultisig, Revoked)
+- Added MultisigSummary for listings with required_signatures and total_keys
+- Constants: MIN_MULTISIG_KEYS (2), MAX_MULTISIG_KEYS (15), COMPRESSED_PUBKEY_SIZE (33), SCHNORR_SIGNATURE_SIZE (64)
+- Added 4 RPC methods: z_multisig_setup, z_multisig_action, z_multisig_status, z_multisig_list
+- Created `zebra-rpc/src/indexer/multisig.rs` module for indexer-side multi-sig parsing
+- Added IndexedMultisigSetup struct with public_keys, threshold, activation_height
+- Added IndexedMultisigAction struct with action_type, action_payload, signatures
+- Added IndexedSignature struct with key_index and signature_bytes
+- Added IndexedMultisig enum for unified multi-sig event handling
+- Added MultisigParseError enum for detailed error reporting
+- Added utility functions: is_multisig_memo(), multisig_type_from_memo(), parse_multisig_memo()
+- Added BlockMultisigStats for per-block multi-sig statistics
+- 11 zebra-chain multi-sig tests + RPC type validation tests
 
 **P6.5a Implementation Details (Bridge Message Types):**
 - Added 4 bridge message types: BridgeLink (0xB0), BridgeUnlink (0xB1), BridgePost (0xB2), BridgeVerify (0xB3)
@@ -1719,10 +1742,13 @@ cd zashi-android && ./gradlew test
 - [ ] Karma/reputation transfer
 - [ ] Required Tests: Migration correctness, follower preservation
 
-#### 6.4.3 Multi-Sig Identities
-- [ ] multisig_setup transaction type (0xF5)
-- [ ] M-of-N signature verification for posts
-- [ ] Required Tests: Multi-sig posting, threshold verification
+#### 6.4.3 Multi-Sig Identities ✅ DONE
+- [x] multisig_setup transaction type (0xF5) - zebra-chain SocialMessageType
+- [x] multisig_action transaction type (0xF6) - for M-of-N signed actions
+- [x] Multi-Sig RPC types (setup/action/status/list requests/responses) - zebra-rpc/methods/types
+- [x] Multi-Sig RPC methods (z_multisigsetup, z_multisigaction, z_multisigstatus, z_multisiglist)
+- [x] Indexer multi-sig parsing (IndexedMultisigSetup, IndexedMultisigAction) - zebra-rpc/indexer/multisig
+- [x] Required Tests: 11 zebra-chain multi-sig tests passing, RPC type validation tests
 
 ---
 

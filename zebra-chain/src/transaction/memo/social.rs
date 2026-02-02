@@ -29,7 +29,7 @@
 //! - **Governance (0xE0-0xE1)**: On-chain voting and proposals
 //! - **Channels (0xC0-0xC2)**: Layer-2 social channels for high-frequency messaging
 //! - **Moderation (0xD0-0xD1)**: Trust/reputation and content reports
-//! - **Recovery (0xF0-0xF3)**: Key recovery and social recovery mechanisms
+//! - **Recovery (0xF0-0xF6)**: Key recovery, social recovery, and multi-sig identity mechanisms
 
 use std::fmt;
 
@@ -259,6 +259,30 @@ pub enum SocialMessageType {
     /// After rotation: followers auto-follow new address, karma transfers, old address marked "migrated".
     KeyRotation = 0xF4,
 
+    /// Multi-sig identity setup (0xF5).
+    ///
+    /// Registers a multi-sig identity with M-of-N signature requirements.
+    /// For high-value accounts (influencers, businesses, agents with significant stake).
+    /// All subsequent posts from this address require M signatures from the N keys.
+    /// Format: [key_count(1)][pubkey1(33)]...[pubkeyN(33)][threshold(1)]
+    /// - key_count: Number of keys (2-15)
+    /// - pubkeyN: Compressed public keys (33 bytes each)
+    /// - threshold: M value (1 to key_count)
+    MultisigSetup = 0xF5,
+
+    /// Multi-sig action with signatures (0xF6).
+    ///
+    /// A social action (post, follow, etc.) signed by multiple keys.
+    /// Used by multi-sig identities to authorize actions.
+    /// Format: [action_type(1)][action_len(2)][action][sig_count(1)][sig1_idx(1)][sig1(64)]...[sigM_idx(1)][sigM(64)]
+    /// - action_type: The wrapped social message type
+    /// - action_len: Length of the wrapped action (2 bytes, little-endian)
+    /// - action: The serialized social message being authorized
+    /// - sig_count: Number of signatures (must meet threshold)
+    /// - sigN_idx: Index of the key that made this signature (0-based)
+    /// - sigN: Schnorr signature (64 bytes)
+    MultisigAction = 0xF6,
+
     /// Trust/vouch for another user (0xD0).
     ///
     /// Explicitly express trust in another user, contributing to the web of trust.
@@ -317,6 +341,8 @@ impl SocialMessageType {
             Self::RecoveryApprove => "RecoveryApprove",
             Self::RecoveryCancel => "RecoveryCancel",
             Self::KeyRotation => "KeyRotation",
+            Self::MultisigSetup => "MultisigSetup",
+            Self::MultisigAction => "MultisigAction",
             Self::Trust => "Trust",
             Self::Report => "Report",
         }
@@ -365,7 +391,7 @@ impl SocialMessageType {
     ///
     /// Recovery messages are used for social recovery mechanisms that allow
     /// users to recover access to their accounts using trusted guardians.
-    /// Also includes key rotation which migrates identity to a new address.
+    /// Also includes key rotation and multi-sig identity setup.
     pub const fn is_recovery(&self) -> bool {
         matches!(
             self,
@@ -374,7 +400,17 @@ impl SocialMessageType {
                 | Self::RecoveryApprove
                 | Self::RecoveryCancel
                 | Self::KeyRotation
+                | Self::MultisigSetup
+                | Self::MultisigAction
         )
+    }
+
+    /// Returns true if this is a multi-sig message type.
+    ///
+    /// Multi-sig messages are used for identities that require M-of-N
+    /// signatures to authorize actions, suitable for high-value accounts.
+    pub const fn is_multisig(&self) -> bool {
+        matches!(self, Self::MultisigSetup | Self::MultisigAction)
     }
 
     /// Returns true if this is a bridge message type.
@@ -435,6 +471,8 @@ impl TryFrom<u8> for SocialMessageType {
             0xF2 => Ok(Self::RecoveryApprove),
             0xF3 => Ok(Self::RecoveryCancel),
             0xF4 => Ok(Self::KeyRotation),
+            0xF5 => Ok(Self::MultisigSetup),
+            0xF6 => Ok(Self::MultisigAction),
             0xD0 => Ok(Self::Trust),
             0xD1 => Ok(Self::Report),
             _ => Err(SocialParseError::UnknownMessageType(value)),
@@ -4371,5 +4409,268 @@ mod tests {
         // Partial txid
         let result = ReportMessage::parse(&[0xAB; 20]);
         assert!(matches!(result, Err(ModerationParseError::PayloadTooShort { .. })));
+    }
+
+    // ========================================================================
+    // Multi-Sig Identity Tests (0xF5, 0xF6)
+    // ========================================================================
+
+    #[test]
+    fn multisig_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        // Verify multi-sig type byte values match spec
+        assert_eq!(SocialMessageType::MultisigSetup.as_u8(), 0xF5);
+        assert_eq!(SocialMessageType::MultisigAction.as_u8(), 0xF6);
+
+        // Verify names
+        assert_eq!(SocialMessageType::MultisigSetup.name(), "MultisigSetup");
+        assert_eq!(SocialMessageType::MultisigAction.name(), "MultisigAction");
+    }
+
+    #[test]
+    fn multisig_setup_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // MultisigSetup format: [key_count(1)][pubkey1(33)]...[pubkeyN(33)][threshold(1)]
+        // Example: 2-of-3 multi-sig setup with 3 compressed public keys
+
+        let mut payload = Vec::new();
+        payload.push(3u8); // key_count = 3
+
+        // Add 3 fake compressed public keys (33 bytes each)
+        // First byte is 0x02 or 0x03 for compressed keys
+        let pubkey1: [u8; 33] = {
+            let mut key = [0u8; 33];
+            key[0] = 0x02;
+            key[1..].copy_from_slice(&[0xAA; 32]);
+            key
+        };
+        let pubkey2: [u8; 33] = {
+            let mut key = [0u8; 33];
+            key[0] = 0x03;
+            key[1..].copy_from_slice(&[0xBB; 32]);
+            key
+        };
+        let pubkey3: [u8; 33] = {
+            let mut key = [0u8; 33];
+            key[0] = 0x02;
+            key[1..].copy_from_slice(&[0xCC; 32]);
+            key
+        };
+
+        payload.extend_from_slice(&pubkey1);
+        payload.extend_from_slice(&pubkey2);
+        payload.extend_from_slice(&pubkey3);
+        payload.push(2u8); // threshold = 2 (2-of-3)
+
+        let _msg = SocialMessage::new(SocialMessageType::MultisigSetup, SOCIAL_PROTOCOL_VERSION, payload.clone());
+
+        // Encode to memo and parse back
+        let mut memo_bytes = vec![SocialMessageType::MultisigSetup.as_u8(), SOCIAL_PROTOCOL_VERSION];
+        memo_bytes.extend_from_slice(&payload);
+        let memo = create_memo(&memo_bytes);
+        let decoded = SocialMessage::try_from(&memo).expect("should parse");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::MultisigSetup);
+        assert_eq!(decoded.version(), SOCIAL_PROTOCOL_VERSION);
+        assert_eq!(decoded.payload(), &payload);
+        assert!(decoded.msg_type().is_recovery());
+        assert!(decoded.msg_type().is_multisig());
+    }
+
+    #[test]
+    fn multisig_action_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // MultisigAction format: [action_type(1)][action_len(2)][action][sig_count(1)][sig1_idx(1)][sig1(64)]...
+        // Example: A multi-sig post with 2 signatures
+
+        let mut payload = Vec::new();
+
+        // The wrapped action: a simple Post
+        let inner_action = b"Hello from multisig!";
+        payload.push(SocialMessageType::Post.as_u8()); // action_type
+        payload.extend_from_slice(&(inner_action.len() as u16).to_le_bytes()); // action_len (2 bytes LE)
+        payload.extend_from_slice(inner_action); // action content
+
+        // 2 signatures
+        payload.push(2u8); // sig_count
+
+        // Signature 1 from key index 0
+        payload.push(0u8); // sig1_idx
+        payload.extend_from_slice(&[0x11; 64]); // sig1 (Schnorr signature placeholder)
+
+        // Signature 2 from key index 2
+        payload.push(2u8); // sig2_idx
+        payload.extend_from_slice(&[0x22; 64]); // sig2 (Schnorr signature placeholder)
+
+        let _msg = SocialMessage::new(SocialMessageType::MultisigAction, SOCIAL_PROTOCOL_VERSION, payload.clone());
+
+        // Encode to memo and parse back
+        let mut memo_bytes = vec![SocialMessageType::MultisigAction.as_u8(), SOCIAL_PROTOCOL_VERSION];
+        memo_bytes.extend_from_slice(&payload);
+        let memo = create_memo(&memo_bytes);
+        let decoded = SocialMessage::try_from(&memo).expect("should parse");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::MultisigAction);
+        assert_eq!(decoded.version(), SOCIAL_PROTOCOL_VERSION);
+        assert_eq!(decoded.payload(), &payload);
+        assert!(decoded.msg_type().is_recovery());
+        assert!(decoded.msg_type().is_multisig());
+    }
+
+    #[test]
+    fn multisig_type_roundtrip_from_u8() {
+        let _init_guard = zebra_test::init();
+
+        // Test multisig types can roundtrip through u8
+        let setup = SocialMessageType::try_from(0xF5).expect("should parse");
+        assert_eq!(setup, SocialMessageType::MultisigSetup);
+        assert_eq!(setup.as_u8(), 0xF5);
+
+        let action = SocialMessageType::try_from(0xF6).expect("should parse");
+        assert_eq!(action, SocialMessageType::MultisigAction);
+        assert_eq!(action.as_u8(), 0xF6);
+    }
+
+    #[test]
+    fn multisig_is_recovery_helper() {
+        let _init_guard = zebra_test::init();
+
+        // Multi-sig types should return true for is_recovery (grouped with recovery types)
+        assert!(SocialMessageType::MultisigSetup.is_recovery());
+        assert!(SocialMessageType::MultisigAction.is_recovery());
+
+        // And also true for is_multisig
+        assert!(SocialMessageType::MultisigSetup.is_multisig());
+        assert!(SocialMessageType::MultisigAction.is_multisig());
+    }
+
+    #[test]
+    fn multisig_not_value_transfer() {
+        let _init_guard = zebra_test::init();
+
+        // Multi-sig types are not value transfers
+        assert!(!SocialMessageType::MultisigSetup.is_value_transfer());
+        assert!(!SocialMessageType::MultisigAction.is_value_transfer());
+    }
+
+    #[test]
+    fn multisig_not_other_categories() {
+        let _init_guard = zebra_test::init();
+
+        // Multi-sig is not governance
+        assert!(!SocialMessageType::MultisigSetup.is_governance());
+        assert!(!SocialMessageType::MultisigAction.is_governance());
+
+        // Multi-sig is not bridge
+        assert!(!SocialMessageType::MultisigSetup.is_bridge());
+        assert!(!SocialMessageType::MultisigAction.is_bridge());
+
+        // Multi-sig is not channel
+        assert!(!SocialMessageType::MultisigSetup.is_channel());
+        assert!(!SocialMessageType::MultisigAction.is_channel());
+
+        // Multi-sig is not moderation
+        assert!(!SocialMessageType::MultisigSetup.is_moderation());
+        assert!(!SocialMessageType::MultisigAction.is_moderation());
+
+        // Multi-sig is not batch
+        assert!(!SocialMessageType::MultisigSetup.is_batch());
+        assert!(!SocialMessageType::MultisigAction.is_batch());
+
+        // Multi-sig is not attention market
+        assert!(!SocialMessageType::MultisigSetup.is_attention_market());
+        assert!(!SocialMessageType::MultisigAction.is_attention_market());
+    }
+
+    #[test]
+    fn multisig_type_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", SocialMessageType::MultisigSetup), "MultisigSetup");
+        assert_eq!(format!("{}", SocialMessageType::MultisigAction), "MultisigAction");
+    }
+
+    #[test]
+    fn multisig_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Multi-sig setup can be batched (though unusual)
+        let setup_payload = {
+            let mut p = Vec::new();
+            p.push(2u8); // 2 keys
+            p.extend_from_slice(&[0x02; 33]); // pubkey1
+            p.extend_from_slice(&[0x03; 33]); // pubkey2
+            p.push(2u8); // threshold = 2
+            p
+        };
+
+        let actions = vec![
+            SocialMessage::new(SocialMessageType::MultisigSetup, SOCIAL_PROTOCOL_VERSION, setup_payload),
+            SocialMessage::new(SocialMessageType::Post, SOCIAL_PROTOCOL_VERSION, b"After setup!".to_vec()),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("batch should be valid");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should parse batch");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded.actions()[0].msg_type(), SocialMessageType::MultisigSetup);
+        assert!(decoded.actions()[0].msg_type().is_multisig());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
+    fn multisig_setup_with_max_keys() {
+        let _init_guard = zebra_test::init();
+
+        // Test setup with 15 keys (maximum supported)
+        let mut payload = Vec::new();
+        payload.push(15u8); // 15 keys
+
+        for i in 0..15 {
+            let mut key = [0u8; 33];
+            key[0] = if i % 2 == 0 { 0x02 } else { 0x03 };
+            key[1..].copy_from_slice(&[i as u8; 32]);
+            payload.extend_from_slice(&key);
+        }
+
+        payload.push(10u8); // threshold = 10-of-15
+
+        let mut memo_bytes = vec![SocialMessageType::MultisigSetup.as_u8(), SOCIAL_PROTOCOL_VERSION];
+        memo_bytes.extend_from_slice(&payload);
+        let memo = create_memo(&memo_bytes);
+        let decoded = SocialMessage::try_from(&memo).expect("should parse");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::MultisigSetup);
+        assert!(decoded.msg_type().is_multisig());
+        // 1 (key_count) + 15*33 (keys) + 1 (threshold) = 497 bytes
+        assert_eq!(decoded.payload().len(), 1 + 15 * 33 + 1);
+    }
+
+    #[test]
+    fn multisig_setup_with_min_keys() {
+        let _init_guard = zebra_test::init();
+
+        // Test setup with 2 keys (minimum for multi-sig)
+        let mut payload = Vec::new();
+        payload.push(2u8); // 2 keys
+
+        // Add 2 compressed public keys
+        payload.extend_from_slice(&[0x02; 33]); // pubkey1
+        payload.extend_from_slice(&[0x03; 33]); // pubkey2
+        payload.push(1u8); // threshold = 1-of-2
+
+        let mut memo_bytes = vec![SocialMessageType::MultisigSetup.as_u8(), SOCIAL_PROTOCOL_VERSION];
+        memo_bytes.extend_from_slice(&payload);
+        let memo = create_memo(&memo_bytes);
+        let decoded = SocialMessage::try_from(&memo).expect("should parse");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::MultisigSetup);
+        // 1 (key_count) + 2*33 (keys) + 1 (threshold) = 68 bytes
+        assert_eq!(decoded.payload().len(), 68);
     }
 }
