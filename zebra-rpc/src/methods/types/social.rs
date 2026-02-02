@@ -1208,6 +1208,201 @@ pub struct ChannelListResponse {
     total_count: u32,
 }
 
+// ==================== Channel Dispute Types ====================
+
+/// Minimum dispute window in blocks (4 hours at 60s blocks).
+/// Disputes must be submitted within this window after a settlement.
+pub const MIN_DISPUTE_WINDOW_BLOCKS: u32 = 240;
+
+/// Default dispute window in blocks (~24 hours at 60s blocks).
+pub const DEFAULT_DISPUTE_WINDOW_BLOCKS: u32 = 1440;
+
+/// Maximum number of signatures in a dispute proof.
+pub const MAX_DISPUTE_SIGNATURES: usize = 10;
+
+/// Size of a Schnorr signature in bytes.
+pub const SCHNORR_SIGNATURE_SIZE: usize = 64;
+
+/// Request for disputing a channel settlement.
+///
+/// A dispute challenges a settlement by providing proof of a later state.
+/// The disputer must prove they have messages with a higher sequence number
+/// than the settlement being disputed.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChannelDisputeRequest {
+    /// The disputer's address (must be a party to the channel).
+    pub from: String,
+
+    /// The channel ID being disputed (32 bytes hex-encoded).
+    #[serde(rename = "channelId")]
+    pub channel_id: String,
+
+    /// The txid of the settlement being disputed (32 bytes hex-encoded).
+    #[serde(rename = "settlementTxid")]
+    pub settlement_txid: String,
+
+    /// The sequence number the disputer claims is more recent.
+    /// Must be greater than the settlement's final_seq.
+    #[serde(rename = "disputeSeq")]
+    pub dispute_seq: u32,
+
+    /// Merkle root of messages proving the higher sequence (32 bytes hex-encoded).
+    /// This hash allows on-chain verification without revealing all messages.
+    #[serde(rename = "proofHash")]
+    pub proof_hash: String,
+
+    /// Signatures from channel parties attesting to the state.
+    /// At least one signature is required; more signatures strengthen the dispute.
+    pub signatures: Vec<DisputeSignature>,
+}
+
+/// A signature in a dispute proof.
+///
+/// Each signature attests that the signing party acknowledges
+/// the disputed state (higher sequence number).
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct DisputeSignature {
+    /// Index of the signing party in the channel's party list.
+    #[serde(rename = "partyIndex")]
+    #[getter(copy)]
+    party_index: u8,
+
+    /// The Schnorr signature (64 bytes hex-encoded).
+    signature: String,
+}
+
+/// Response for a channel dispute submission.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelDisputeResponse {
+    /// The transaction ID of the dispute.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The channel ID that was disputed.
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The new state of the channel (should be "disputed").
+    state: ChannelState,
+
+    /// Block height when the dispute resolution window expires.
+    /// The disputed party can respond with counter-proof before this block.
+    #[serde(rename = "resolutionDeadlineBlock")]
+    #[getter(copy)]
+    resolution_deadline_block: u32,
+
+    /// Block height when the dispute was submitted.
+    #[serde(rename = "disputedAtBlock")]
+    #[getter(copy)]
+    disputed_at_block: u32,
+}
+
+/// Outcome of a dispute resolution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DisputeOutcome {
+    /// Dispute is pending resolution (within resolution window).
+    Pending,
+    /// Dispute was successful - the challenged settlement was invalid.
+    Valid,
+    /// Dispute was rejected - the original settlement was correct.
+    Rejected,
+    /// Dispute resolution expired without action (defaults to disputed state winning).
+    Expired,
+}
+
+impl Default for DisputeOutcome {
+    fn default() -> Self {
+        Self::Pending
+    }
+}
+
+impl std::fmt::Display for DisputeOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pending => write!(f, "pending"),
+            Self::Valid => write!(f, "valid"),
+            Self::Rejected => write!(f, "rejected"),
+            Self::Expired => write!(f, "expired"),
+        }
+    }
+}
+
+/// Request for querying dispute status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct DisputeStatusRequest {
+    /// The channel ID to query disputes for (32 bytes hex-encoded).
+    #[serde(rename = "channelId")]
+    pub channel_id: String,
+
+    /// Optional: specific dispute txid to query.
+    /// If not provided, returns the latest dispute for the channel.
+    #[serde(rename = "disputeTxid", skip_serializing_if = "Option::is_none")]
+    pub dispute_txid: Option<String>,
+}
+
+/// Information about a dispute.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct DisputeInfo {
+    /// The dispute transaction ID.
+    #[serde(rename = "disputeTxid")]
+    dispute_txid: String,
+
+    /// The settlement being disputed.
+    #[serde(rename = "settlementTxid")]
+    settlement_txid: String,
+
+    /// The disputer's address.
+    disputer: String,
+
+    /// The disputed sequence number.
+    #[serde(rename = "disputeSeq")]
+    #[getter(copy)]
+    dispute_seq: u32,
+
+    /// Settlement's sequence number (what's being challenged).
+    #[serde(rename = "settlementSeq")]
+    #[getter(copy)]
+    settlement_seq: u32,
+
+    /// Current outcome of the dispute.
+    outcome: DisputeOutcome,
+
+    /// Block height when disputed.
+    #[serde(rename = "disputedAtBlock")]
+    #[getter(copy)]
+    disputed_at_block: u32,
+
+    /// Block height when resolution window expires.
+    #[serde(rename = "resolutionDeadlineBlock")]
+    #[getter(copy)]
+    resolution_deadline_block: u32,
+
+    /// Number of signatures in the dispute proof.
+    #[serde(rename = "signatureCount")]
+    #[getter(copy)]
+    signature_count: usize,
+}
+
+/// Response for dispute status query.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct DisputeStatusResponse {
+    /// The channel ID.
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The current channel state.
+    state: ChannelState,
+
+    /// Information about the active dispute, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dispute: Option<DisputeInfo>,
+
+    /// Historical disputes for this channel (most recent first).
+    #[serde(rename = "disputeHistory", skip_serializing_if = "Vec::is_empty")]
+    dispute_history: Vec<DisputeInfo>,
+}
+
 // ==================== Recovery Types ====================
 
 /// Default timelock in blocks (~7 days at 60s blocks).
@@ -3742,6 +3937,229 @@ mod tests {
         assert_eq!(DEFAULT_CHANNEL_TIMEOUT_BLOCKS, 1440);
         assert_eq!(MAX_CHANNEL_PARTIES, 10);
         assert_eq!(MIN_CHANNEL_DEPOSIT, 100_000);
+    }
+
+    // ==================== Channel Dispute Tests ====================
+
+    #[test]
+    fn dispute_constants() {
+        assert_eq!(MIN_DISPUTE_WINDOW_BLOCKS, 240);
+        assert_eq!(DEFAULT_DISPUTE_WINDOW_BLOCKS, 1440);
+        assert_eq!(MAX_DISPUTE_SIGNATURES, 10);
+        assert_eq!(SCHNORR_SIGNATURE_SIZE, 64);
+    }
+
+    #[test]
+    fn channel_dispute_request_deserialize() {
+        let json = r#"{
+            "from": "bs1alice",
+            "channelId": "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+            "settlementTxid": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "disputeSeq": 150,
+            "proofHash": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+            "signatures": [
+                {"partyIndex": 0, "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"}
+            ]
+        }"#;
+        let req: ChannelDisputeRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1alice");
+        assert_eq!(req.channel_id.len(), 64);
+        assert_eq!(req.settlement_txid.len(), 64);
+        assert_eq!(req.dispute_seq, 150);
+        assert_eq!(req.proof_hash.len(), 64);
+        assert_eq!(req.signatures.len(), 1);
+        assert_eq!(req.signatures[0].party_index(), 0);
+        assert_eq!(req.signatures[0].signature().len(), 128); // hex-encoded 64 bytes
+    }
+
+    #[test]
+    fn channel_dispute_request_multiple_signatures() {
+        let json = r#"{
+            "from": "bs1charlie",
+            "channelId": "1111111111111111111111111111111111111111111111111111111111111111",
+            "settlementTxid": "2222222222222222222222222222222222222222222222222222222222222222",
+            "disputeSeq": 200,
+            "proofHash": "3333333333333333333333333333333333333333333333333333333333333333",
+            "signatures": [
+                {"partyIndex": 0, "signature": "aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11"},
+                {"partyIndex": 2, "signature": "bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22bb22"}
+            ]
+        }"#;
+        let req: ChannelDisputeRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.signatures.len(), 2);
+        assert_eq!(req.signatures[0].party_index(), 0);
+        assert_eq!(req.signatures[1].party_index(), 2);
+    }
+
+    #[test]
+    fn dispute_signature_new() {
+        let sig = DisputeSignature::new(
+            1,
+            "abcd".repeat(32), // 128 hex chars
+        );
+        assert_eq!(sig.party_index(), 1);
+        assert_eq!(sig.signature().len(), 128);
+    }
+
+    #[test]
+    fn channel_dispute_response_serialize() {
+        let resp = ChannelDisputeResponse::new(
+            "txid_dispute_001".to_string(),
+            "ch_disputed".to_string(),
+            ChannelState::Disputed,
+            15000,
+            14000,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid_dispute_001\""));
+        assert!(json.contains("\"channelId\":\"ch_disputed\""));
+        assert!(json.contains("\"state\":\"disputed\""));
+        assert!(json.contains("\"resolutionDeadlineBlock\":15000"));
+        assert!(json.contains("\"disputedAtBlock\":14000"));
+    }
+
+    #[test]
+    fn dispute_outcome_serialize() {
+        let outcome = DisputeOutcome::Pending;
+        let json = serde_json::to_string(&outcome).unwrap();
+        assert_eq!(json, "\"pending\"");
+
+        let outcome = DisputeOutcome::Valid;
+        let json = serde_json::to_string(&outcome).unwrap();
+        assert_eq!(json, "\"valid\"");
+
+        let outcome = DisputeOutcome::Rejected;
+        let json = serde_json::to_string(&outcome).unwrap();
+        assert_eq!(json, "\"rejected\"");
+
+        let outcome = DisputeOutcome::Expired;
+        let json = serde_json::to_string(&outcome).unwrap();
+        assert_eq!(json, "\"expired\"");
+    }
+
+    #[test]
+    fn dispute_outcome_default() {
+        let outcome = DisputeOutcome::default();
+        assert_eq!(outcome, DisputeOutcome::Pending);
+    }
+
+    #[test]
+    fn dispute_outcome_display() {
+        assert_eq!(format!("{}", DisputeOutcome::Pending), "pending");
+        assert_eq!(format!("{}", DisputeOutcome::Valid), "valid");
+        assert_eq!(format!("{}", DisputeOutcome::Rejected), "rejected");
+        assert_eq!(format!("{}", DisputeOutcome::Expired), "expired");
+    }
+
+    #[test]
+    fn dispute_status_request_deserialize() {
+        let json = r#"{"channelId":"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"}"#;
+        let req: DisputeStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.channel_id.len(), 64);
+        assert!(req.dispute_txid.is_none());
+    }
+
+    #[test]
+    fn dispute_status_request_with_txid() {
+        let json = r#"{
+            "channelId": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            "disputeTxid": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        }"#;
+        let req: DisputeStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.channel_id.len(), 64);
+        assert!(req.dispute_txid.is_some());
+        assert_eq!(req.dispute_txid.as_ref().unwrap().len(), 64);
+    }
+
+    #[test]
+    fn dispute_info_serialize() {
+        let info = DisputeInfo::new(
+            "txid_dispute".to_string(),
+            "txid_settlement".to_string(),
+            "bs1alice".to_string(),
+            150,
+            100,
+            DisputeOutcome::Pending,
+            14000,
+            15440,
+            2,
+        );
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"disputeTxid\":\"txid_dispute\""));
+        assert!(json.contains("\"settlementTxid\":\"txid_settlement\""));
+        assert!(json.contains("\"disputer\":\"bs1alice\""));
+        assert!(json.contains("\"disputeSeq\":150"));
+        assert!(json.contains("\"settlementSeq\":100"));
+        assert!(json.contains("\"outcome\":\"pending\""));
+        assert!(json.contains("\"signatureCount\":2"));
+    }
+
+    #[test]
+    fn dispute_status_response_no_dispute() {
+        let resp = DisputeStatusResponse::new(
+            "ch_clean".to_string(),
+            ChannelState::Open,
+            None,
+            vec![],
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"channelId\":\"ch_clean\""));
+        assert!(json.contains("\"state\":\"open\""));
+        // dispute should not appear when None
+        assert!(!json.contains("\"dispute\":"));
+        // disputeHistory should not appear when empty
+        assert!(!json.contains("\"disputeHistory\""));
+    }
+
+    #[test]
+    fn dispute_status_response_with_active_dispute() {
+        let info = DisputeInfo::new(
+            "txid_d1".to_string(),
+            "txid_s1".to_string(),
+            "bs1bob".to_string(),
+            200,
+            150,
+            DisputeOutcome::Pending,
+            20000,
+            21440,
+            1,
+        );
+        let resp = DisputeStatusResponse::new(
+            "ch_disputed".to_string(),
+            ChannelState::Disputed,
+            Some(info),
+            vec![],
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"state\":\"disputed\""));
+        assert!(json.contains("\"dispute\":{"));
+        assert!(json.contains("\"disputer\":\"bs1bob\""));
+    }
+
+    #[test]
+    fn dispute_status_response_with_history() {
+        let history = vec![
+            DisputeInfo::new(
+                "old_dispute".to_string(),
+                "old_settlement".to_string(),
+                "bs1eve".to_string(),
+                50,
+                40,
+                DisputeOutcome::Rejected,
+                10000,
+                11440,
+                1,
+            ),
+        ];
+        let resp = DisputeStatusResponse::new(
+            "ch_resolved".to_string(),
+            ChannelState::Settled,
+            None,
+            history,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"disputeHistory\":["));
+        assert!(json.contains("\"outcome\":\"rejected\""));
     }
 
     // ==================== Recovery Tests ====================

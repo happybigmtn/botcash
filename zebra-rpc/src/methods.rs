@@ -1258,6 +1258,77 @@ pub trait Rpc {
         request: types::social::ChannelListRequest,
     ) -> Result<types::social::ChannelListResponse>;
 
+    /// Disputes a channel settlement.
+    ///
+    /// Challenges a settlement by providing proof of a later state. Used when
+    /// a counterparty attempts to settle with an outdated state. The disputer
+    /// must prove they have messages with a higher sequence number.
+    ///
+    /// # method: post
+    /// # tags: channel, dispute
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The dispute request containing:
+    ///   - `from`: (string) Disputer's address (must be a party to the channel)
+    ///   - `channelId`: (string) Channel ID being disputed (32 bytes hex-encoded)
+    ///   - `settlementTxid`: (string) Txid of settlement being disputed (32 bytes hex)
+    ///   - `disputeSeq`: (u32) Sequence number disputer claims is more recent
+    ///   - `proofHash`: (string) Merkle root proving higher sequence (32 bytes hex)
+    ///   - `signatures`: (array) Signatures from channel parties attesting to state
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) The dispute transaction ID
+    /// - `channelId`: (string) The disputed channel ID
+    /// - `state`: (string) New channel state (should be "disputed")
+    /// - `resolutionDeadlineBlock`: (u32) Block when resolution window expires
+    /// - `disputedAtBlock`: (u32) Block when dispute was submitted
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet support for transaction creation and signing.
+    /// Disputes must be submitted within the dispute window after settlement.
+    #[method(name = "z_channeldispute")]
+    async fn z_channel_dispute(
+        &self,
+        request: types::social::ChannelDisputeRequest,
+    ) -> Result<types::social::ChannelDisputeResponse>;
+
+    /// Gets the dispute status for a channel.
+    ///
+    /// Returns information about active or historical disputes for a channel.
+    /// Can query a specific dispute by txid or get the latest dispute.
+    ///
+    /// # method: post
+    /// # tags: channel, dispute
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `channelId`: (string) Channel ID to query (32 bytes hex-encoded)
+    ///   - `disputeTxid`: (string, optional) Specific dispute txid to query
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `channelId`: (string) The channel ID
+    /// - `state`: (string) Current channel state
+    /// - `dispute`: (object, optional) Active dispute information
+    /// - `disputeHistory`: (array) Historical disputes (most recent first)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track dispute state.
+    #[method(name = "z_disputestatus")]
+    async fn z_dispute_status(
+        &self,
+        request: types::social::DisputeStatusRequest,
+    ) -> Result<types::social::DisputeStatusResponse>;
+
     // ==================== Recovery RPC Methods (Social Recovery) ====================
 
     /// Configures social recovery for an address.
@@ -5406,6 +5477,258 @@ where
         Ok(types::social::ChannelListResponse::new(
             vec![], // channels
             0,      // total_count
+        ))
+    }
+
+    async fn z_channel_dispute(
+        &self,
+        request: types::social::ChannelDisputeRequest,
+    ) -> Result<types::social::ChannelDisputeResponse> {
+        // Validate disputer address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate channel ID (should be 64 hex chars = 32 bytes)
+        if request.channel_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.channel_id.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "channelId must be 64 hex characters (32 bytes), got {}",
+                    request.channel_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .channel_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Validate settlement txid (should be 64 hex chars = 32 bytes)
+        if request.settlement_txid.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "settlementTxid is required",
+                None::<()>,
+            ));
+        }
+
+        if request.settlement_txid.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "settlementTxid must be 64 hex characters (32 bytes), got {}",
+                    request.settlement_txid.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .settlement_txid
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "settlementTxid must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Validate proof hash (should be 64 hex chars = 32 bytes)
+        if request.proof_hash.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proofHash is required",
+                None::<()>,
+            ));
+        }
+
+        if request.proof_hash.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "proofHash must be 64 hex characters (32 bytes), got {}",
+                    request.proof_hash.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .proof_hash
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proofHash must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Validate signatures (at least one required)
+        if request.signatures.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one signature is required for dispute proof",
+                None::<()>,
+            ));
+        }
+
+        if request.signatures.len() > types::social::MAX_DISPUTE_SIGNATURES {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "too many signatures (max: {}, got: {})",
+                    types::social::MAX_DISPUTE_SIGNATURES,
+                    request.signatures.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate each signature (should be 128 hex chars = 64 bytes Schnorr)
+        for (i, sig) in request.signatures.iter().enumerate() {
+            let sig_hex = sig.signature();
+            if sig_hex.len() != 128 {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "signature[{}] must be 128 hex characters (64 bytes), got {}",
+                        i,
+                        sig_hex.len()
+                    ),
+                    None::<()>,
+                ));
+            }
+
+            if !sig_hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "signature[{}] must contain only hexadecimal characters",
+                        i
+                    ),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Create a ChannelDispute (0xC3) memo message
+        // - Verify the from address is a party to the channel
+        // - Verify the settlement being disputed exists
+        // - Verify dispute_seq > settlement's final_seq
+        // - Verify all signatures are from channel parties
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_channeldispute requires wallet support which is not yet implemented in Zebra. \
+                Would dispute settlement {} of channel {} with claimed seq {} and {} signatures",
+                request.settlement_txid,
+                request.channel_id,
+                request.dispute_seq,
+                request.signatures.len()
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_dispute_status(
+        &self,
+        request: types::social::DisputeStatusRequest,
+    ) -> Result<types::social::DisputeStatusResponse> {
+        // Validate channel ID (should be 64 hex chars = 32 bytes)
+        if request.channel_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.channel_id.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "channelId must be 64 hex characters (32 bytes), got {}",
+                    request.channel_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .channel_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Validate optional dispute txid
+        if let Some(ref txid) = request.dispute_txid {
+            if txid.len() != 64 {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "disputeTxid must be 64 hex characters (32 bytes), got {}",
+                        txid.len()
+                    ),
+                    None::<()>,
+                ));
+            }
+
+            if !txid.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "disputeTxid must contain only hexadecimal characters",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Query the channel by ID
+        // - Look up any active disputes
+        // - Return dispute history
+        //
+        // For now, return a response indicating no disputes (no indexer = no disputes visible).
+        Ok(types::social::DisputeStatusResponse::new(
+            request.channel_id,
+            types::social::ChannelState::Open, // Assume open if no indexer
+            None,                              // No active dispute
+            vec![],                            // No dispute history
         ))
     }
 

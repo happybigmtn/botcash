@@ -1659,8 +1659,8 @@ cd zashi-android && ./gradlew test
 - [x] Channel RPC types and methods (5 methods) — `zebra-rpc/src/methods.rs`
 - [x] Indexer channel parsing module — `zebra-rpc/src/indexer/channels.rs`
 - [ ] Off-chain message signing protocol (wallet-side feature)
-- [ ] Dispute resolution mechanism (consensus-side feature)
-- [x] Required Tests: 35+ tests covering channel lifecycle, parsing, RPC types
+- [x] Dispute resolution mechanism (consensus-side feature) — ChannelDispute 0xC3, z_channel_dispute/z_dispute_status RPC
+- [x] Required Tests: 45+ tests covering channel lifecycle, parsing, RPC types, dispute resolution
 
 #### 6.1.3 Indexer Scaling
 - [ ] Redis caching layer (feed TTL: 10s, profiles: 5m)

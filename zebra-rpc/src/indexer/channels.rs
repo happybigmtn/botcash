@@ -5,15 +5,16 @@
 //!
 //! # Overview
 //!
-//! Channel messages (types 0xC0, 0xC1, 0xC2) enable Layer-2 social channels for
+//! Channel messages (types 0xC0, 0xC1, 0xC2, 0xC3) enable Layer-2 social channels for
 //! high-frequency interactions like chat. Indexers need to track channel state
-//! (open, closing, settled) and parse the relevant data from each message type.
+//! (open, closing, settled, disputed) and parse the relevant data from each message type.
 //!
 //! # Channel Types
 //!
 //! - `ChannelOpen` (0xC0): Opens a new channel between parties with a deposit
 //! - `ChannelClose` (0xC1): Initiates cooperative channel close
 //! - `ChannelSettle` (0xC2): Finalizes channel with message hash proof
+//! - `ChannelDispute` (0xC3): Challenges a settlement with proof of a later state
 //!
 //! # Usage
 //!
@@ -31,6 +32,9 @@
 //!     }
 //!     IndexedChannel::Settle(settle) => {
 //!         println!("Channel {} settled", settle.channel_id);
+//!     }
+//!     IndexedChannel::Dispute(dispute) => {
+//!         println!("Dispute on channel {} at seq {}", dispute.channel_id, dispute.dispute_seq);
 //!     }
 //! }
 //! ```
@@ -224,7 +228,77 @@ impl fmt::Display for IndexedChannelSettle {
     }
 }
 
-/// An indexed channel event (open, close, or settle).
+/// An indexed channel dispute event extracted from a memo.
+///
+/// A dispute challenges a settlement by providing proof of a later state.
+/// Used when a counterparty attempts to settle with an outdated state hash.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexedChannelDispute {
+    /// The transaction ID containing this channel dispute.
+    pub tx_id: String,
+
+    /// Block height where this transaction was included.
+    pub block_height: u32,
+
+    /// The channel ID being disputed (32-byte hex string).
+    pub channel_id: String,
+
+    /// The txid of the settlement being disputed (32-byte hex string).
+    pub settlement_txid: String,
+
+    /// The sequence number the disputer claims is more recent.
+    pub dispute_seq: u32,
+
+    /// Merkle root hash proving the higher sequence (32-byte hex string).
+    pub proof_hash: String,
+
+    /// Number of signatures in the dispute proof.
+    pub signature_count: u8,
+
+    /// Protocol version.
+    pub version: u8,
+}
+
+impl IndexedChannelDispute {
+    /// Creates a new indexed channel dispute from parsed data.
+    pub fn new(
+        tx_id: &str,
+        block_height: u32,
+        channel_id: String,
+        settlement_txid: String,
+        dispute_seq: u32,
+        proof_hash: String,
+        signature_count: u8,
+        version: u8,
+    ) -> Self {
+        Self {
+            tx_id: tx_id.to_string(),
+            block_height,
+            channel_id,
+            settlement_txid,
+            dispute_seq,
+            proof_hash,
+            signature_count,
+            version,
+        }
+    }
+}
+
+impl fmt::Display for IndexedChannelDispute {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ChannelDispute {{ tx: {}..., channel: {}..., settlement: {}..., seq: {}, sigs: {} }}",
+            &self.tx_id[..8.min(self.tx_id.len())],
+            &self.channel_id[..8.min(self.channel_id.len())],
+            &self.settlement_txid[..8.min(self.settlement_txid.len())],
+            self.dispute_seq,
+            self.signature_count
+        )
+    }
+}
+
+/// An indexed channel event (open, close, settle, or dispute).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IndexedChannel {
     /// A channel open event.
@@ -233,6 +307,8 @@ pub enum IndexedChannel {
     Close(IndexedChannelClose),
     /// A channel settle event.
     Settle(IndexedChannelSettle),
+    /// A channel dispute event.
+    Dispute(IndexedChannelDispute),
 }
 
 impl IndexedChannel {
@@ -242,6 +318,7 @@ impl IndexedChannel {
             Self::Open(open) => &open.tx_id,
             Self::Close(close) => &close.tx_id,
             Self::Settle(settle) => &settle.tx_id,
+            Self::Dispute(dispute) => &dispute.tx_id,
         }
     }
 
@@ -251,6 +328,7 @@ impl IndexedChannel {
             Self::Open(open) => open.block_height,
             Self::Close(close) => close.block_height,
             Self::Settle(settle) => settle.block_height,
+            Self::Dispute(dispute) => dispute.block_height,
         }
     }
 
@@ -260,6 +338,7 @@ impl IndexedChannel {
             Self::Open(_) => None,
             Self::Close(close) => Some(&close.channel_id),
             Self::Settle(settle) => Some(&settle.channel_id),
+            Self::Dispute(dispute) => Some(&dispute.channel_id),
         }
     }
 
@@ -278,12 +357,18 @@ impl IndexedChannel {
         matches!(self, Self::Settle(_))
     }
 
+    /// Returns true if this is a channel dispute event.
+    pub fn is_dispute(&self) -> bool {
+        matches!(self, Self::Dispute(_))
+    }
+
     /// Returns the event type name.
     pub fn event_type(&self) -> &'static str {
         match self {
             Self::Open(_) => "open",
             Self::Close(_) => "close",
             Self::Settle(_) => "settle",
+            Self::Dispute(_) => "dispute",
         }
     }
 }
@@ -294,6 +379,7 @@ impl fmt::Display for IndexedChannel {
             Self::Open(open) => write!(f, "{}", open),
             Self::Close(close) => write!(f, "{}", close),
             Self::Settle(settle) => write!(f, "{}", settle),
+            Self::Dispute(dispute) => write!(f, "{}", dispute),
         }
     }
 }
@@ -316,6 +402,9 @@ pub enum ChannelIndexError {
     /// Invalid channel settle payload.
     InvalidChannelSettle(String),
 
+    /// Invalid channel dispute payload.
+    InvalidChannelDispute(String),
+
     /// Invalid transaction ID.
     InvalidTxId,
 }
@@ -328,6 +417,7 @@ impl fmt::Display for ChannelIndexError {
             Self::InvalidChannelOpen(msg) => write!(f, "invalid channel open: {}", msg),
             Self::InvalidChannelClose(msg) => write!(f, "invalid channel close: {}", msg),
             Self::InvalidChannelSettle(msg) => write!(f, "invalid channel settle: {}", msg),
+            Self::InvalidChannelDispute(msg) => write!(f, "invalid channel dispute: {}", msg),
             Self::InvalidTxId => write!(f, "invalid transaction ID"),
         }
     }
@@ -344,13 +434,13 @@ impl From<SocialParseError> for ChannelIndexError {
 /// Checks if a memo contains a channel message.
 ///
 /// This is a quick check that only looks at the first byte to determine
-/// if the memo is a channel message (0xC0, 0xC1, or 0xC2).
+/// if the memo is a channel message (0xC0, 0xC1, 0xC2, or 0xC3).
 pub fn is_channel_memo(memo: &Memo) -> bool {
     let bytes = memo.as_bytes();
     if bytes.is_empty() {
         return false;
     }
-    matches!(bytes[0], 0xC0 | 0xC1 | 0xC2)
+    matches!(bytes[0], 0xC0 | 0xC1 | 0xC2 | 0xC3)
 }
 
 /// Returns the channel message type from a memo, if it is a channel message.
@@ -363,6 +453,7 @@ pub fn channel_type_from_memo(memo: &Memo) -> Option<SocialMessageType> {
         0xC0 => Some(SocialMessageType::ChannelOpen),
         0xC1 => Some(SocialMessageType::ChannelClose),
         0xC2 => Some(SocialMessageType::ChannelSettle),
+        0xC3 => Some(SocialMessageType::ChannelDispute),
         _ => None,
     }
 }
@@ -507,6 +598,69 @@ fn parse_channel_settle_payload(
     ))
 }
 
+/// Parses a channel dispute payload.
+///
+/// Format: [channel_id(32)][settlement_txid(32)][dispute_seq(4)][proof_hash(32)][sig_count(1)][sig1(64)]...[sigN(64)]
+fn parse_channel_dispute_payload(
+    payload: &[u8],
+    tx_id: &str,
+    block_height: u32,
+    version: u8,
+) -> Result<IndexedChannelDispute, ChannelIndexError> {
+    // Minimum: channel_id (32) + settlement_txid (32) + dispute_seq (4) + proof_hash (32) + sig_count (1) = 101 bytes
+    // Plus at least one signature (64 bytes) = 165 bytes minimum for a valid dispute
+    if payload.len() < 101 {
+        return Err(ChannelIndexError::InvalidChannelDispute(format!(
+            "payload too short: {} bytes, expected at least 101",
+            payload.len()
+        )));
+    }
+
+    let channel_id = hex::encode(&payload[0..32]);
+    let settlement_txid = hex::encode(&payload[32..64]);
+    let dispute_seq = u32::from_le_bytes(payload[64..68].try_into().map_err(|_| {
+        ChannelIndexError::InvalidChannelDispute("invalid dispute_seq bytes".to_string())
+    })?);
+    let proof_hash = hex::encode(&payload[68..100]);
+    let signature_count = payload[100];
+
+    // Validate signature count is reasonable
+    if signature_count == 0 {
+        return Err(ChannelIndexError::InvalidChannelDispute(
+            "signature count cannot be zero".to_string(),
+        ));
+    }
+
+    if signature_count > 10 {
+        return Err(ChannelIndexError::InvalidChannelDispute(format!(
+            "too many signatures: {}, max 10",
+            signature_count
+        )));
+    }
+
+    // Verify payload has enough bytes for all signatures
+    let expected_len = 101 + (signature_count as usize) * 64;
+    if payload.len() < expected_len {
+        return Err(ChannelIndexError::InvalidChannelDispute(format!(
+            "payload too short for {} signatures: {} bytes, expected {}",
+            signature_count,
+            payload.len(),
+            expected_len
+        )));
+    }
+
+    Ok(IndexedChannelDispute::new(
+        tx_id,
+        block_height,
+        channel_id,
+        settlement_txid,
+        dispute_seq,
+        proof_hash,
+        signature_count,
+        version,
+    ))
+}
+
 /// Parses a channel message from a memo and returns an indexed channel event.
 ///
 /// # Arguments
@@ -517,7 +671,7 @@ fn parse_channel_settle_payload(
 ///
 /// # Returns
 ///
-/// An `IndexedChannel` variant (Open, Close, or Settle), or an error if the
+/// An `IndexedChannel` variant (Open, Close, Settle, or Dispute), or an error if the
 /// memo is not a valid channel message.
 ///
 /// # Example
@@ -528,6 +682,7 @@ fn parse_channel_settle_payload(
 ///     IndexedChannel::Open(open) => println!("Opened with {} parties", open.parties.len()),
 ///     IndexedChannel::Close(close) => println!("Closing channel {}", close.channel_id),
 ///     IndexedChannel::Settle(settle) => println!("Settled channel {}", settle.channel_id),
+///     IndexedChannel::Dispute(dispute) => println!("Disputed channel {}", dispute.channel_id),
 /// }
 /// ```
 pub fn parse_channel_memo(
@@ -563,6 +718,10 @@ pub fn parse_channel_memo(
             let settle = parse_channel_settle_payload(payload, tx_id, block_height, version)?;
             Ok(IndexedChannel::Settle(settle))
         }
+        SocialMessageType::ChannelDispute => {
+            let dispute = parse_channel_dispute_payload(payload, tx_id, block_height, version)?;
+            Ok(IndexedChannel::Dispute(dispute))
+        }
         _ => Err(ChannelIndexError::NotAChannel),
     }
 }
@@ -584,6 +743,9 @@ pub struct BlockChannelStats {
 
     /// Number of channel settle transactions.
     pub channel_settles: u32,
+
+    /// Number of channel dispute transactions.
+    pub channel_disputes: u32,
 
     /// Total deposit amount in opened channels (zatoshis).
     pub total_deposits: u64,
@@ -627,6 +789,12 @@ impl BlockChannelStats {
         self.channel_settles += 1;
     }
 
+    /// Records a channel dispute event.
+    pub fn record_dispute(&mut self) {
+        self.total_channel_txs += 1;
+        self.channel_disputes += 1;
+    }
+
     /// Records an indexed channel event.
     pub fn record_channel(&mut self, channel: &IndexedChannel) {
         match channel {
@@ -639,6 +807,9 @@ impl BlockChannelStats {
             IndexedChannel::Settle(_) => {
                 self.record_settle();
             }
+            IndexedChannel::Dispute(_) => {
+                self.record_dispute();
+            }
         }
     }
 }
@@ -647,12 +818,13 @@ impl fmt::Display for BlockChannelStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Block {} channel stats: {} txs ({} opens, {} closes, {} settles), deposits: {} zatoshis",
+            "Block {} channel stats: {} txs ({} opens, {} closes, {} settles, {} disputes), deposits: {} zatoshis",
             self.block_height,
             self.total_channel_txs,
             self.channel_opens,
             self.channel_closes,
             self.channel_settles,
+            self.channel_disputes,
             self.total_deposits
         )
     }
@@ -963,6 +1135,242 @@ mod tests {
     }
 
     // ========================================================================
+    // Tests for channel dispute parsing (0xC3)
+    // ========================================================================
+
+    /// Creates a channel dispute payload.
+    /// Format: [channel_id(32)][settlement_txid(32)][dispute_seq(4)][proof_hash(32)][sig_count(1)][sig1(64)]...[sigN(64)]
+    fn create_channel_dispute_payload(
+        channel_id: &[u8; 32],
+        settlement_txid: &[u8; 32],
+        dispute_seq: u32,
+        proof_hash: &[u8; 32],
+        signature_count: u8,
+    ) -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(channel_id);
+        payload.extend_from_slice(settlement_txid);
+        payload.extend_from_slice(&dispute_seq.to_le_bytes());
+        payload.extend_from_slice(proof_hash);
+        payload.push(signature_count);
+        // Add dummy signatures (64 bytes each)
+        for i in 0..signature_count {
+            payload.extend_from_slice(&[0x11 + i; 64]);
+        }
+        payload
+    }
+
+    #[test]
+    fn test_parse_channel_dispute() {
+        let _init_guard = zebra_test::init();
+
+        let channel_id = [0xAB; 32];
+        let settlement_txid = [0xCD; 32];
+        let proof_hash = [0xEF; 32];
+        let dispute_seq: u32 = 150;
+        let signature_count: u8 = 1;
+
+        let payload = create_channel_dispute_payload(
+            &channel_id,
+            &settlement_txid,
+            dispute_seq,
+            &proof_hash,
+            signature_count,
+        );
+        let memo = create_social_memo(SocialMessageType::ChannelDispute, &payload);
+        let result = parse_channel_memo(&memo, "txid123", 5000);
+
+        assert!(result.is_ok());
+        let channel = result.unwrap();
+
+        assert!(channel.is_dispute());
+        assert_eq!(channel.event_type(), "dispute");
+        assert_eq!(channel.tx_id(), "txid123");
+        assert_eq!(channel.block_height(), 5000);
+        assert_eq!(channel.channel_id(), Some(hex::encode(&channel_id).as_str()));
+
+        if let IndexedChannel::Dispute(dispute) = channel {
+            assert_eq!(dispute.channel_id, hex::encode(&channel_id));
+            assert_eq!(dispute.settlement_txid, hex::encode(&settlement_txid));
+            assert_eq!(dispute.dispute_seq, dispute_seq);
+            assert_eq!(dispute.proof_hash, hex::encode(&proof_hash));
+            assert_eq!(dispute.signature_count, signature_count);
+            assert_eq!(dispute.version, SOCIAL_PROTOCOL_VERSION);
+        } else {
+            panic!("Expected IndexedChannel::Dispute");
+        }
+    }
+
+    #[test]
+    fn test_parse_channel_dispute_multiple_signatures() {
+        let _init_guard = zebra_test::init();
+
+        let channel_id = [0x11; 32];
+        let settlement_txid = [0x22; 32];
+        let proof_hash = [0x33; 32];
+        let dispute_seq: u32 = 200;
+        let signature_count: u8 = 3;
+
+        let payload = create_channel_dispute_payload(
+            &channel_id,
+            &settlement_txid,
+            dispute_seq,
+            &proof_hash,
+            signature_count,
+        );
+        let memo = create_social_memo(SocialMessageType::ChannelDispute, &payload);
+        let result = parse_channel_memo(&memo, "txid456", 6000);
+
+        assert!(result.is_ok());
+        let channel = result.unwrap();
+
+        if let IndexedChannel::Dispute(dispute) = channel {
+            assert_eq!(dispute.signature_count, 3);
+        } else {
+            panic!("Expected IndexedChannel::Dispute");
+        }
+    }
+
+    #[test]
+    fn test_parse_channel_dispute_short_payload() {
+        let _init_guard = zebra_test::init();
+
+        // Only 90 bytes instead of minimum 101
+        let short_payload = vec![0xAB; 90];
+        let memo = create_social_memo(SocialMessageType::ChannelDispute, &short_payload);
+        let result = parse_channel_memo(&memo, "txid", 1000);
+
+        assert!(matches!(
+            result,
+            Err(ChannelIndexError::InvalidChannelDispute(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_channel_dispute_zero_signatures() {
+        let _init_guard = zebra_test::init();
+
+        let channel_id = [0xAA; 32];
+        let settlement_txid = [0xBB; 32];
+        let proof_hash = [0xCC; 32];
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&channel_id);
+        payload.extend_from_slice(&settlement_txid);
+        payload.extend_from_slice(&100u32.to_le_bytes());
+        payload.extend_from_slice(&proof_hash);
+        payload.push(0); // Zero signatures - invalid!
+
+        let memo = create_social_memo(SocialMessageType::ChannelDispute, &payload);
+        let result = parse_channel_memo(&memo, "txid", 1000);
+
+        assert!(matches!(
+            result,
+            Err(ChannelIndexError::InvalidChannelDispute(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_channel_dispute_too_many_signatures() {
+        let _init_guard = zebra_test::init();
+
+        let channel_id = [0xAA; 32];
+        let settlement_txid = [0xBB; 32];
+        let proof_hash = [0xCC; 32];
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&channel_id);
+        payload.extend_from_slice(&settlement_txid);
+        payload.extend_from_slice(&100u32.to_le_bytes());
+        payload.extend_from_slice(&proof_hash);
+        payload.push(11); // 11 signatures - exceeds max of 10!
+        // Add dummy signatures to make payload large enough
+        for _ in 0..11 {
+            payload.extend_from_slice(&[0xFF; 64]);
+        }
+
+        let memo = create_social_memo(SocialMessageType::ChannelDispute, &payload);
+        let result = parse_channel_memo(&memo, "txid", 1000);
+
+        assert!(matches!(
+            result,
+            Err(ChannelIndexError::InvalidChannelDispute(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_channel_dispute_truncated_signatures() {
+        let _init_guard = zebra_test::init();
+
+        let channel_id = [0xAA; 32];
+        let settlement_txid = [0xBB; 32];
+        let proof_hash = [0xCC; 32];
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&channel_id);
+        payload.extend_from_slice(&settlement_txid);
+        payload.extend_from_slice(&100u32.to_le_bytes());
+        payload.extend_from_slice(&proof_hash);
+        payload.push(2); // Claims 2 signatures
+        payload.extend_from_slice(&[0xFF; 64]); // But only provides 1
+
+        let memo = create_social_memo(SocialMessageType::ChannelDispute, &payload);
+        let result = parse_channel_memo(&memo, "txid", 1000);
+
+        assert!(matches!(
+            result,
+            Err(ChannelIndexError::InvalidChannelDispute(_))
+        ));
+    }
+
+    #[test]
+    fn test_is_channel_memo_includes_dispute() {
+        let _init_guard = zebra_test::init();
+
+        // 0xC3 should be recognized as a channel memo
+        let mut bytes = vec![0xC3, SOCIAL_PROTOCOL_VERSION];
+        bytes.extend_from_slice(&[0; 32]); // Some dummy payload
+        let memo = create_memo(&bytes);
+        assert!(is_channel_memo(&memo));
+    }
+
+    #[test]
+    fn test_channel_type_from_memo_dispute() {
+        let _init_guard = zebra_test::init();
+
+        let mut bytes = vec![0xC3, SOCIAL_PROTOCOL_VERSION];
+        bytes.extend_from_slice(&[0; 32]); // Some dummy payload
+        let memo = create_memo(&bytes);
+
+        let msg_type = channel_type_from_memo(&memo);
+        assert_eq!(msg_type, Some(SocialMessageType::ChannelDispute));
+    }
+
+    #[test]
+    fn test_indexed_channel_dispute_display() {
+        let _init_guard = zebra_test::init();
+
+        let dispute = IndexedChannelDispute::new(
+            "txid123456789",
+            5000,
+            "channel1234567890abcdef".to_string(),
+            "settle1234567890abcdef".to_string(),
+            150,
+            "proof1234567890abcdef".to_string(),
+            2,
+            1,
+        );
+
+        let display = format!("{}", dispute);
+        assert!(display.contains("ChannelDispute"));
+        assert!(display.contains("txid1234"));
+        assert!(display.contains("channel1"));
+        assert!(display.contains("settle12"));
+        assert!(display.contains("seq: 150"));
+        assert!(display.contains("sigs: 2"));
+    }
+
+    // ========================================================================
     // Tests for IndexedChannel methods
     // ========================================================================
 
@@ -985,6 +1393,7 @@ mod tests {
         assert!(open.is_open());
         assert!(!open.is_close());
         assert!(!open.is_settle());
+        assert!(!open.is_dispute());
         assert_eq!(open.event_type(), "open");
 
         let close = IndexedChannel::Close(IndexedChannelClose::new(
@@ -1001,6 +1410,7 @@ mod tests {
         assert!(!close.is_open());
         assert!(close.is_close());
         assert!(!close.is_settle());
+        assert!(!close.is_dispute());
         assert_eq!(close.event_type(), "close");
 
         let settle = IndexedChannel::Settle(IndexedChannelSettle::new(
@@ -1018,7 +1428,28 @@ mod tests {
         assert!(!settle.is_open());
         assert!(!settle.is_close());
         assert!(settle.is_settle());
+        assert!(!settle.is_dispute());
         assert_eq!(settle.event_type(), "settle");
+
+        let dispute = IndexedChannel::Dispute(IndexedChannelDispute::new(
+            "txid4",
+            4000,
+            "ghi789".to_string(),
+            "settle_xyz".to_string(),
+            300,
+            "proof_abc".to_string(),
+            2,
+            1,
+        ));
+
+        assert_eq!(dispute.tx_id(), "txid4");
+        assert_eq!(dispute.block_height(), 4000);
+        assert_eq!(dispute.channel_id(), Some("ghi789"));
+        assert!(!dispute.is_open());
+        assert!(!dispute.is_close());
+        assert!(!dispute.is_settle());
+        assert!(dispute.is_dispute());
+        assert_eq!(dispute.event_type(), "dispute");
     }
 
     // ========================================================================
@@ -1130,12 +1561,14 @@ mod tests {
         stats.record_open(3, 750_000);
         stats.record_close();
         stats.record_settle();
+        stats.record_dispute();
 
         assert_eq!(stats.block_height, 10000);
-        assert_eq!(stats.total_channel_txs, 4);
+        assert_eq!(stats.total_channel_txs, 5);
         assert_eq!(stats.channel_opens, 2);
         assert_eq!(stats.channel_closes, 1);
         assert_eq!(stats.channel_settles, 1);
+        assert_eq!(stats.channel_disputes, 1);
         assert_eq!(stats.total_deposits, 1_250_000);
     }
 
@@ -1174,10 +1607,23 @@ mod tests {
         ));
         stats.record_channel(&settle);
 
-        assert_eq!(stats.total_channel_txs, 3);
+        let dispute = IndexedChannel::Dispute(IndexedChannelDispute::new(
+            "tx4",
+            11000,
+            "ch3".to_string(),
+            "settle_txid".to_string(),
+            150,
+            "proof_hash".to_string(),
+            1,
+            1,
+        ));
+        stats.record_channel(&dispute);
+
+        assert_eq!(stats.total_channel_txs, 4);
         assert_eq!(stats.channel_opens, 1);
         assert_eq!(stats.channel_closes, 1);
         assert_eq!(stats.channel_settles, 1);
+        assert_eq!(stats.channel_disputes, 1);
         assert_eq!(stats.total_deposits, 600_000);
     }
 

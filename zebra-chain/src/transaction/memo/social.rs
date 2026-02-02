@@ -27,7 +27,7 @@
 //! - **Media (0x60)**: Media attachments
 //! - **Polls (0x70-0x71)**: Poll creation and voting
 //! - **Governance (0xE0-0xE1)**: On-chain voting and proposals
-//! - **Channels (0xC0-0xC2)**: Layer-2 social channels for high-frequency messaging
+//! - **Channels (0xC0-0xC3)**: Layer-2 social channels for high-frequency messaging and disputes
 //! - **Moderation (0xD0-0xD1)**: Trust/reputation and content reports
 //! - **Recovery (0xF0-0xF6)**: Key recovery, social recovery, and multi-sig identity mechanisms
 
@@ -207,6 +207,20 @@ pub enum SocialMessageType {
     /// Format: [channel_id(32)][final_seq(4)][message_hash(32)]
     ChannelSettle = 0xC2,
 
+    /// Channel dispute (0xC3).
+    ///
+    /// Disputes a channel settlement by providing proof of a later state.
+    /// Used when a party attempts to settle with an outdated state hash.
+    /// The disputer must provide signed messages proving a higher sequence number.
+    /// Format: [channel_id(32)][settlement_txid(32)][dispute_seq(4)][proof_hash(32)][sig_count(1)][sig1(64)]...[sigN(64)]
+    /// - channel_id: The 32-byte channel identifier
+    /// - settlement_txid: The txid of the settlement being disputed
+    /// - dispute_seq: The sequence number the disputer claims is more recent
+    /// - proof_hash: Merkle root of messages proving the higher sequence
+    /// - sig_count: Number of signatures (from channel parties)
+    /// - sigN: Schnorr signatures (64 bytes each) from parties attesting to the state
+    ChannelDispute = 0xC3,
+
     /// Governance vote on a proposal (0xE0).
     ///
     /// Cast a vote (yes/no/abstain) on an existing governance proposal.
@@ -334,6 +348,7 @@ impl SocialMessageType {
             Self::ChannelOpen => "ChannelOpen",
             Self::ChannelClose => "ChannelClose",
             Self::ChannelSettle => "ChannelSettle",
+            Self::ChannelDispute => "ChannelDispute",
             Self::GovernanceVote => "GovernanceVote",
             Self::GovernanceProposal => "GovernanceProposal",
             Self::RecoveryConfig => "RecoveryConfig",
@@ -358,7 +373,7 @@ impl SocialMessageType {
     /// Channel messages are used for Layer-2 social channels that enable
     /// high-frequency off-chain messaging (chat, group DM, thread replies).
     pub const fn is_channel(&self) -> bool {
-        matches!(self, Self::ChannelOpen | Self::ChannelClose | Self::ChannelSettle)
+        matches!(self, Self::ChannelOpen | Self::ChannelClose | Self::ChannelSettle | Self::ChannelDispute)
     }
 
     /// Returns true if this message type involves value transfer.
@@ -464,6 +479,7 @@ impl TryFrom<u8> for SocialMessageType {
             0xC0 => Ok(Self::ChannelOpen),
             0xC1 => Ok(Self::ChannelClose),
             0xC2 => Ok(Self::ChannelSettle),
+            0xC3 => Ok(Self::ChannelDispute),
             0xE0 => Ok(Self::GovernanceVote),
             0xE1 => Ok(Self::GovernanceProposal),
             0xF0 => Ok(Self::RecoveryConfig),
@@ -2904,11 +2920,13 @@ mod tests {
         assert_eq!(SocialMessageType::ChannelOpen.as_u8(), 0xC0);
         assert_eq!(SocialMessageType::ChannelClose.as_u8(), 0xC1);
         assert_eq!(SocialMessageType::ChannelSettle.as_u8(), 0xC2);
+        assert_eq!(SocialMessageType::ChannelDispute.as_u8(), 0xC3);
 
         // Verify names
         assert_eq!(SocialMessageType::ChannelOpen.name(), "ChannelOpen");
         assert_eq!(SocialMessageType::ChannelClose.name(), "ChannelClose");
         assert_eq!(SocialMessageType::ChannelSettle.name(), "ChannelSettle");
+        assert_eq!(SocialMessageType::ChannelDispute.name(), "ChannelDispute");
     }
 
     #[test]
@@ -3014,6 +3032,115 @@ mod tests {
     }
 
     #[test]
+    fn channel_dispute_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // ChannelDispute format: [channel_id(32)][settlement_txid(32)][dispute_seq(4)][proof_hash(32)][sig_count(1)][sig1(64)]
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&[0xAB; 32]); // channel_id (32 bytes)
+        payload.extend_from_slice(&[0xCD; 32]); // settlement_txid (32 bytes)
+
+        let dispute_seq: u32 = 0x01020304; // Non-zero to avoid memo trimming
+        payload.extend_from_slice(&dispute_seq.to_le_bytes());
+
+        payload.extend_from_slice(&[0xEF; 32]); // proof_hash (merkle root of messages proving higher seq)
+
+        payload.push(1); // sig_count = 1 signature
+        payload.extend_from_slice(&[0x11; 64]); // sig1 (Schnorr signature, 64 bytes)
+
+        let msg = SocialMessage::new(
+            SocialMessageType::ChannelDispute,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xC3); // ChannelDispute type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::ChannelDispute);
+        assert!(decoded.msg_type().is_channel());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn channel_dispute_multiple_signatures() {
+        let _init_guard = zebra_test::init();
+
+        // Test dispute with multiple signatures (2-of-3 channel parties signing)
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&[0xAA; 32]); // channel_id
+        payload.extend_from_slice(&[0xBB; 32]); // settlement_txid
+
+        let dispute_seq: u32 = 150;
+        payload.extend_from_slice(&dispute_seq.to_le_bytes());
+
+        payload.extend_from_slice(&[0xCC; 32]); // proof_hash
+
+        payload.push(2); // sig_count = 2 signatures
+        payload.extend_from_slice(&[0x22; 64]); // sig1
+        payload.extend_from_slice(&[0x33; 64]); // sig2
+
+        let msg = SocialMessage::new(
+            SocialMessageType::ChannelDispute,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::ChannelDispute);
+        assert!(decoded.msg_type().is_channel());
+
+        // Verify payload structure
+        let p = decoded.payload();
+        assert_eq!(p.len(), 32 + 32 + 4 + 32 + 1 + 64 + 64); // 229 bytes
+        assert_eq!(p[100], 2); // sig_count at offset 100
+    }
+
+    #[test]
+    fn channel_dispute_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Dispute messages can be batched (e.g., dispute + post announcement)
+        let actions = vec![
+            SocialMessage::new(
+                SocialMessageType::ChannelDispute,
+                SOCIAL_PROTOCOL_VERSION,
+                {
+                    let mut payload = vec![0xDD; 32]; // channel_id
+                    payload.extend_from_slice(&[0xEE; 32]); // settlement_txid
+                    payload.extend_from_slice(&100u32.to_le_bytes()); // dispute_seq
+                    payload.extend_from_slice(&[0xFF; 32]); // proof_hash
+                    payload.push(1);
+                    payload.extend_from_slice(&[0x44; 64]); // sig
+                    payload
+                },
+            ),
+            SocialMessage::new(
+                SocialMessageType::Post,
+                SOCIAL_PROTOCOL_VERSION,
+                b"Disputed invalid channel settlement!".to_vec(),
+            ),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("valid batch");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should decode");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded.actions()[0].msg_type(), SocialMessageType::ChannelDispute);
+        assert!(decoded.actions()[0].msg_type().is_channel());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
     fn channel_types_in_batch() {
         let _init_guard = zebra_test::init();
 
@@ -3059,21 +3186,25 @@ mod tests {
         assert!(!SocialMessageType::ChannelOpen.is_value_transfer());
         assert!(!SocialMessageType::ChannelClose.is_value_transfer());
         assert!(!SocialMessageType::ChannelSettle.is_value_transfer());
+        assert!(!SocialMessageType::ChannelDispute.is_value_transfer());
 
         // Channel types are not attention market
         assert!(!SocialMessageType::ChannelOpen.is_attention_market());
         assert!(!SocialMessageType::ChannelClose.is_attention_market());
         assert!(!SocialMessageType::ChannelSettle.is_attention_market());
+        assert!(!SocialMessageType::ChannelDispute.is_attention_market());
 
         // Channel types are not governance
         assert!(!SocialMessageType::ChannelOpen.is_governance());
         assert!(!SocialMessageType::ChannelClose.is_governance());
         assert!(!SocialMessageType::ChannelSettle.is_governance());
+        assert!(!SocialMessageType::ChannelDispute.is_governance());
 
         // Channel types are not batch
         assert!(!SocialMessageType::ChannelOpen.is_batch());
         assert!(!SocialMessageType::ChannelClose.is_batch());
         assert!(!SocialMessageType::ChannelSettle.is_batch());
+        assert!(!SocialMessageType::ChannelDispute.is_batch());
     }
 
     #[test]
@@ -3084,6 +3215,7 @@ mod tests {
         assert!(SocialMessageType::ChannelOpen.is_channel());
         assert!(SocialMessageType::ChannelClose.is_channel());
         assert!(SocialMessageType::ChannelSettle.is_channel());
+        assert!(SocialMessageType::ChannelDispute.is_channel());
 
         // Non-channel types should return false
         assert!(!SocialMessageType::Post.is_channel());
@@ -3099,6 +3231,7 @@ mod tests {
         assert_eq!(format!("{}", SocialMessageType::ChannelOpen), "ChannelOpen");
         assert_eq!(format!("{}", SocialMessageType::ChannelClose), "ChannelClose");
         assert_eq!(format!("{}", SocialMessageType::ChannelSettle), "ChannelSettle");
+        assert_eq!(format!("{}", SocialMessageType::ChannelDispute), "ChannelDispute");
     }
 
     #[test]
@@ -3977,6 +4110,7 @@ mod tests {
             SocialMessageType::ChannelOpen,
             SocialMessageType::ChannelClose,
             SocialMessageType::ChannelSettle,
+            SocialMessageType::ChannelDispute,
             SocialMessageType::GovernanceVote,
             SocialMessageType::GovernanceProposal,
             SocialMessageType::RecoveryConfig,
@@ -3988,7 +4122,7 @@ mod tests {
             SocialMessageType::Report,
         ];
 
-        assert_eq!(all_types.len(), 33);
+        assert_eq!(all_types.len(), 34);
 
         // Verify all can be parsed from their byte values
         for msg_type in &all_types {
