@@ -1833,12 +1833,20 @@ cd zashi-android && ./gradlew test
 - Privacy modes: full_mirror, selective (default), read_only, private
 - 94 comprehensive tests covering nostr_types (28), config (13), models (12), identity (24), protocol_mapper (17)
 
-#### 6.5.4 ActivityPub/Fediverse Bridge
-- [ ] Actor representation (@bs1...@botcash.social)
-- [ ] Federation protocol handlers
-- [ ] Inbox/Outbox implementation
-- [ ] WebFinger support
-- [ ] Required Tests: Federation messages, actor discovery
+#### 6.5.4 ActivityPub/Fediverse Bridge ✅
+- [x] Actor representation (@bs1...@botcash.social)
+- [x] Federation protocol handlers
+- [x] Inbox/Outbox implementation
+- [x] WebFinger support
+- [x] Required Tests: Federation messages, actor discovery
+- Implementation: `bridges/activitypub/` - Full ActivityPub/ActivityStreams bridge
+- Actor identity: Botcash address → @bs1address@botcash.social (20-char local part truncation)
+- WebFinger discovery via /.well-known/webfinger
+- HTTP Signatures (RSA-SHA256) for federation authentication
+- Protocol mapping: Create(Note) ↔ post, Follow ↔ follow, Like ↔ upvote, Announce ↔ boost
+- Inbox/Outbox handlers with signature verification
+- Privacy modes: full_mirror, selective (default), read_only, private
+- 86 comprehensive tests covering activitypub_types (30), config (9), models (12), identity (16), protocol_mapper (17), federation (2)
 
 ---
 
