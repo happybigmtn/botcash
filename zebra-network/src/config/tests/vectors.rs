@@ -219,3 +219,21 @@ fn funding_streams_default_values() {
         1
     );
 }
+
+/// Test that Botcash network configuration works correctly.
+#[test]
+fn botcash_network_config() {
+    let _init_guard = zebra_test::init();
+
+    use zebra_chain::parameters::{Network, NetworkKind};
+
+    // Botcash network should use port 8533
+    let config: Config = toml::from_str("network = 'Botcash'").unwrap();
+    assert_eq!(config.listen_addr.to_string(), "[::]:8533");
+
+    // Verify network kind mapping
+    assert_eq!(config.network.kind(), NetworkKind::Botcash);
+
+    // Verify it's the Botcash variant
+    assert!(matches!(config.network, Network::Botcash));
+}

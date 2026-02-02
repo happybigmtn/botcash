@@ -743,8 +743,7 @@ impl<'de> Deserialize<'de> for Config {
         let network = match (network_kind, testnet_parameters) {
             (NetworkKind::Mainnet, _) => Network::Mainnet,
             // Botcash is a standalone network like Mainnet
-            // TODO: Implement Network::Botcash variant (P1.2)
-            (NetworkKind::Botcash, _) => Network::Mainnet, // Temporary: will be Network::Botcash
+            (NetworkKind::Botcash, _) => Network::Botcash,
             (NetworkKind::Testnet, None) => Network::new_default_testnet(),
             (NetworkKind::Regtest, testnet_parameters) => {
                 let configured_activation_heights = testnet_parameters
