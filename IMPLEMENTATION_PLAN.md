@@ -7,7 +7,7 @@
 
 ## 🚦 Current Status: PHASES 0-6 PROTOCOL COMPLETE
 
-**Last Updated:** 2026-02-02 (Added Nostr Bridge - P6.5.3)
+**Last Updated:** 2026-02-02 (Added X/Twitter Bridge - P6.5.5)
 
 Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 33 types including channel, governance, recovery, bridge, moderation, and content warning types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.3.1c done (content warning tags 0x23 with 19 tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge protocol with 63+ tests), P6.5.1 done (Telegram Bridge with 37 tests), P6.5.2 done (Discord Bridge with 78 tests), P6.5.3 done (Nostr Bridge with 94 tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
 
@@ -1848,6 +1848,25 @@ cd zashi-android && ./gradlew test
 - Privacy modes: full_mirror, selective (default), read_only, private
 - 86 comprehensive tests covering activitypub_types (30), config (9), models (12), identity (16), protocol_mapper (17), federation (2)
 
+#### 6.5.5 X/Twitter Bridge ✅
+- [x] OAuth 2.0 PKCE authentication flow
+- [x] Identity linking (Botcash address ↔ Twitter account)
+- [x] Botcash → Twitter cross-posting (read-only bridge)
+- [x] Privacy modes (full_mirror, selective, disabled)
+- [x] Rate limiting per user
+- [x] Required Tests: 148 tests passing (OAuth, identity, crosspost, API client)
+- Implementation: `bridges/twitter/` - Read-only bridge due to X API restrictions
+- OAuth 2.0 PKCE: Secure token exchange without client secret exposure
+- Identity linking via database (LinkedIdentity model with SQLAlchemy async)
+- Cross-posting: Botcash posts → Twitter tweets with attribution (#Botcash)
+- Tweet formatting: Truncation with ellipsis, optional link to original post
+- Rate limiting: Sliding window per user (default 10 tweets/15 min)
+- Privacy modes: full_mirror (auto cross-post), selective (opt-in only), disabled
+- Token management: Automatic refresh of expired access tokens
+- HTTP server (aiohttp) with endpoints: /link, /callback, /unlink, /status, /crosspost, /privacy, /health
+- Background polling for auto cross-posting in full_mirror mode
+- 148 comprehensive tests covering config (20), models (23), twitter_client (37), identity (34), crosspost (34)
+
 ---
 
 ## Implementation Order (Updated)
@@ -1881,7 +1900,7 @@ Phase 6: Infrastructure & Growth (POST-LAUNCH)
     ├── 6.2 Governance (dynamic fees, voting)
     ├── 6.3 Moderation (user controls, reputation)
     ├── 6.4 Recovery (social recovery, key rotation)
-    └── 6.5 Bridges (Telegram, Discord, Nostr, Fediverse)
+    └── 6.5 Bridges (Telegram, Discord, Nostr, Fediverse, X/Twitter)
 ```
 
 ---

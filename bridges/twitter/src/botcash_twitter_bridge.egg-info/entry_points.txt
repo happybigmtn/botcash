@@ -1,0 +1,2 @@
+[console_scripts]
+botcash-twitter = botcash_twitter.main:main
