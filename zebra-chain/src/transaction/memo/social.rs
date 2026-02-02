@@ -20,7 +20,7 @@
 //! The protocol defines 16 core message types organized by category:
 //!
 //! - **Profile (0x10)**: Agent/user metadata
-//! - **Content (0x20-0x22)**: Posts, comments, and upvotes
+//! - **Content (0x20-0x23)**: Posts, comments, upvotes, and content warnings
 //! - **Social (0x30-0x31)**: Follow/unfollow actions
 //! - **Messaging (0x40-0x41)**: Private and group DMs
 //! - **Value (0x50-0x54)**: Tips, bounties, attention boosts, and credits
@@ -92,6 +92,29 @@ pub enum SocialMessageType {
     ///
     /// The transaction value serves as the upvote weight.
     Upvote = 0x22,
+
+    /// Content warning (0x23).
+    ///
+    /// Applied by content authors to flag sensitive content.
+    /// Wallets can use these flags to blur/hide/collapse content based on user preferences.
+    /// Format: [flags(2)][custom_warning_len(1)][custom_warning]
+    /// - flags: Bitfield of ContentWarningFlags (2 bytes, little-endian)
+    /// - custom_warning_len: Length of optional custom warning text (0-255)
+    /// - custom_warning: UTF-8 custom warning message (if len > 0)
+    ///
+    /// Standard flags (bit positions):
+    /// - bit 0 (0x0001): NSFW - Adult/sexual content
+    /// - bit 1 (0x0002): Violence - Graphic violence
+    /// - bit 2 (0x0004): Spoiler - Plot spoilers
+    /// - bit 3 (0x0008): Disturbing - Emotionally disturbing content
+    /// - bit 4 (0x0010): Medical - Graphic medical content
+    /// - bit 5 (0x0020): Flashing - Flashing lights/photosensitive
+    /// - bit 6 (0x0040): Audio - Loud or sudden audio
+    /// - bit 7 (0x0080): Politics - Political content
+    /// - bit 8 (0x0100): Religion - Religious content
+    /// - bit 9 (0x0200): Drugs - Drug-related content
+    /// - bits 10-15: Reserved for future use
+    ContentWarning = 0x23,
 
     /// Subscribe to a user's content (0x30).
     ///
@@ -344,6 +367,7 @@ impl SocialMessageType {
             Self::Post => "Post",
             Self::Comment => "Comment",
             Self::Upvote => "Upvote",
+            Self::ContentWarning => "ContentWarning",
             Self::Follow => "Follow",
             Self::Unfollow => "Unfollow",
             Self::Dm => "DM",
@@ -405,6 +429,24 @@ impl SocialMessageType {
                 | Self::CreditClaim
                 | Self::Upvote
         )
+    }
+
+    /// Returns true if this is a content message type.
+    ///
+    /// Content messages include posts, comments, upvotes, and content warnings.
+    pub const fn is_content(&self) -> bool {
+        matches!(
+            self,
+            Self::Post | Self::Comment | Self::Upvote | Self::ContentWarning
+        )
+    }
+
+    /// Returns true if this is a content warning message.
+    ///
+    /// Content warnings are used by authors to flag sensitive content,
+    /// allowing readers to filter based on their preferences.
+    pub const fn is_content_warning(&self) -> bool {
+        matches!(self, Self::ContentWarning)
     }
 
     /// Returns true if this is an attention market message type.
@@ -486,6 +528,7 @@ impl TryFrom<u8> for SocialMessageType {
             0x20 => Ok(Self::Post),
             0x21 => Ok(Self::Comment),
             0x22 => Ok(Self::Upvote),
+            0x23 => Ok(Self::ContentWarning),
             0x30 => Ok(Self::Follow),
             0x31 => Ok(Self::Unfollow),
             0x40 => Ok(Self::Dm),
@@ -606,6 +649,436 @@ impl fmt::Display for SocialParseError {
 }
 
 impl std::error::Error for SocialParseError {}
+
+// ==================== Content Warning Types ====================
+
+/// Bitfield flags for standard content warning categories.
+///
+/// These flags are used by content authors to voluntarily mark their posts
+/// with warnings, allowing readers to filter or blur content based on their
+/// preferences. Multiple flags can be combined using bitwise OR.
+///
+/// # Wire Format
+///
+/// Flags are encoded as a 2-byte little-endian integer in ContentWarning messages.
+///
+/// # Example
+///
+/// ```ignore
+/// let flags = ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE;
+/// assert!(flags.contains(ContentWarningFlags::NSFW));
+/// assert!(flags.contains(ContentWarningFlags::VIOLENCE));
+/// assert!(!flags.contains(ContentWarningFlags::SPOILER));
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct ContentWarningFlags(u16);
+
+impl ContentWarningFlags {
+    /// No content warnings (empty flags).
+    pub const NONE: Self = Self(0x0000);
+
+    /// Adult/sexual content (NSFW).
+    /// Bit 0 (0x0001).
+    pub const NSFW: Self = Self(0x0001);
+
+    /// Graphic violence.
+    /// Bit 1 (0x0002).
+    pub const VIOLENCE: Self = Self(0x0002);
+
+    /// Plot spoilers (movies, TV shows, books, games).
+    /// Bit 2 (0x0004).
+    pub const SPOILER: Self = Self(0x0004);
+
+    /// Emotionally disturbing content.
+    /// Bit 3 (0x0008).
+    pub const DISTURBING: Self = Self(0x0008);
+
+    /// Graphic medical content (surgery, injuries).
+    /// Bit 4 (0x0010).
+    pub const MEDICAL: Self = Self(0x0010);
+
+    /// Flashing lights (photosensitive warning).
+    /// Bit 5 (0x0020).
+    pub const FLASHING: Self = Self(0x0020);
+
+    /// Loud or sudden audio.
+    /// Bit 6 (0x0040).
+    pub const AUDIO: Self = Self(0x0040);
+
+    /// Political content.
+    /// Bit 7 (0x0080).
+    pub const POLITICS: Self = Self(0x0080);
+
+    /// Religious content.
+    /// Bit 8 (0x0100).
+    pub const RELIGION: Self = Self(0x0100);
+
+    /// Drug-related content.
+    /// Bit 9 (0x0200).
+    pub const DRUGS: Self = Self(0x0200);
+
+    /// All standard flags (bits 0-9).
+    /// Reserved bits (10-15) are not included.
+    pub const ALL_STANDARD: Self = Self(0x03FF);
+
+    /// Creates a new ContentWarningFlags from raw bits.
+    #[inline]
+    pub const fn from_bits(bits: u16) -> Self {
+        Self(bits)
+    }
+
+    /// Returns the raw bits of these flags.
+    #[inline]
+    pub const fn bits(&self) -> u16 {
+        self.0
+    }
+
+    /// Returns true if no flags are set.
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    /// Returns true if these flags contain all the flags in `other`.
+    #[inline]
+    pub const fn contains(&self, other: Self) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    /// Returns the union of these flags and `other`.
+    #[inline]
+    pub const fn union(&self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// Returns the intersection of these flags and `other`.
+    #[inline]
+    pub const fn intersection(&self, other: Self) -> Self {
+        Self(self.0 & other.0)
+    }
+
+    /// Returns a list of the individual flags that are set.
+    pub fn iter_flags(&self) -> impl Iterator<Item = Self> + '_ {
+        [
+            Self::NSFW,
+            Self::VIOLENCE,
+            Self::SPOILER,
+            Self::DISTURBING,
+            Self::MEDICAL,
+            Self::FLASHING,
+            Self::AUDIO,
+            Self::POLITICS,
+            Self::RELIGION,
+            Self::DRUGS,
+        ]
+        .into_iter()
+        .filter(|flag| self.contains(*flag))
+    }
+
+    /// Returns human-readable names for all set flags.
+    pub fn names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        if self.contains(Self::NSFW) {
+            names.push("NSFW");
+        }
+        if self.contains(Self::VIOLENCE) {
+            names.push("Violence");
+        }
+        if self.contains(Self::SPOILER) {
+            names.push("Spoiler");
+        }
+        if self.contains(Self::DISTURBING) {
+            names.push("Disturbing");
+        }
+        if self.contains(Self::MEDICAL) {
+            names.push("Medical");
+        }
+        if self.contains(Self::FLASHING) {
+            names.push("Flashing");
+        }
+        if self.contains(Self::AUDIO) {
+            names.push("Audio");
+        }
+        if self.contains(Self::POLITICS) {
+            names.push("Politics");
+        }
+        if self.contains(Self::RELIGION) {
+            names.push("Religion");
+        }
+        if self.contains(Self::DRUGS) {
+            names.push("Drugs");
+        }
+        names
+    }
+
+    /// Encodes the flags as 2 bytes (little-endian).
+    #[inline]
+    pub fn encode(&self) -> [u8; 2] {
+        self.0.to_le_bytes()
+    }
+
+    /// Decodes flags from 2 bytes (little-endian).
+    #[inline]
+    pub fn decode(bytes: [u8; 2]) -> Self {
+        Self(u16::from_le_bytes(bytes))
+    }
+}
+
+impl std::ops::BitOr for ContentWarningFlags {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        self.union(rhs)
+    }
+}
+
+impl std::ops::BitAnd for ContentWarningFlags {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self {
+        self.intersection(rhs)
+    }
+}
+
+impl std::ops::BitOrAssign for ContentWarningFlags {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl fmt::Display for ContentWarningFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            return write!(f, "None");
+        }
+        let names = self.names();
+        write!(f, "{}", names.join(", "))
+    }
+}
+
+/// A parsed content warning message.
+///
+/// Content warnings are applied by authors to flag sensitive content,
+/// allowing readers to filter based on their preferences.
+///
+/// # Wire Format
+///
+/// ```text
+/// ┌─────────────┬───────────────────┬───────────────┐
+/// │ Flags       │ Custom Warning Len│ Custom Warning│
+/// │ 2 bytes (LE)│ 1 byte            │ 0-255 bytes   │
+/// └─────────────┴───────────────────┴───────────────┘
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContentWarningMessage {
+    /// Standard warning flags.
+    flags: ContentWarningFlags,
+
+    /// Optional custom warning text (UTF-8).
+    custom_warning: Option<String>,
+}
+
+/// Maximum length of custom warning text in bytes.
+pub const MAX_CUSTOM_WARNING_LEN: usize = 255;
+
+/// Minimum size of a content warning payload (after trailing zero trimming).
+/// Due to memo zero-trimming, only the flags_lo byte is strictly required.
+/// Missing bytes (flags_hi, custom_warning_len) are assumed to be 0.
+pub const MIN_CONTENT_WARNING_SIZE: usize = 1; // flags_lo only (flags_hi and len may be trimmed)
+
+impl ContentWarningMessage {
+    /// Creates a new content warning with only standard flags.
+    pub fn new(flags: ContentWarningFlags) -> Self {
+        Self {
+            flags,
+            custom_warning: None,
+        }
+    }
+
+    /// Creates a new content warning with standard flags and custom text.
+    pub fn with_custom_warning(flags: ContentWarningFlags, custom: impl Into<String>) -> Self {
+        let custom = custom.into();
+        Self {
+            flags,
+            custom_warning: if custom.is_empty() {
+                None
+            } else {
+                Some(custom)
+            },
+        }
+    }
+
+    /// Returns the warning flags.
+    #[inline]
+    pub fn flags(&self) -> ContentWarningFlags {
+        self.flags
+    }
+
+    /// Returns the custom warning text, if any.
+    #[inline]
+    pub fn custom_warning(&self) -> Option<&str> {
+        self.custom_warning.as_deref()
+    }
+
+    /// Returns true if this warning contains any flags or custom text.
+    #[inline]
+    pub fn has_warnings(&self) -> bool {
+        !self.flags.is_empty() || self.custom_warning.is_some()
+    }
+
+    /// Encodes this content warning into bytes for a memo payload.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(MIN_CONTENT_WARNING_SIZE + MAX_CUSTOM_WARNING_LEN);
+
+        // Flags (2 bytes, little-endian)
+        bytes.extend_from_slice(&self.flags.encode());
+
+        // Custom warning length and text
+        match &self.custom_warning {
+            Some(text) => {
+                let text_bytes = text.as_bytes();
+                let len = text_bytes.len().min(MAX_CUSTOM_WARNING_LEN);
+                bytes.push(len as u8);
+                bytes.extend_from_slice(&text_bytes[..len]);
+            }
+            None => {
+                bytes.push(0);
+            }
+        }
+
+        bytes
+    }
+
+    /// Parses a content warning from a memo payload.
+    ///
+    /// # Notes
+    ///
+    /// Due to memo trailing zero trimming, the parser handles incomplete payloads:
+    /// - 1 byte: flags_lo only, flags_hi defaults to 0, no custom warning
+    /// - 2 bytes: flags only, no custom warning
+    /// - 3+ bytes: full format with optional custom warning
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload is empty or contains invalid UTF-8.
+    pub fn parse(payload: &[u8]) -> Result<Self, ContentWarningParseError> {
+        // Minimum 1 byte (at least flags_lo after trailing zero trim)
+        if payload.is_empty() {
+            return Err(ContentWarningParseError::TooShort {
+                actual: 0,
+                minimum: 1,
+            });
+        }
+
+        // Parse flags (handle trailing zero trimming)
+        // - 1 byte: flags_lo only, flags_hi assumed 0
+        // - 2+ bytes: both flag bytes present
+        let flags_lo = payload[0];
+        let flags_hi = if payload.len() >= 2 { payload[1] } else { 0 };
+        let flags = ContentWarningFlags::decode([flags_lo, flags_hi]);
+
+        // Parse custom warning length (may be trimmed to 0)
+        let custom_len = if payload.len() >= 3 {
+            payload[2] as usize
+        } else {
+            0 // Length byte was trimmed (was 0x00)
+        };
+
+        // Parse custom warning text
+        let custom_warning = if custom_len == 0 {
+            None
+        } else {
+            let text_start = 3;
+            let text_end = text_start + custom_len;
+
+            if payload.len() < text_end {
+                return Err(ContentWarningParseError::TruncatedCustomWarning {
+                    expected: custom_len,
+                    available: payload.len().saturating_sub(text_start),
+                });
+            }
+
+            let text_bytes = &payload[text_start..text_end];
+            let text = std::str::from_utf8(text_bytes).map_err(|e| {
+                ContentWarningParseError::InvalidUtf8 {
+                    position: e.valid_up_to(),
+                }
+            })?;
+
+            Some(text.to_string())
+        };
+
+        Ok(Self {
+            flags,
+            custom_warning,
+        })
+    }
+}
+
+impl fmt::Display for ContentWarningMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ContentWarning({}", self.flags)?;
+        if let Some(custom) = &self.custom_warning {
+            write!(f, ", \"{}\"", custom)?;
+        }
+        write!(f, ")")
+    }
+}
+
+/// Errors that can occur when parsing a content warning message.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ContentWarningParseError {
+    /// The payload is too short.
+    TooShort {
+        /// The actual payload length.
+        actual: usize,
+        /// The minimum required length.
+        minimum: usize,
+    },
+
+    /// The custom warning text is truncated.
+    TruncatedCustomWarning {
+        /// The expected length from the header.
+        expected: usize,
+        /// The actual available bytes.
+        available: usize,
+    },
+
+    /// The custom warning text contains invalid UTF-8.
+    InvalidUtf8 {
+        /// The byte position where invalid UTF-8 was found.
+        position: usize,
+    },
+}
+
+impl fmt::Display for ContentWarningParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TooShort { actual, minimum } => {
+                write!(
+                    f,
+                    "content warning payload too short: {} bytes, minimum {} required",
+                    actual, minimum
+                )
+            }
+            Self::TruncatedCustomWarning {
+                expected,
+                available,
+            } => {
+                write!(
+                    f,
+                    "custom warning truncated: expected {} bytes, only {} available",
+                    expected, available
+                )
+            }
+            Self::InvalidUtf8 { position } => {
+                write!(f, "invalid UTF-8 in custom warning at byte {}", position)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ContentWarningParseError {}
 
 // ==================== Bridge Types ====================
 
@@ -2720,6 +3193,7 @@ mod tests {
         assert_eq!(SocialMessageType::Post.as_u8(), 0x20);
         assert_eq!(SocialMessageType::Comment.as_u8(), 0x21);
         assert_eq!(SocialMessageType::Upvote.as_u8(), 0x22);
+        assert_eq!(SocialMessageType::ContentWarning.as_u8(), 0x23);
         assert_eq!(SocialMessageType::Follow.as_u8(), 0x30);
         assert_eq!(SocialMessageType::Unfollow.as_u8(), 0x31);
         assert_eq!(SocialMessageType::Dm.as_u8(), 0x40);
@@ -2745,6 +3219,7 @@ mod tests {
             SocialMessageType::Post,
             SocialMessageType::Comment,
             SocialMessageType::Upvote,
+            SocialMessageType::ContentWarning,
             SocialMessageType::Follow,
             SocialMessageType::Unfollow,
             SocialMessageType::Dm,
@@ -2783,8 +3258,8 @@ mod tests {
     fn social_message_type_unknown() {
         let _init_guard = zebra_test::init();
 
-        // Test various invalid type bytes (0xF4 is now KeyRotation, so remove it from invalid)
-        let invalid_types: &[u8] = &[0x00, 0x0F, 0x11, 0x23, 0x32, 0x42, 0x55, 0x61, 0x72, 0xFF];
+        // Test various invalid type bytes (0xF4 is KeyRotation, 0x23 is ContentWarning)
+        let invalid_types: &[u8] = &[0x00, 0x0F, 0x11, 0x24, 0x32, 0x42, 0x55, 0x61, 0x72, 0xFF];
 
         for &byte in invalid_types {
             let result = SocialMessageType::try_from(byte);
@@ -5928,5 +6403,350 @@ mod tests {
             actual_len: 500,
         };
         assert!(format!("{}", err6).contains("block list description too long"));
+    }
+
+    // ==================== Content Warning Tests ====================
+
+    #[test]
+    fn content_warning_flags_basic() {
+        let _init_guard = zebra_test::init();
+
+        // Test individual flag values
+        assert_eq!(ContentWarningFlags::NONE.bits(), 0x0000);
+        assert_eq!(ContentWarningFlags::NSFW.bits(), 0x0001);
+        assert_eq!(ContentWarningFlags::VIOLENCE.bits(), 0x0002);
+        assert_eq!(ContentWarningFlags::SPOILER.bits(), 0x0004);
+        assert_eq!(ContentWarningFlags::DISTURBING.bits(), 0x0008);
+        assert_eq!(ContentWarningFlags::MEDICAL.bits(), 0x0010);
+        assert_eq!(ContentWarningFlags::FLASHING.bits(), 0x0020);
+        assert_eq!(ContentWarningFlags::AUDIO.bits(), 0x0040);
+        assert_eq!(ContentWarningFlags::POLITICS.bits(), 0x0080);
+        assert_eq!(ContentWarningFlags::RELIGION.bits(), 0x0100);
+        assert_eq!(ContentWarningFlags::DRUGS.bits(), 0x0200);
+
+        // Test ALL_STANDARD includes all defined flags
+        assert_eq!(ContentWarningFlags::ALL_STANDARD.bits(), 0x03FF);
+    }
+
+    #[test]
+    fn content_warning_flags_operations() {
+        let _init_guard = zebra_test::init();
+
+        // Test bitwise OR
+        let flags = ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE;
+        assert!(flags.contains(ContentWarningFlags::NSFW));
+        assert!(flags.contains(ContentWarningFlags::VIOLENCE));
+        assert!(!flags.contains(ContentWarningFlags::SPOILER));
+        assert_eq!(flags.bits(), 0x0003);
+
+        // Test bitwise AND
+        let intersection = flags & ContentWarningFlags::NSFW;
+        assert!(intersection.contains(ContentWarningFlags::NSFW));
+        assert!(!intersection.contains(ContentWarningFlags::VIOLENCE));
+
+        // Test union method
+        let union = ContentWarningFlags::SPOILER.union(ContentWarningFlags::DISTURBING);
+        assert!(union.contains(ContentWarningFlags::SPOILER));
+        assert!(union.contains(ContentWarningFlags::DISTURBING));
+
+        // Test OR assignment
+        let mut flags2 = ContentWarningFlags::NSFW;
+        flags2 |= ContentWarningFlags::DRUGS;
+        assert!(flags2.contains(ContentWarningFlags::NSFW));
+        assert!(flags2.contains(ContentWarningFlags::DRUGS));
+    }
+
+    #[test]
+    fn content_warning_flags_empty() {
+        let _init_guard = zebra_test::init();
+
+        assert!(ContentWarningFlags::NONE.is_empty());
+        assert!(!ContentWarningFlags::NSFW.is_empty());
+
+        let empty = ContentWarningFlags::from_bits(0);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn content_warning_flags_names() {
+        let _init_guard = zebra_test::init();
+
+        // Single flag
+        let names = ContentWarningFlags::NSFW.names();
+        assert_eq!(names, vec!["NSFW"]);
+
+        // Multiple flags
+        let flags = ContentWarningFlags::VIOLENCE | ContentWarningFlags::SPOILER;
+        let names = flags.names();
+        assert_eq!(names, vec!["Violence", "Spoiler"]);
+
+        // Empty flags
+        let names = ContentWarningFlags::NONE.names();
+        assert!(names.is_empty());
+
+        // All flags
+        let names = ContentWarningFlags::ALL_STANDARD.names();
+        assert_eq!(names.len(), 10);
+    }
+
+    #[test]
+    fn content_warning_flags_encode_decode_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let test_flags = [
+            ContentWarningFlags::NONE,
+            ContentWarningFlags::NSFW,
+            ContentWarningFlags::VIOLENCE | ContentWarningFlags::SPOILER,
+            ContentWarningFlags::ALL_STANDARD,
+            ContentWarningFlags::from_bits(0xFFFF), // All bits set including reserved
+        ];
+
+        for flags in test_flags {
+            let encoded = flags.encode();
+            let decoded = ContentWarningFlags::decode(encoded);
+            assert_eq!(decoded, flags);
+        }
+    }
+
+    #[test]
+    fn content_warning_flags_iter() {
+        let _init_guard = zebra_test::init();
+
+        let flags = ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE | ContentWarningFlags::DRUGS;
+        let collected: Vec<_> = flags.iter_flags().collect();
+
+        assert_eq!(collected.len(), 3);
+        assert!(collected.contains(&ContentWarningFlags::NSFW));
+        assert!(collected.contains(&ContentWarningFlags::VIOLENCE));
+        assert!(collected.contains(&ContentWarningFlags::DRUGS));
+    }
+
+    #[test]
+    fn content_warning_flags_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", ContentWarningFlags::NONE), "None");
+        assert_eq!(format!("{}", ContentWarningFlags::NSFW), "NSFW");
+        assert!(format!("{}", ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE).contains("NSFW"));
+        assert!(format!("{}", ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE).contains("Violence"));
+    }
+
+    #[test]
+    fn content_warning_message_flags_only() {
+        let _init_guard = zebra_test::init();
+
+        let msg = ContentWarningMessage::new(ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE);
+
+        assert!(msg.flags().contains(ContentWarningFlags::NSFW));
+        assert!(msg.flags().contains(ContentWarningFlags::VIOLENCE));
+        assert!(msg.custom_warning().is_none());
+        assert!(msg.has_warnings());
+    }
+
+    #[test]
+    fn content_warning_message_with_custom() {
+        let _init_guard = zebra_test::init();
+
+        let msg = ContentWarningMessage::with_custom_warning(
+            ContentWarningFlags::SPOILER,
+            "Contains ending spoilers for XYZ",
+        );
+
+        assert!(msg.flags().contains(ContentWarningFlags::SPOILER));
+        assert_eq!(msg.custom_warning(), Some("Contains ending spoilers for XYZ"));
+        assert!(msg.has_warnings());
+    }
+
+    #[test]
+    fn content_warning_message_encode_decode_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // Flags only
+        let msg1 = ContentWarningMessage::new(ContentWarningFlags::NSFW);
+        let encoded1 = msg1.encode();
+        let decoded1 = ContentWarningMessage::parse(&encoded1).expect("should parse");
+        assert_eq!(decoded1.flags(), msg1.flags());
+        assert_eq!(decoded1.custom_warning(), msg1.custom_warning());
+
+        // With custom warning
+        let msg2 = ContentWarningMessage::with_custom_warning(
+            ContentWarningFlags::VIOLENCE | ContentWarningFlags::DISTURBING,
+            "Graphic content",
+        );
+        let encoded2 = msg2.encode();
+        let decoded2 = ContentWarningMessage::parse(&encoded2).expect("should parse");
+        assert_eq!(decoded2.flags(), msg2.flags());
+        assert_eq!(decoded2.custom_warning(), msg2.custom_warning());
+
+        // Empty flags with custom warning
+        let msg3 = ContentWarningMessage::with_custom_warning(ContentWarningFlags::NONE, "Custom only warning");
+        let encoded3 = msg3.encode();
+        let decoded3 = ContentWarningMessage::parse(&encoded3).expect("should parse");
+        assert!(decoded3.flags().is_empty());
+        assert_eq!(decoded3.custom_warning(), Some("Custom only warning"));
+    }
+
+    #[test]
+    fn content_warning_message_parse_too_short() {
+        let _init_guard = zebra_test::init();
+
+        // 0 bytes - truly too short
+        let result = ContentWarningMessage::parse(&[]);
+        assert!(matches!(result, Err(ContentWarningParseError::TooShort { .. })));
+
+        // 1 byte - now valid (flags_lo only, flags_hi and len assumed 0 due to trailing zero trim)
+        let result = ContentWarningMessage::parse(&[0x01]);
+        assert!(result.is_ok());
+        let cw = result.unwrap();
+        assert!(cw.flags().contains(ContentWarningFlags::NSFW));
+        assert!(cw.custom_warning().is_none());
+
+        // 2 bytes - valid (flags only, len assumed 0)
+        let result = ContentWarningMessage::parse(&[0x01, 0x00]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn content_warning_message_parse_truncated_custom() {
+        let _init_guard = zebra_test::init();
+
+        // Header says 10 bytes of custom warning but only provides 5
+        let payload = vec![0x01, 0x00, 10, b'H', b'e', b'l', b'l', b'o'];
+        let result = ContentWarningMessage::parse(&payload);
+
+        assert!(matches!(
+            result,
+            Err(ContentWarningParseError::TruncatedCustomWarning { expected: 10, available: 5 })
+        ));
+    }
+
+    #[test]
+    fn content_warning_message_parse_invalid_utf8() {
+        let _init_guard = zebra_test::init();
+
+        // Invalid UTF-8 sequence
+        let payload = vec![0x01, 0x00, 4, 0xFF, 0xFE, 0xFF, 0xFE];
+        let result = ContentWarningMessage::parse(&payload);
+
+        assert!(matches!(result, Err(ContentWarningParseError::InvalidUtf8 { .. })));
+    }
+
+    #[test]
+    fn content_warning_message_empty_custom_warning() {
+        let _init_guard = zebra_test::init();
+
+        // Empty string should be treated as None
+        let msg = ContentWarningMessage::with_custom_warning(ContentWarningFlags::NSFW, "");
+        assert!(msg.custom_warning().is_none());
+
+        // Encoded should have flags(2) + len(1) = 3 bytes
+        let encoded = msg.encode();
+        assert_eq!(encoded.len(), 3); // flags(2) + len(1)
+        assert_eq!(encoded[2], 0); // Length byte is 0
+    }
+
+    #[test]
+    fn content_warning_message_display() {
+        let _init_guard = zebra_test::init();
+
+        let msg1 = ContentWarningMessage::new(ContentWarningFlags::NSFW);
+        assert!(format!("{}", msg1).contains("NSFW"));
+
+        let msg2 = ContentWarningMessage::with_custom_warning(ContentWarningFlags::SPOILER, "Game spoilers");
+        let display = format!("{}", msg2);
+        assert!(display.contains("Spoiler"));
+        assert!(display.contains("Game spoilers"));
+    }
+
+    #[test]
+    fn content_warning_social_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // Create a ContentWarningMessage and wrap it in a SocialMessage
+        let cw = ContentWarningMessage::with_custom_warning(
+            ContentWarningFlags::NSFW | ContentWarningFlags::VIOLENCE,
+            "Adult content",
+        );
+        let payload = cw.encode();
+
+        let msg = SocialMessage::new(SocialMessageType::ContentWarning, SOCIAL_PROTOCOL_VERSION, payload.clone());
+        assert_eq!(msg.msg_type(), SocialMessageType::ContentWarning);
+        assert!(msg.msg_type().is_content_warning());
+        assert!(msg.msg_type().is_content());
+
+        // Verify the payload can be parsed back
+        let parsed_cw = ContentWarningMessage::parse(msg.payload()).expect("should parse");
+        assert!(parsed_cw.flags().contains(ContentWarningFlags::NSFW));
+        assert!(parsed_cw.flags().contains(ContentWarningFlags::VIOLENCE));
+        assert_eq!(parsed_cw.custom_warning(), Some("Adult content"));
+    }
+
+    #[test]
+    fn content_warning_memo_parsing() {
+        let _init_guard = zebra_test::init();
+
+        // Create a memo with content warning type
+        let cw = ContentWarningMessage::new(ContentWarningFlags::FLASHING | ContentWarningFlags::AUDIO);
+        let payload = cw.encode();
+
+        let mut memo_bytes = vec![0x23, 0x01]; // ContentWarning type (0x23), version 1
+        memo_bytes.extend_from_slice(&payload);
+
+        let memo = create_memo(&memo_bytes);
+        let msg = SocialMessage::try_from(&memo).expect("should parse content warning memo");
+
+        assert_eq!(msg.msg_type(), SocialMessageType::ContentWarning);
+        assert!(msg.msg_type().is_content_warning());
+        assert_eq!(msg.version(), 1);
+
+        // Parse the inner content warning
+        let inner = ContentWarningMessage::parse(msg.payload()).expect("should parse inner");
+        assert!(inner.flags().contains(ContentWarningFlags::FLASHING));
+        assert!(inner.flags().contains(ContentWarningFlags::AUDIO));
+    }
+
+    #[test]
+    fn content_warning_type_category_helpers() {
+        let _init_guard = zebra_test::init();
+
+        // Test is_content()
+        assert!(SocialMessageType::Post.is_content());
+        assert!(SocialMessageType::Comment.is_content());
+        assert!(SocialMessageType::Upvote.is_content());
+        assert!(SocialMessageType::ContentWarning.is_content());
+
+        // Non-content types
+        assert!(!SocialMessageType::Profile.is_content());
+        assert!(!SocialMessageType::Follow.is_content());
+        assert!(!SocialMessageType::Dm.is_content());
+
+        // Test is_content_warning()
+        assert!(SocialMessageType::ContentWarning.is_content_warning());
+        assert!(!SocialMessageType::Post.is_content_warning());
+        assert!(!SocialMessageType::Comment.is_content_warning());
+    }
+
+    #[test]
+    fn content_warning_parse_error_display() {
+        let _init_guard = zebra_test::init();
+
+        let err1 = ContentWarningParseError::TooShort {
+            actual: 2,
+            minimum: 3,
+        };
+        assert!(format!("{}", err1).contains("too short"));
+        assert!(format!("{}", err1).contains("2 bytes"));
+
+        let err2 = ContentWarningParseError::TruncatedCustomWarning {
+            expected: 10,
+            available: 5,
+        };
+        assert!(format!("{}", err2).contains("truncated"));
+        assert!(format!("{}", err2).contains("10"));
+        assert!(format!("{}", err2).contains("5"));
+
+        let err3 = ContentWarningParseError::InvalidUtf8 { position: 3 };
+        assert!(format!("{}", err3).contains("invalid UTF-8"));
+        assert!(format!("{}", err3).contains("byte 3"));
     }
 }
