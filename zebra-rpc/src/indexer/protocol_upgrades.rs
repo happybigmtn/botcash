@@ -409,7 +409,7 @@ impl DeploymentTracker {
 // ============================================================================
 
 /// Per-block protocol upgrade statistics for indexing.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockUpgradeStats {
     /// Block height.
     pub height: Height,
@@ -431,6 +431,20 @@ pub struct BlockUpgradeStats {
 
     /// Position within the window (0 to SIGNALING_WINDOW_BLOCKS-1).
     pub window_position: u32,
+}
+
+impl Default for BlockUpgradeStats {
+    fn default() -> Self {
+        Self {
+            height: Height(0),
+            version: 0,
+            supports_signaling: false,
+            active_signal_count: 0,
+            active_bits: Vec::new(),
+            window: 0,
+            window_position: 0,
+        }
+    }
 }
 
 impl BlockUpgradeStats {

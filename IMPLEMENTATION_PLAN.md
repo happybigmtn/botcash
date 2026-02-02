@@ -1712,13 +1712,15 @@ cd zashi-android && ./gradlew test
 - [ ] Required Tests: Share generation, reconstruction, timelock
 
 #### 6.4.2 Key Rotation
-- [ ] key_rotation transaction type (0xF2)
+- [x] key_rotation transaction type (0xF4) - zebra-chain SocialMessageType
+- [x] Key Rotation RPC types (request/response/history) - zebra-rpc/methods/types
+- [x] Key Rotation indexer parsing (IndexedKeyRotation) - zebra-rpc/indexer/recovery
 - [ ] Indexer migration logic (follower auto-update)
 - [ ] Karma/reputation transfer
 - [ ] Required Tests: Migration correctness, follower preservation
 
 #### 6.4.3 Multi-Sig Identities
-- [ ] multisig_setup transaction type (0xF3)
+- [ ] multisig_setup transaction type (0xF5)
 - [ ] M-of-N signature verification for posts
 - [ ] Required Tests: Multi-sig posting, threshold verification
 

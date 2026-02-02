@@ -250,6 +250,15 @@ pub enum SocialMessageType {
     /// Format: [request_txid(32)][owner_sig_len(1)][owner_sig]
     RecoveryCancel = 0xF3,
 
+    /// Key rotation to migrate identity to new address (0xF4).
+    ///
+    /// Allows users to rotate their keys by migrating their social identity
+    /// (followers, following, karma) to a new address. Must be signed by both
+    /// the old key and the new key to prove ownership of both.
+    /// Format: [old_addr_len(1)][old_addr][new_addr_len(1)][new_addr][old_sig_len(1)][old_sig][new_sig_len(1)][new_sig]
+    /// After rotation: followers auto-follow new address, karma transfers, old address marked "migrated".
+    KeyRotation = 0xF4,
+
     /// Trust/vouch for another user (0xD0).
     ///
     /// Explicitly express trust in another user, contributing to the web of trust.
@@ -307,6 +316,7 @@ impl SocialMessageType {
             Self::RecoveryRequest => "RecoveryRequest",
             Self::RecoveryApprove => "RecoveryApprove",
             Self::RecoveryCancel => "RecoveryCancel",
+            Self::KeyRotation => "KeyRotation",
             Self::Trust => "Trust",
             Self::Report => "Report",
         }
@@ -355,6 +365,7 @@ impl SocialMessageType {
     ///
     /// Recovery messages are used for social recovery mechanisms that allow
     /// users to recover access to their accounts using trusted guardians.
+    /// Also includes key rotation which migrates identity to a new address.
     pub const fn is_recovery(&self) -> bool {
         matches!(
             self,
@@ -362,6 +373,7 @@ impl SocialMessageType {
                 | Self::RecoveryRequest
                 | Self::RecoveryApprove
                 | Self::RecoveryCancel
+                | Self::KeyRotation
         )
     }
 
@@ -422,6 +434,7 @@ impl TryFrom<u8> for SocialMessageType {
             0xF1 => Ok(Self::RecoveryRequest),
             0xF2 => Ok(Self::RecoveryApprove),
             0xF3 => Ok(Self::RecoveryCancel),
+            0xF4 => Ok(Self::KeyRotation),
             0xD0 => Ok(Self::Trust),
             0xD1 => Ok(Self::Report),
             _ => Err(SocialParseError::UnknownMessageType(value)),
@@ -2085,6 +2098,7 @@ mod tests {
             SocialMessageType::RecoveryRequest,
             SocialMessageType::RecoveryApprove,
             SocialMessageType::RecoveryCancel,
+            SocialMessageType::KeyRotation,
             SocialMessageType::Trust,
             SocialMessageType::Report,
         ];
@@ -2100,7 +2114,7 @@ mod tests {
     fn social_message_type_unknown() {
         let _init_guard = zebra_test::init();
 
-        // Test various invalid type bytes
+        // Test various invalid type bytes (0xF4 is now KeyRotation, so remove it from invalid)
         let invalid_types: &[u8] = &[0x00, 0x0F, 0x11, 0x23, 0x32, 0x42, 0x55, 0x61, 0x72, 0xFF];
 
         for &byte in invalid_types {
@@ -3253,6 +3267,62 @@ mod tests {
     }
 
     #[test]
+    fn key_rotation_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // KeyRotation format: [old_addr_len(1)][old_addr][new_addr_len(1)][new_addr][old_sig_len(1)][old_sig][new_sig_len(1)][new_sig]
+        let mut payload = Vec::new();
+
+        // Old address (simulated bech32 z-address hash, 43 bytes)
+        let old_addr = b"bs1oldaddress1234567890abcdefghijklmnop";
+        payload.push(old_addr.len() as u8);
+        payload.extend_from_slice(old_addr);
+
+        // New address (simulated bech32 z-address hash, 43 bytes)
+        let new_addr = b"bs1newaddress0987654321zyxwvutsrqponml";
+        payload.push(new_addr.len() as u8);
+        payload.extend_from_slice(new_addr);
+
+        // Old key signature (64 bytes for Ed25519)
+        let old_sig = [0xAA; 64];
+        payload.push(old_sig.len() as u8);
+        payload.extend_from_slice(&old_sig);
+
+        // New key signature (64 bytes for Ed25519)
+        let new_sig = [0xBB; 64];
+        payload.push(new_sig.len() as u8);
+        payload.extend_from_slice(&new_sig);
+
+        let msg = SocialMessage::new(
+            SocialMessageType::KeyRotation,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xF4); // KeyRotation type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::KeyRotation);
+        assert!(decoded.msg_type().is_recovery());
+    }
+
+    #[test]
+    fn key_rotation_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(SocialMessageType::KeyRotation.as_u8(), 0xF4);
+        assert_eq!(SocialMessageType::KeyRotation.name(), "KeyRotation");
+
+        // Verify roundtrip from u8
+        let parsed = SocialMessageType::try_from(0xF4).expect("should parse");
+        assert_eq!(parsed, SocialMessageType::KeyRotation);
+    }
+
+    #[test]
     fn recovery_types_in_batch() {
         let _init_guard = zebra_test::init();
 
@@ -3298,41 +3368,47 @@ mod tests {
         assert!(!SocialMessageType::RecoveryRequest.is_value_transfer());
         assert!(!SocialMessageType::RecoveryApprove.is_value_transfer());
         assert!(!SocialMessageType::RecoveryCancel.is_value_transfer());
+        assert!(!SocialMessageType::KeyRotation.is_value_transfer());
 
         // Recovery types are not attention market
         assert!(!SocialMessageType::RecoveryConfig.is_attention_market());
         assert!(!SocialMessageType::RecoveryRequest.is_attention_market());
         assert!(!SocialMessageType::RecoveryApprove.is_attention_market());
         assert!(!SocialMessageType::RecoveryCancel.is_attention_market());
+        assert!(!SocialMessageType::KeyRotation.is_attention_market());
 
         // Recovery types are not governance
         assert!(!SocialMessageType::RecoveryConfig.is_governance());
         assert!(!SocialMessageType::RecoveryRequest.is_governance());
         assert!(!SocialMessageType::RecoveryApprove.is_governance());
         assert!(!SocialMessageType::RecoveryCancel.is_governance());
+        assert!(!SocialMessageType::KeyRotation.is_governance());
 
         // Recovery types are not channels
         assert!(!SocialMessageType::RecoveryConfig.is_channel());
         assert!(!SocialMessageType::RecoveryRequest.is_channel());
         assert!(!SocialMessageType::RecoveryApprove.is_channel());
         assert!(!SocialMessageType::RecoveryCancel.is_channel());
+        assert!(!SocialMessageType::KeyRotation.is_channel());
 
         // Recovery types are not batch
         assert!(!SocialMessageType::RecoveryConfig.is_batch());
         assert!(!SocialMessageType::RecoveryRequest.is_batch());
         assert!(!SocialMessageType::RecoveryApprove.is_batch());
         assert!(!SocialMessageType::RecoveryCancel.is_batch());
+        assert!(!SocialMessageType::KeyRotation.is_batch());
     }
 
     #[test]
     fn recovery_is_recovery_helper() {
         let _init_guard = zebra_test::init();
 
-        // Recovery types should return true
+        // Recovery types should return true (includes key rotation)
         assert!(SocialMessageType::RecoveryConfig.is_recovery());
         assert!(SocialMessageType::RecoveryRequest.is_recovery());
         assert!(SocialMessageType::RecoveryApprove.is_recovery());
         assert!(SocialMessageType::RecoveryCancel.is_recovery());
+        assert!(SocialMessageType::KeyRotation.is_recovery());
 
         // Non-recovery types should return false
         assert!(!SocialMessageType::Post.is_recovery());
@@ -3350,6 +3426,7 @@ mod tests {
         assert_eq!(format!("{}", SocialMessageType::RecoveryRequest), "RecoveryRequest");
         assert_eq!(format!("{}", SocialMessageType::RecoveryApprove), "RecoveryApprove");
         assert_eq!(format!("{}", SocialMessageType::RecoveryCancel), "RecoveryCancel");
+        assert_eq!(format!("{}", SocialMessageType::KeyRotation), "KeyRotation");
     }
 
     #[test]
@@ -3362,6 +3439,7 @@ mod tests {
             SocialMessageType::RecoveryRequest,
             SocialMessageType::RecoveryApprove,
             SocialMessageType::RecoveryCancel,
+            SocialMessageType::KeyRotation,
         ];
 
         for msg_type in recovery_types {
@@ -3372,10 +3450,10 @@ mod tests {
     }
 
     #[test]
-    fn all_26_message_types_exist() {
+    fn all_27_message_types_exist() {
         let _init_guard = zebra_test::init();
 
-        // Verify we have exactly 26 message types (22 + 4 recovery)
+        // Verify we have exactly 27 message types (22 pre-recovery + 5 recovery/key-rotation)
         let all_types = [
             SocialMessageType::Profile,
             SocialMessageType::Post,
@@ -3403,9 +3481,10 @@ mod tests {
             SocialMessageType::RecoveryRequest,
             SocialMessageType::RecoveryApprove,
             SocialMessageType::RecoveryCancel,
+            SocialMessageType::KeyRotation,
         ];
 
-        assert_eq!(all_types.len(), 26, "Should have exactly 26 message types");
+        assert_eq!(all_types.len(), 27, "Should have exactly 27 message types");
 
         // Verify each has a unique byte value
         let mut seen_bytes = std::collections::HashSet::new();
@@ -3866,11 +3945,12 @@ mod tests {
             SocialMessageType::RecoveryRequest,
             SocialMessageType::RecoveryApprove,
             SocialMessageType::RecoveryCancel,
+            SocialMessageType::KeyRotation,
             SocialMessageType::Trust,
             SocialMessageType::Report,
         ];
 
-        assert_eq!(all_types.len(), 32);
+        assert_eq!(all_types.len(), 33);
 
         // Verify all can be parsed from their byte values
         for msg_type in &all_types {

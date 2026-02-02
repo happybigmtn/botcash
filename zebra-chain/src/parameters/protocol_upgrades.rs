@@ -13,6 +13,8 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::block::Height;
 
 // ============================================================================
@@ -80,7 +82,7 @@ pub const SIGNALING_MIN_VERSION: u32 = 5;
 /// DEFINED -> STARTED -> LOCKED_IN -> ACTIVE
 ///                   \-> FAILED (if timeout reached without activation)
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DeploymentState {
     /// Deployment is defined but signaling has not started.
     ///
@@ -144,7 +146,7 @@ impl DeploymentState {
 /// A soft fork deployment that miners can signal support for.
 ///
 /// Each deployment has a unique BIP number and version bit assignment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SoftForkDeployment {
     /// Unique identifier for this deployment (e.g., "BSP-001").
     ///
@@ -227,7 +229,7 @@ impl SoftForkDeployment {
 // ============================================================================
 
 /// Tracks signaling statistics for a deployment within a window.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SignalingStats {
     /// Total blocks in the signaling window.
     pub total_blocks: u32,

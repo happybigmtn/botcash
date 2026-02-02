@@ -1537,6 +1537,171 @@ pub struct GuardianListResponse {
     active_count: u8,
 }
 
+// ==================== Key Rotation Types ====================
+
+/// Request for initiating a key rotation to migrate identity to a new address.
+///
+/// Key rotation allows users to migrate their social identity (followers, following,
+/// karma) to a new address. This can be used after social recovery or proactively
+/// for security reasons.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct KeyRotationRequest {
+    /// The current (old) address initiating the rotation.
+    #[serde(rename = "oldAddress")]
+    pub old_address: String,
+
+    /// The new address to rotate to.
+    #[serde(rename = "newAddress")]
+    pub new_address: String,
+
+    /// Optional reason for the rotation (for on-chain record).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+
+    /// Whether to transfer karma to the new address.
+    /// Default: true
+    #[serde(rename = "transferKarma", default = "default_true")]
+    pub transfer_karma: bool,
+
+    /// Whether followers should auto-follow the new address.
+    /// Default: true
+    #[serde(rename = "notifyFollowers", default = "default_true")]
+    pub notify_followers: bool,
+}
+
+impl KeyRotationRequest {
+    /// Create a new key rotation request.
+    pub fn new(old_address: String, new_address: String) -> Self {
+        Self {
+            old_address,
+            new_address,
+            reason: None,
+            transfer_karma: true,
+            notify_followers: true,
+        }
+    }
+
+    /// Set the reason for rotation.
+    pub fn with_reason(mut self, reason: String) -> Self {
+        self.reason = Some(reason);
+        self
+    }
+}
+
+/// Response for a key rotation request.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct KeyRotationResponse {
+    /// The transaction ID of the key rotation.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The old address being rotated from.
+    #[serde(rename = "oldAddress")]
+    old_address: String,
+
+    /// The new address being rotated to.
+    #[serde(rename = "newAddress")]
+    new_address: String,
+
+    /// Block height at which the rotation was submitted.
+    #[serde(rename = "rotationBlock")]
+    #[getter(copy)]
+    rotation_block: u32,
+
+    /// Number of followers that will be notified.
+    #[serde(rename = "followerCount")]
+    #[getter(copy)]
+    follower_count: u32,
+
+    /// Amount of karma being transferred.
+    #[serde(rename = "karmaTransferred")]
+    #[getter(copy)]
+    karma_transferred: i64,
+}
+
+/// Request for checking key rotation history for an address.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct KeyRotationHistoryRequest {
+    /// The address to check rotation history for.
+    /// This can be either the current address or any previous address in the chain.
+    pub address: String,
+}
+
+/// Response for key rotation history.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct KeyRotationHistoryResponse {
+    /// The queried address.
+    address: String,
+
+    /// The current active address (if different from queried).
+    #[serde(rename = "currentAddress")]
+    current_address: String,
+
+    /// List of all addresses in this identity's rotation history.
+    #[serde(rename = "rotationHistory")]
+    rotation_history: Vec<KeyRotationRecord>,
+
+    /// Total number of rotations this identity has undergone.
+    #[serde(rename = "totalRotations")]
+    #[getter(copy)]
+    total_rotations: u32,
+}
+
+/// A single key rotation event in the history.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct KeyRotationRecord {
+    /// The transaction ID of the rotation.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The old address.
+    #[serde(rename = "oldAddress")]
+    old_address: String,
+
+    /// The new address.
+    #[serde(rename = "newAddress")]
+    new_address: String,
+
+    /// Block height of the rotation.
+    #[serde(rename = "rotationBlock")]
+    #[getter(copy)]
+    rotation_block: u32,
+
+    /// Reason for the rotation (if provided).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+
+    /// Whether this was via social recovery.
+    #[serde(rename = "viaRecovery")]
+    #[getter(copy)]
+    via_recovery: bool,
+}
+
+/// Status of a key rotation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KeyRotationStatus {
+    /// Rotation is active and the new address is the current identity.
+    Active,
+    /// Rotation is pending confirmation.
+    Pending,
+    /// Rotation was cancelled (by owner or failed).
+    Cancelled,
+    /// The old address has been migrated (superseded by new address).
+    Migrated,
+}
+
+impl std::fmt::Display for KeyRotationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => write!(f, "active"),
+            Self::Pending => write!(f, "pending"),
+            Self::Cancelled => write!(f, "cancelled"),
+            Self::Migrated => write!(f, "migrated"),
+        }
+    }
+}
+
 // ==================== Bridge Types ====================
 
 /// Supported bridge platforms for cross-platform identity linking.
@@ -3555,6 +3720,150 @@ mod tests {
         assert!(json.contains("\"approvalsCount\":2"));
         assert!(json.contains("\"approvalsNeeded\":3"));
         assert!(json.contains("\"approvedGuardians\":[\"g1\",\"g2\"]"));
+    }
+
+    // ==================== Key Rotation Types Tests ====================
+
+    #[test]
+    fn key_rotation_request_deserialize() {
+        let json = r#"{
+            "oldAddress": "bs1oldaddress...",
+            "newAddress": "bs1newaddress...",
+            "reason": "Device compromised",
+            "transferKarma": true,
+            "notifyFollowers": true
+        }"#;
+        let req: KeyRotationRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.old_address, "bs1oldaddress...");
+        assert_eq!(req.new_address, "bs1newaddress...");
+        assert_eq!(req.reason, Some("Device compromised".to_string()));
+        assert!(req.transfer_karma);
+        assert!(req.notify_followers);
+    }
+
+    #[test]
+    fn key_rotation_request_defaults() {
+        let json = r#"{
+            "oldAddress": "bs1old...",
+            "newAddress": "bs1new..."
+        }"#;
+        let req: KeyRotationRequest = serde_json::from_str(json).unwrap();
+        assert!(req.transfer_karma); // default true
+        assert!(req.notify_followers); // default true
+        assert!(req.reason.is_none());
+    }
+
+    #[test]
+    fn key_rotation_request_builder() {
+        let req = KeyRotationRequest::new(
+            "bs1old...".to_string(),
+            "bs1new...".to_string(),
+        )
+        .with_reason("Routine rotation".to_string());
+
+        assert_eq!(req.old_address, "bs1old...");
+        assert_eq!(req.new_address, "bs1new...");
+        assert_eq!(req.reason, Some("Routine rotation".to_string()));
+    }
+
+    #[test]
+    fn key_rotation_response_serialize() {
+        let resp = KeyRotationResponse::new(
+            "txid123".to_string(),
+            "bs1oldaddr...".to_string(),
+            "bs1newaddr...".to_string(),
+            100000,
+            150,
+            2500,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid123\""));
+        assert!(json.contains("\"oldAddress\":\"bs1oldaddr...\""));
+        assert!(json.contains("\"newAddress\":\"bs1newaddr...\""));
+        assert!(json.contains("\"rotationBlock\":100000"));
+        assert!(json.contains("\"followerCount\":150"));
+        assert!(json.contains("\"karmaTransferred\":2500"));
+    }
+
+    #[test]
+    fn key_rotation_history_request_deserialize() {
+        let json = r#"{"address": "bs1someaddress..."}"#;
+        let req: KeyRotationHistoryRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1someaddress...");
+    }
+
+    #[test]
+    fn key_rotation_history_response_serialize() {
+        let record = KeyRotationRecord::new(
+            "tx001".to_string(),
+            "bs1old1...".to_string(),
+            "bs1old2...".to_string(),
+            50000,
+            Some("Key compromised".to_string()),
+            false,
+        );
+        let resp = KeyRotationHistoryResponse::new(
+            "bs1old1...".to_string(),
+            "bs1current...".to_string(),
+            vec![record],
+            1,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"currentAddress\":\"bs1current...\""));
+        assert!(json.contains("\"totalRotations\":1"));
+        assert!(json.contains("\"rotationHistory\""));
+    }
+
+    #[test]
+    fn key_rotation_record_via_recovery() {
+        let record = KeyRotationRecord::new(
+            "tx002".to_string(),
+            "bs1old...".to_string(),
+            "bs1new...".to_string(),
+            75000,
+            None,
+            true, // via recovery
+        );
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("\"viaRecovery\":true"));
+        // Reason should be omitted when None
+        assert!(!json.contains("\"reason\""));
+    }
+
+    #[test]
+    fn key_rotation_status_serialize() {
+        assert_eq!(serde_json::to_string(&KeyRotationStatus::Active).unwrap(), "\"active\"");
+        assert_eq!(serde_json::to_string(&KeyRotationStatus::Pending).unwrap(), "\"pending\"");
+        assert_eq!(serde_json::to_string(&KeyRotationStatus::Cancelled).unwrap(), "\"cancelled\"");
+        assert_eq!(serde_json::to_string(&KeyRotationStatus::Migrated).unwrap(), "\"migrated\"");
+    }
+
+    #[test]
+    fn key_rotation_status_deserialize() {
+        assert_eq!(
+            serde_json::from_str::<KeyRotationStatus>("\"active\"").unwrap(),
+            KeyRotationStatus::Active
+        );
+        assert_eq!(
+            serde_json::from_str::<KeyRotationStatus>("\"pending\"").unwrap(),
+            KeyRotationStatus::Pending
+        );
+        assert_eq!(
+            serde_json::from_str::<KeyRotationStatus>("\"cancelled\"").unwrap(),
+            KeyRotationStatus::Cancelled
+        );
+        assert_eq!(
+            serde_json::from_str::<KeyRotationStatus>("\"migrated\"").unwrap(),
+            KeyRotationStatus::Migrated
+        );
+    }
+
+    #[test]
+    fn key_rotation_status_display() {
+        assert_eq!(format!("{}", KeyRotationStatus::Active), "active");
+        assert_eq!(format!("{}", KeyRotationStatus::Pending), "pending");
+        assert_eq!(format!("{}", KeyRotationStatus::Cancelled), "cancelled");
+        assert_eq!(format!("{}", KeyRotationStatus::Migrated), "migrated");
     }
 
     // ==================== Bridge Types Tests ====================

@@ -396,6 +396,86 @@ impl fmt::Display for IndexedRecoveryCancel {
     }
 }
 
+/// An indexed key rotation extracted from a memo.
+///
+/// Key rotation allows users to migrate their social identity (followers,
+/// karma, etc.) to a new address. This can be initiated after successful
+/// social recovery or proactively for security reasons.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexedKeyRotation {
+    /// The transaction ID containing this rotation.
+    pub tx_id: String,
+
+    /// Block height where this rotation was submitted.
+    pub rotation_block: u32,
+
+    /// The old (source) address being rotated from.
+    pub old_address: String,
+
+    /// The new (target) address being rotated to.
+    pub new_address: String,
+
+    /// Whether this rotation was performed via social recovery.
+    pub via_recovery: bool,
+
+    /// The old key signature (hex-encoded).
+    pub old_signature: String,
+
+    /// The new key signature (hex-encoded).
+    pub new_signature: String,
+
+    /// Optional reason for the rotation.
+    pub reason: Option<String>,
+}
+
+impl IndexedKeyRotation {
+    /// Creates a new indexed key rotation from parsed data.
+    pub fn new(
+        tx_id: &str,
+        rotation_block: u32,
+        old_address: String,
+        new_address: String,
+        via_recovery: bool,
+        old_signature: String,
+        new_signature: String,
+        reason: Option<String>,
+    ) -> Self {
+        Self {
+            tx_id: tx_id.to_string(),
+            rotation_block,
+            old_address,
+            new_address,
+            via_recovery,
+            old_signature,
+            new_signature,
+            reason,
+        }
+    }
+
+    /// Returns the migration ID (derived from old and new addresses).
+    pub fn migration_id(&self) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.old_address.hash(&mut hasher);
+        self.new_address.hash(&mut hasher);
+        self.tx_id.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    }
+}
+
+impl fmt::Display for IndexedKeyRotation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "KeyRotation {{ old: {}... -> new: {}...{} }}",
+            &self.old_address[..8.min(self.old_address.len())],
+            &self.new_address[..8.min(self.new_address.len())],
+            if self.via_recovery { " (via recovery)" } else { "" }
+        )
+    }
+}
+
 /// Unified enum for all indexed recovery message types.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IndexedRecovery {
@@ -407,6 +487,8 @@ pub enum IndexedRecovery {
     Approve(IndexedRecoveryApproval),
     /// A recovery cancellation message.
     Cancel(IndexedRecoveryCancel),
+    /// A key rotation message.
+    Rotation(IndexedKeyRotation),
 }
 
 impl IndexedRecovery {
@@ -417,6 +499,7 @@ impl IndexedRecovery {
             Self::Request(_) => SocialMessageType::RecoveryRequest,
             Self::Approve(_) => SocialMessageType::RecoveryApprove,
             Self::Cancel(_) => SocialMessageType::RecoveryCancel,
+            Self::Rotation(_) => SocialMessageType::KeyRotation,
         }
     }
 
@@ -427,6 +510,7 @@ impl IndexedRecovery {
             Self::Request(r) => &r.tx_id,
             Self::Approve(a) => &a.tx_id,
             Self::Cancel(c) => &c.tx_id,
+            Self::Rotation(r) => &r.tx_id,
         }
     }
 }
@@ -438,6 +522,7 @@ impl fmt::Display for IndexedRecovery {
             Self::Request(r) => write!(f, "{}", r),
             Self::Approve(a) => write!(f, "{}", a),
             Self::Cancel(c) => write!(f, "{}", c),
+            Self::Rotation(r) => write!(f, "{}", r),
         }
     }
 }
@@ -486,14 +571,14 @@ impl From<SocialParseError> for RecoveryParseError {
 /// Checks if a memo contains a recovery message.
 ///
 /// Returns true if the first byte of the memo matches a recovery message type
-/// (0xF0-0xF3).
+/// (0xF0-0xF4).
 pub fn is_recovery_memo(memo: &Memo) -> bool {
     let bytes = memo.as_bytes();
     if bytes.is_empty() {
         return false;
     }
 
-    matches!(bytes[0], 0xF0 | 0xF1 | 0xF2 | 0xF3)
+    matches!(bytes[0], 0xF0 | 0xF1 | 0xF2 | 0xF3 | 0xF4)
 }
 
 /// Parses a recovery message from a memo.
@@ -539,6 +624,9 @@ pub fn parse_recovery_memo(
         }
         SocialMessageType::RecoveryCancel => {
             parse_recovery_cancel(payload, tx_id, block_height)
+        }
+        SocialMessageType::KeyRotation => {
+            parse_key_rotation(payload, tx_id, block_height)
         }
         _ => Err(RecoveryParseError::NotRecoveryMessage),
     }
@@ -806,6 +894,113 @@ fn parse_recovery_cancel(
     Ok(IndexedRecovery::Cancel(cancel))
 }
 
+/// Parses a KeyRotation payload.
+///
+/// Expected format:
+/// ```text
+/// [version:1][flags:1][old_addr_len:1][old_addr:N][new_addr_len:1][new_addr:M]
+/// [old_sig_len:1][old_sig:S1][new_sig_len:1][new_sig:S2][reason_len:2][reason:R]?
+/// ```
+///
+/// Flags byte:
+/// - bit 0: via_recovery (1 = key rotation via social recovery)
+fn parse_key_rotation(
+    payload: &[u8],
+    tx_id: &str,
+    block_height: u32,
+) -> Result<IndexedRecovery, RecoveryParseError> {
+    if payload.len() < 4 {
+        return Err(RecoveryParseError::MalformedPayload(
+            "payload too short for key rotation".to_string(),
+        ));
+    }
+
+    let _version = payload[0];
+    let flags = payload[1];
+    let via_recovery = (flags & 0x01) != 0;
+
+    let old_addr_len = payload[2] as usize;
+    if payload.len() < 3 + old_addr_len + 1 {
+        return Err(RecoveryParseError::MalformedPayload(
+            "payload too short for old address".to_string(),
+        ));
+    }
+
+    let old_address = String::from_utf8_lossy(&payload[3..3 + old_addr_len]).to_string();
+
+    let new_addr_offset = 3 + old_addr_len;
+    let new_addr_len = payload[new_addr_offset] as usize;
+
+    if payload.len() < new_addr_offset + 1 + new_addr_len + 1 {
+        return Err(RecoveryParseError::MalformedPayload(
+            "payload too short for new address".to_string(),
+        ));
+    }
+
+    let new_address =
+        String::from_utf8_lossy(&payload[new_addr_offset + 1..new_addr_offset + 1 + new_addr_len])
+            .to_string();
+
+    // Parse old signature
+    let old_sig_offset = new_addr_offset + 1 + new_addr_len;
+    if payload.len() < old_sig_offset + 1 {
+        return Err(RecoveryParseError::MalformedPayload(
+            "payload too short for old signature length".to_string(),
+        ));
+    }
+    let old_sig_len = payload[old_sig_offset] as usize;
+
+    if payload.len() < old_sig_offset + 1 + old_sig_len + 1 {
+        return Err(RecoveryParseError::MalformedPayload(
+            "payload too short for old signature".to_string(),
+        ));
+    }
+    let old_signature =
+        hex::encode(&payload[old_sig_offset + 1..old_sig_offset + 1 + old_sig_len]);
+
+    // Parse new signature
+    let new_sig_offset = old_sig_offset + 1 + old_sig_len;
+    let new_sig_len = payload[new_sig_offset] as usize;
+
+    if payload.len() < new_sig_offset + 1 + new_sig_len {
+        return Err(RecoveryParseError::MalformedPayload(
+            "payload too short for new signature".to_string(),
+        ));
+    }
+    let new_signature =
+        hex::encode(&payload[new_sig_offset + 1..new_sig_offset + 1 + new_sig_len]);
+
+    // Parse optional reason
+    let reason_offset = new_sig_offset + 1 + new_sig_len;
+    let reason = if payload.len() >= reason_offset + 2 {
+        let reason_len =
+            u16::from_le_bytes([payload[reason_offset], payload[reason_offset + 1]]) as usize;
+        if reason_len > 0 && payload.len() >= reason_offset + 2 + reason_len {
+            Some(
+                String::from_utf8_lossy(&payload[reason_offset + 2..reason_offset + 2 + reason_len])
+                    .to_string(),
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let rotation = IndexedKeyRotation::new(
+        tx_id,
+        block_height,
+        old_address,
+        new_address,
+        via_recovery,
+        old_signature,
+        new_signature,
+        reason,
+    );
+
+    Ok(IndexedRecovery::Rotation(rotation))
+}
+
 /// Derives a recovery ID from a transaction ID.
 ///
 /// Uses SHA256 hash of the tx_id, hex-encoded.
@@ -838,6 +1033,8 @@ pub struct BlockRecoveryStats {
     pub approvals: u32,
     /// Number of cancellations.
     pub cancellations: u32,
+    /// Number of key rotations.
+    pub key_rotations: u32,
     /// Total recovery-related transactions.
     pub total_recovery_txs: u32,
 }
@@ -856,6 +1053,7 @@ impl BlockRecoveryStats {
             IndexedRecovery::Request(_) => self.requests_initiated += 1,
             IndexedRecovery::Approve(_) => self.approvals += 1,
             IndexedRecovery::Cancel(_) => self.cancellations += 1,
+            IndexedRecovery::Rotation(_) => self.key_rotations += 1,
         }
     }
 
@@ -869,8 +1067,8 @@ impl fmt::Display for BlockRecoveryStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "RecoveryStats {{ configs: {}, requests: {}, approvals: {}, cancels: {} }}",
-            self.configs_created, self.requests_initiated, self.approvals, self.cancellations
+            "RecoveryStats {{ configs: {}, requests: {}, approvals: {}, cancels: {}, rotations: {} }}",
+            self.configs_created, self.requests_initiated, self.approvals, self.cancellations, self.key_rotations
         )
     }
 }
@@ -1362,5 +1560,186 @@ mod tests {
         assert!(display.contains("requests: 1"));
         assert!(display.contains("approvals: 5"));
         assert!(display.contains("cancels: 1"));
+    }
+
+    // ==================== IndexedKeyRotation Tests ====================
+
+    #[test]
+    fn indexed_key_rotation_new() {
+        let rotation = IndexedKeyRotation::new(
+            "txid_rotation",
+            5000,
+            "bs1old_address".to_string(),
+            "bs1new_address".to_string(),
+            false,
+            "old_sig_hex".to_string(),
+            "new_sig_hex".to_string(),
+            Some("Security upgrade".to_string()),
+        );
+
+        assert_eq!(rotation.tx_id, "txid_rotation");
+        assert_eq!(rotation.rotation_block, 5000);
+        assert_eq!(rotation.old_address, "bs1old_address");
+        assert_eq!(rotation.new_address, "bs1new_address");
+        assert!(!rotation.via_recovery);
+        assert_eq!(rotation.old_signature, "old_sig_hex");
+        assert_eq!(rotation.new_signature, "new_sig_hex");
+        assert_eq!(rotation.reason, Some("Security upgrade".to_string()));
+    }
+
+    #[test]
+    fn indexed_key_rotation_via_recovery() {
+        let rotation = IndexedKeyRotation::new(
+            "txid_recovery_rotation",
+            6000,
+            "bs1lost_key".to_string(),
+            "bs1new_key".to_string(),
+            true,
+            "recovery_old_sig".to_string(),
+            "recovery_new_sig".to_string(),
+            None,
+        );
+
+        assert!(rotation.via_recovery);
+        assert!(rotation.reason.is_none());
+    }
+
+    #[test]
+    fn indexed_key_rotation_migration_id() {
+        let rotation1 = IndexedKeyRotation::new(
+            "tx1",
+            1000,
+            "old1".to_string(),
+            "new1".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        );
+
+        let rotation2 = IndexedKeyRotation::new(
+            "tx1",
+            1000,
+            "old1".to_string(),
+            "new1".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        );
+
+        // Same inputs should produce same migration ID
+        assert_eq!(rotation1.migration_id(), rotation2.migration_id());
+
+        // Different tx_id should produce different migration ID
+        let rotation3 = IndexedKeyRotation::new(
+            "tx2",
+            1000,
+            "old1".to_string(),
+            "new1".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        );
+        assert_ne!(rotation1.migration_id(), rotation3.migration_id());
+    }
+
+    #[test]
+    fn indexed_key_rotation_display() {
+        let rotation = IndexedKeyRotation::new(
+            "txid_rotation_display",
+            5000,
+            "bs1old_address_long".to_string(),
+            "bs1new_address_long".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        );
+        let display = format!("{}", rotation);
+        assert!(display.contains("KeyRotation"));
+        assert!(display.contains("old:"));
+        assert!(display.contains("new:"));
+        assert!(!display.contains("via recovery"));
+
+        // Test with via_recovery
+        let rotation_recovery = IndexedKeyRotation::new(
+            "txid_recovery",
+            5000,
+            "bs1old_addr".to_string(),
+            "bs1new_addr".to_string(),
+            true,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        );
+        let display_recovery = format!("{}", rotation_recovery);
+        assert!(display_recovery.contains("(via recovery)"));
+    }
+
+    #[test]
+    fn indexed_recovery_rotation_message_type() {
+        let rotation = IndexedRecovery::Rotation(IndexedKeyRotation::new(
+            "tx_rot",
+            5000,
+            "old".to_string(),
+            "new".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        ));
+        assert_eq!(rotation.message_type(), SocialMessageType::KeyRotation);
+    }
+
+    #[test]
+    fn indexed_recovery_rotation_tx_id() {
+        let rotation = IndexedRecovery::Rotation(IndexedKeyRotation::new(
+            "rotation_tx_123",
+            5000,
+            "old".to_string(),
+            "new".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        ));
+        assert_eq!(rotation.tx_id(), "rotation_tx_123");
+    }
+
+    #[test]
+    fn block_recovery_stats_add_rotation() {
+        let mut stats = BlockRecoveryStats::new();
+
+        let rotation = IndexedRecovery::Rotation(IndexedKeyRotation::new(
+            "tx_rot",
+            5000,
+            "old".to_string(),
+            "new".to_string(),
+            false,
+            "sig1".to_string(),
+            "sig2".to_string(),
+            None,
+        ));
+        stats.add(&rotation);
+
+        assert_eq!(stats.key_rotations, 1);
+        assert_eq!(stats.total_recovery_txs, 1);
+        assert!(!stats.is_empty());
+
+        // Add another rotation
+        stats.add(&rotation);
+        assert_eq!(stats.key_rotations, 2);
+        assert_eq!(stats.total_recovery_txs, 2);
+    }
+
+    #[test]
+    fn block_recovery_stats_display_with_rotations() {
+        let mut stats = BlockRecoveryStats::new();
+        stats.key_rotations = 3;
+        stats.total_recovery_txs = 3;
+        let display = format!("{}", stats);
+        assert!(display.contains("rotations: 3"));
     }
 }
