@@ -1841,31 +1841,46 @@ Phase 6: Infrastructure & Growth (POST-LAUNCH)
 
 ---
 
-## ⚠️ Known Pre-Existing Test Issues
+## ✅ Test Vector Issues RESOLVED
 
-The following tests fail due to missing test vector data files (not related to Botcash implementation):
+**Status:** All 447 zebra-chain tests now pass.
 
-| Test | Error | Root Cause |
-|------|-------|------------|
-| `history_tree::tests::vectors::upgrade` | "test vector exists" panic | Missing sapling_roots vector at activation height |
-| `history_tree::tests::vectors::push_and_prune` | "test vector exists" panic | Same as above |
-| `block::tests::vectors::block_test_vectors` | "test vector exists" panic | Missing block test vector files |
-| `primitives::zcash_history::tests::vectors::tree` | "test vector exists" panic | Missing tree test vectors |
-| `sapling::tests::tree::incremental_roots_with_blocks` | "test vector exists" panic | Missing sapling tree vectors |
-| `work::difficulty::tests::vectors::genesis_block_difficulty` | "test vector exists" panic | Missing difficulty vectors |
-| `transaction::tests::vectors::binding_signatures` | "test vector exists" panic | Missing binding sig vectors |
-| `work::difficulty::tests::vectors::block_difficulty` | "test vector exists" panic | Missing difficulty vectors |
+Previously, the following tests failed because `Network::iter()` includes `Network::Botcash`, but Botcash doesn't have test vector files yet (network hasn't launched):
+- `history_tree::tests::vectors::upgrade`
+- `history_tree::tests::vectors::push_and_prune`
+- `block::tests::vectors::block_test_vectors`
+- `primitives::zcash_history::tests::vectors::tree`
+- `sapling::tests::tree::incremental_roots_with_blocks`
+- `work::difficulty::tests::vectors::genesis_block_difficulty`
+- `transaction::tests::vectors::binding_signatures`
+- `work::difficulty::tests::vectors::block_difficulty`
 
-**Note:** These tests require Zcash mainnet/testnet test vector files that may not be present in the forked repository. They are not required for Botcash protocol implementation.
+**Fix Applied:**
+- Added `Network::has_test_vectors()` method in `zebra-chain/src/tests/vectors.rs`
+- Updated all test vector tests to skip networks without test vectors using `if !net.has_test_vectors() { continue; }`
+- Botcash will get test vectors after genesis block is mined
 
-To run Botcash-specific tests only:
+**Modified Files:**
+- `zebra-chain/src/tests/vectors.rs` — Added `has_test_vectors()` method
+- `zebra-chain/src/block/tests/vectors.rs` — Skip Botcash in `block_test_vectors` and `block_commitment`
+- `zebra-chain/src/history_tree/tests/vectors.rs` — Skip Botcash in `push_and_prune` and `upgrade`
+- `zebra-chain/src/primitives/zcash_history/tests/vectors.rs` — Skip Botcash in `tree`
+- `zebra-chain/src/sapling/tests/tree.rs` — Skip Botcash in `incremental_roots_with_blocks`
+- `zebra-chain/src/work/difficulty/tests/vectors.rs` — Skip Botcash in `block_difficulty` and `genesis_block_difficulty`
+- `zebra-chain/src/transaction/tests/vectors.rs` — Skip Botcash in `binding_signatures`, `consensus_branch_id`, `fake_v5_librustzcash_round_trip`
+- `zebra-chain/src/parameters/network/tests.rs` — Added `botcash_no_test_vectors` test
+
+**Running Tests:**
 ```bash
-# Social protocol tests (112 tests)
+# Full zebra-chain test suite (447 tests pass)
+cargo test -p zebra-chain
+
+# Social protocol tests (139 tests)
 cargo test -p zebra-chain -- social
 
-# Social RPC type tests (197 tests)
+# Social RPC type tests
 cargo test -p zebra-rpc -- types::social
 
-# Indexer tests (224 tests)
+# Indexer tests
 cargo test -p zebra-rpc -- indexer
 ```

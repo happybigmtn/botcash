@@ -52,6 +52,10 @@ fn incremental_roots() {
 #[test]
 fn incremental_roots_with_blocks() -> Result<()> {
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         incremental_roots_with_blocks_for_network(network)?;
     }
     Ok(())

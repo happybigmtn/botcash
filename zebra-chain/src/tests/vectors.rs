@@ -28,6 +28,14 @@ impl Network {
         matches!(self, Network::Mainnet)
     }
 
+    /// Returns true if this network has test vectors available.
+    ///
+    /// Botcash does not have test vectors yet because the network hasn't launched.
+    /// Test vector tests should skip Botcash until genesis is mined and vectors are generated.
+    pub fn has_test_vectors(&self) -> bool {
+        matches!(self, Network::Mainnet | Network::Testnet(_))
+    }
+
     /// Returns iterator over blocks.
     pub fn block_iter(&self) -> std::collections::btree_map::Iter<'static, u32, &'static [u8]> {
         if self.is_mainnet() {

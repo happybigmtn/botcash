@@ -361,6 +361,10 @@ fn invalid_orchard_nullifier() {
 fn fake_v5_librustzcash_round_trip() {
     let _init_guard = zebra_test::init();
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         fake_v5_librustzcash_round_trip_for_network(network);
     }
 }
@@ -846,6 +850,10 @@ fn zip244_sighash() -> Result<()> {
 #[test]
 fn consensus_branch_id() {
     for net in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !net.has_test_vectors() {
+            continue;
+        }
         for tx in v5_transactions(net.block_iter()).filter(|tx| {
             !tx.has_transparent_inputs() && tx.has_shielded_data() && tx.network_upgrade().is_some()
         }) {
@@ -902,6 +910,10 @@ fn binding_signatures() {
     let _init_guard = zebra_test::init();
 
     for net in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !net.has_test_vectors() {
+            continue;
+        }
         let sapling_activation_height = NetworkUpgrade::Sapling
             .activation_height(&net)
             .expect("a valid height")

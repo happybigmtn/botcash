@@ -264,6 +264,10 @@ fn compact_bitcoin_test_vectors() {
 #[test]
 fn block_difficulty() -> Result<(), Report> {
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         block_difficulty_for_network(network)?;
     }
 
@@ -351,6 +355,10 @@ fn block_difficulty_for_network(network: Network) -> Result<(), Report> {
 #[test]
 fn genesis_block_difficulty() -> Result<(), Report> {
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         genesis_block_difficulty_for_network(network)?;
     }
 

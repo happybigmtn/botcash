@@ -23,6 +23,10 @@ use eyre::Result;
 #[test]
 fn push_and_prune() -> Result<()> {
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         push_and_prune_for_network_upgrade(network.clone(), NetworkUpgrade::Heartwood)?;
         push_and_prune_for_network_upgrade(network, NetworkUpgrade::Canopy)?;
     }
@@ -110,6 +114,10 @@ fn upgrade() -> Result<()> {
     // The history tree only exists Hearwood-onward, and the only upgrade for which
     // we have vectors since then is Canopy. Therefore, only test the Heartwood->Canopy upgrade.
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         upgrade_for_network_upgrade(network, NetworkUpgrade::Canopy)?;
     }
     Ok(())

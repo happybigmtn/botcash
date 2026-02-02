@@ -199,6 +199,11 @@ fn block_test_vectors() {
     let _init_guard = zebra_test::init();
 
     for net in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !net.has_test_vectors() {
+            continue;
+        }
+
         let sapling_anchors = net.sapling_anchors();
         let orchard_anchors = net.orchard_anchors();
 
@@ -245,6 +250,11 @@ fn block_commitment() {
     let _init_guard = zebra_test::init();
 
     for net in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !net.has_test_vectors() {
+            continue;
+        }
+
         let sapling_anchors = net.sapling_anchors();
 
         for (height, block) in net.block_iter() {

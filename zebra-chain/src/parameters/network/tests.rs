@@ -424,6 +424,24 @@ fn botcash_default_port() {
     assert_eq!(network.default_port(), 8533);
 }
 
+/// Tests has_test_vectors() returns false for Botcash (pre-launch).
+#[test]
+fn botcash_no_test_vectors() {
+    let _init_guard = zebra_test::init();
+
+    // Botcash doesn't have test vectors yet (network hasn't launched)
+    assert!(
+        !Network::Botcash.has_test_vectors(),
+        "Botcash should not have test vectors before launch"
+    );
+
+    // Mainnet and Testnet should have test vectors
+    assert!(
+        Network::Mainnet.has_test_vectors(),
+        "Mainnet should have test vectors"
+    );
+}
+
 /// Tests Botcash BIP70 network name via Network.
 #[test]
 fn botcash_network_bip70_name() {

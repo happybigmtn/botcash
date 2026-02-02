@@ -12,6 +12,10 @@ use eyre::Result;
 #[test]
 fn tree() -> Result<()> {
     for network in Network::iter() {
+        // Skip networks without test vectors (e.g., Botcash before launch)
+        if !network.has_test_vectors() {
+            continue;
+        }
         tree_for_network_upgrade(&network, NetworkUpgrade::Heartwood)?;
         tree_for_network_upgrade(&network, NetworkUpgrade::Canopy)?;
     }
