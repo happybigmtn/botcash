@@ -1663,6 +1663,177 @@ pub trait Rpc {
         &self,
         request: types::social::BridgeVerifyRequest,
     ) -> Result<types::social::BridgeVerifyResponse>;
+
+    // ==================== Moderation RPC Methods (Trust & Reports) ====================
+
+    /// Creates or updates a trust relationship with another user.
+    ///
+    /// Trust relationships form a web of trust for reputation. Users can mark
+    /// others as trusted, neutral, or distrusted with an optional reason.
+    /// Trust propagates through the social graph with decay.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The trust request containing:
+    ///   - `from`: (string) The truster's address
+    ///   - `target`: (string) The address to trust/distrust
+    ///   - `level`: (string) Trust level: "trusted", "neutral", or "distrust"
+    ///   - `reason`: (string, optional) Reason for the trust decision (max 200 chars)
+    ///
+    /// # Returns
+    ///
+    /// A `TrustResponse` object containing:
+    /// - `txid`: (string) The trust transaction ID
+    /// - `target`: (string) The trusted/distrusted address
+    /// - `level`: (string) The trust level set
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension for the reputation system.
+    /// Requires wallet support to sign and submit the trust transaction.
+    #[method(name = "z_trust")]
+    async fn z_trust(
+        &self,
+        request: types::social::TrustRequest,
+    ) -> Result<types::social::TrustResponse>;
+
+    /// Queries trust relationships for an address.
+    ///
+    /// Returns incoming and/or outgoing trust relationships, along with
+    /// computed trust scores based on the web of trust.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The query request containing:
+    ///   - `address`: (string) The address to query trust for
+    ///   - `includeIncoming`: (bool, optional) Include trusts received (default: true)
+    ///   - `includeOutgoing`: (bool, optional) Include trusts given (default: true)
+    ///   - `limit`: (u32, optional) Maximum results (default: 100, max: 1000)
+    ///
+    /// # Returns
+    ///
+    /// A `TrustQueryResponse` object containing:
+    /// - `address`: (string) The queried address
+    /// - `trustScore`: (i64) Computed trust score
+    /// - `trustedByCount`: (u32) Number of addresses that trust this address
+    /// - `distrustedByCount`: (u32) Number of addresses that distrust this address
+    /// - `trusts`: (array) List of TrustSummary objects
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_trustquery")]
+    async fn z_trust_query(
+        &self,
+        request: types::social::TrustQueryRequest,
+    ) -> Result<types::social::TrustQueryResponse>;
+
+    /// Submits a stake-weighted report against content.
+    ///
+    /// Reports require staking BCASH as collateral. Valid reports return stake
+    /// plus reward; false reports forfeit stake. This prevents report spam
+    /// while incentivizing honest reporting.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The report request containing:
+    ///   - `from`: (string) The reporter's address
+    ///   - `targetTxid`: (string) Transaction ID of content to report
+    ///   - `category`: (string) Report category: "spam", "scam", "harassment", "illegal", "other"
+    ///   - `stake`: (u64) BCASH stake in zatoshi (minimum 1,000,000 = 0.01 BCASH)
+    ///   - `evidence`: (string, optional) Evidence text (max 300 chars)
+    ///
+    /// # Returns
+    ///
+    /// A `ReportResponse` object containing:
+    /// - `txid`: (string) The report transaction ID
+    /// - `targetTxid`: (string) The reported content's transaction ID
+    /// - `category`: (string) The report category
+    /// - `stake`: (u64) The staked amount
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension for content moderation.
+    /// Requires wallet support to sign and submit the report transaction.
+    #[method(name = "z_report")]
+    async fn z_report(
+        &self,
+        request: types::social::ReportRequest,
+    ) -> Result<types::social::ReportResponse>;
+
+    /// Gets the status of a submitted report.
+    ///
+    /// Returns the current status of a report including whether it has been
+    /// validated, rejected, or is still pending review.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `reportTxid`: (string) Transaction ID of the report
+    ///
+    /// # Returns
+    ///
+    /// A `ReportStatusResponse` object containing:
+    /// - `reportTxid`: (string) The report transaction ID
+    /// - `targetTxid`: (string) The reported content's transaction ID
+    /// - `category`: (string) The report category
+    /// - `stake`: (u64) The staked amount
+    /// - `status`: (string) Current status: "pending", "validated", "rejected", "expired"
+    /// - `blockHeight`: (u32) Block height when report was submitted
+    /// - `resolution`: (string, optional) Resolution details if decided
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_reportstatus")]
+    async fn z_report_status(
+        &self,
+        request: types::social::ReportStatusRequest,
+    ) -> Result<types::social::ReportStatusResponse>;
+
+    /// Lists reports matching filter criteria.
+    ///
+    /// Returns a paginated list of reports, optionally filtered by target,
+    /// reporter, category, or status.
+    ///
+    /// # method: post
+    /// # tags: moderation
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The list request containing:
+    ///   - `targetTxid`: (string, optional) Filter by reported content
+    ///   - `reporterAddress`: (string, optional) Filter by reporter
+    ///   - `category`: (string, optional) Filter by category
+    ///   - `status`: (string, optional) Filter by status
+    ///   - `limit`: (u32, optional) Maximum results (default: 50, max: 1000)
+    ///
+    /// # Returns
+    ///
+    /// A `ReportListResponse` object containing:
+    /// - `reports`: (array) List of ReportSummary objects
+    /// - `totalCount`: (u32) Total matching reports (may exceed limit)
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_reportlist")]
+    async fn z_report_list(
+        &self,
+        request: types::social::ReportListRequest,
+    ) -> Result<types::social::ReportListResponse>;
 }
 
 /// RPC method implementations.
@@ -5787,6 +5958,322 @@ where
             hex::encode(challenge), // challenge
             expires_at,             // expires_at
             instructions.to_string(), // instructions
+        ))
+    }
+
+    // ==================== Moderation RPC Method Implementations ====================
+
+    async fn z_trust(
+        &self,
+        request: types::social::TrustRequest,
+    ) -> Result<types::social::TrustResponse> {
+        // Validate the truster address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate the target address
+        if request.target.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "target address is required",
+                None::<()>,
+            ));
+        }
+
+        // Cannot trust yourself
+        if request.from == request.target {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "cannot trust yourself",
+                None::<()>,
+            ));
+        }
+
+        // Validate reason length if provided
+        if let Some(ref reason) = request.reason {
+            if reason.len() > types::social::MAX_TRUST_REASON_LENGTH {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "reason exceeds maximum length of {} characters (got {})",
+                        types::social::MAX_TRUST_REASON_LENGTH,
+                        reason.len()
+                    ),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // In production, this would:
+        // 1. Build a Trust memo with the target, level, and reason
+        // 2. Create a transaction with the memo attached
+        // 3. Sign and submit via wallet
+        // 4. Return the transaction ID
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_trust requires wallet support which is not yet implemented in Zebra. \
+                Would record {} trust from {} to {}{}",
+                request.level,
+                request.from,
+                request.target,
+                request.reason.as_ref().map(|r| format!(" (reason: {})", r)).unwrap_or_default()
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_trust_query(
+        &self,
+        request: types::social::TrustQueryRequest,
+    ) -> Result<types::social::TrustQueryResponse> {
+        // Validate the address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate limit
+        if request.limit > types::social::MAX_TRUST_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    types::social::MAX_TRUST_LIMIT,
+                    request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // In production, this would query the indexer for:
+        // 1. All trust relationships involving this address
+        // 2. Computed trust score based on web of trust algorithm
+        // 3. Counts of trusted-by and distrusted-by relationships
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_trustquery requires indexer support which is not yet implemented. \
+                Would query trust for address {} (incoming: {}, outgoing: {}, limit: {})",
+                request.address, request.include_incoming, request.include_outgoing, request.limit
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_report(
+        &self,
+        request: types::social::ReportRequest,
+    ) -> Result<types::social::ReportResponse> {
+        // Validate the reporter address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate the target txid
+        if request.target_txid.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "targetTxid is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate target txid format (should be 64 hex chars = 32 bytes)
+        if request.target_txid.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "targetTxid must be 64 hex characters (got {})",
+                    request.target_txid.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate hex format
+        if hex::decode(&request.target_txid).is_err() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "targetTxid must be valid hex",
+                None::<()>,
+            ));
+        }
+
+        // Validate minimum stake
+        if request.stake < types::social::MIN_REPORT_STAKE {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "stake must be at least {} zatoshi (0.01 BCASH), got {}",
+                    types::social::MIN_REPORT_STAKE,
+                    request.stake
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate evidence length if provided
+        if let Some(ref evidence) = request.evidence {
+            if evidence.len() > types::social::MAX_REPORT_EVIDENCE_LENGTH {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "evidence exceeds maximum length of {} characters (got {})",
+                        types::social::MAX_REPORT_EVIDENCE_LENGTH,
+                        evidence.len()
+                    ),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // In production, this would:
+        // 1. Build a Report memo with target, category, stake, and evidence
+        // 2. Create a transaction with the memo attached and stake locked
+        // 3. Sign and submit via wallet
+        // 4. Return the transaction ID
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_report requires wallet support which is not yet implemented in Zebra. \
+                Would submit {} report against tx {} with {} zatoshi stake{}",
+                request.category,
+                request.target_txid,
+                request.stake,
+                request.evidence.as_ref().map(|e| format!(" (evidence: {})", e)).unwrap_or_default()
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_report_status(
+        &self,
+        request: types::social::ReportStatusRequest,
+    ) -> Result<types::social::ReportStatusResponse> {
+        // Validate the report txid
+        if request.report_txid.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "reportTxid is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate txid format (should be 64 hex chars = 32 bytes)
+        if request.report_txid.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "reportTxid must be 64 hex characters (got {})",
+                    request.report_txid.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate hex format
+        if hex::decode(&request.report_txid).is_err() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "reportTxid must be valid hex",
+                None::<()>,
+            ));
+        }
+
+        // In production, this would query the indexer for:
+        // 1. The report transaction details
+        // 2. Current status (pending, validated, rejected, expired)
+        // 3. Resolution details if decided
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_reportstatus requires indexer support which is not yet implemented. \
+                Would query status for report {}",
+                request.report_txid
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_report_list(
+        &self,
+        request: types::social::ReportListRequest,
+    ) -> Result<types::social::ReportListResponse> {
+        // Validate limit
+        if request.limit > types::social::MAX_REPORT_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    types::social::MAX_REPORT_LIMIT,
+                    request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate target txid format if provided
+        if let Some(ref txid) = request.target_txid {
+            if txid.len() != 64 {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "targetTxid must be 64 hex characters (got {})",
+                        txid.len()
+                    ),
+                    None::<()>,
+                ));
+            }
+            if hex::decode(txid).is_err() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "targetTxid must be valid hex",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Validate reporter address if provided
+        if let Some(ref addr) = request.reporter_address {
+            if addr.is_empty() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "reporterAddress cannot be empty if provided",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // In production, this would query the indexer for:
+        // 1. Reports matching the filter criteria
+        // 2. Total count for pagination
+        // 3. Ordered by block height descending
+
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_reportlist requires indexer support which is not yet implemented. \
+                Would list reports with filters: target={:?}, reporter={:?}, category={:?}, status={:?}, limit={}",
+                request.target_txid, request.reporter_address, request.category, request.status, request.limit
+            ),
+            None::<()>,
         ))
     }
 }

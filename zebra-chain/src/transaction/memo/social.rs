@@ -28,6 +28,7 @@
 //! - **Polls (0x70-0x71)**: Poll creation and voting
 //! - **Governance (0xE0-0xE1)**: On-chain voting and proposals
 //! - **Channels (0xC0-0xC2)**: Layer-2 social channels for high-frequency messaging
+//! - **Moderation (0xD0-0xD1)**: Trust/reputation and content reports
 //! - **Recovery (0xF0-0xF3)**: Key recovery and social recovery mechanisms
 
 use std::fmt;
@@ -67,6 +68,7 @@ pub const BATCH_ACTION_LENGTH_SIZE: usize = 2;
 /// - `0x8_`: Batching
 /// - `0xB_`: Bridges (cross-platform identity linking)
 /// - `0xC_`: Channels (layer-2 social channels)
+/// - `0xD_`: Moderation (trust/reputation, content reports)
 /// - `0xE_`: Governance (voting, proposals)
 /// - `0xF_`: Recovery (social recovery, key rotation)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -247,6 +249,22 @@ pub enum SocialMessageType {
     /// Must be submitted before the timelock expires to prevent unauthorized recovery.
     /// Format: [request_txid(32)][owner_sig_len(1)][owner_sig]
     RecoveryCancel = 0xF3,
+
+    /// Trust/vouch for another user (0xD0).
+    ///
+    /// Explicitly express trust in another user, contributing to the web of trust.
+    /// Trust propagates through the social graph with decay.
+    /// Format: [target_addr_len(1)][target_addr][level(1)][reason_len(1)][reason]
+    /// Level: 0 = distrust, 1 = neutral, 2 = trusted
+    Trust = 0xD0,
+
+    /// Stake-weighted content report (0xD1).
+    ///
+    /// Report content for moderation. Requires a small BCASH stake that is
+    /// forfeited for false reports or returned (with small reward) for valid ones.
+    /// Format: [target_txid(32)][category(1)][stake(8)][evidence_len(1)][evidence]
+    /// Categories: 0 = spam, 1 = scam, 2 = harassment, 3 = illegal, 4 = other
+    Report = 0xD1,
 }
 
 impl SocialMessageType {
@@ -289,6 +307,8 @@ impl SocialMessageType {
             Self::RecoveryRequest => "RecoveryRequest",
             Self::RecoveryApprove => "RecoveryApprove",
             Self::RecoveryCancel => "RecoveryCancel",
+            Self::Trust => "Trust",
+            Self::Report => "Report",
         }
     }
 
@@ -356,6 +376,15 @@ impl SocialMessageType {
             Self::BridgeLink | Self::BridgeUnlink | Self::BridgePost | Self::BridgeVerify
         )
     }
+
+    /// Returns true if this is a moderation message type.
+    ///
+    /// Moderation messages are used for the reputation system (trust/vouch)
+    /// and stake-weighted content reports. They enable community-driven
+    /// moderation without central authority.
+    pub const fn is_moderation(&self) -> bool {
+        matches!(self, Self::Trust | Self::Report)
+    }
 }
 
 impl TryFrom<u8> for SocialMessageType {
@@ -393,6 +422,8 @@ impl TryFrom<u8> for SocialMessageType {
             0xF1 => Ok(Self::RecoveryRequest),
             0xF2 => Ok(Self::RecoveryApprove),
             0xF3 => Ok(Self::RecoveryCancel),
+            0xD0 => Ok(Self::Trust),
+            0xD1 => Ok(Self::Report),
             _ => Err(SocialParseError::UnknownMessageType(value)),
         }
     }
@@ -986,6 +1017,545 @@ impl BridgeMessage {
     }
 }
 
+// ==================== Moderation Types ====================
+
+/// Trust level for the web of trust reputation system.
+///
+/// Users can explicitly express trust levels for other users, which propagates
+/// through the social graph with decay. This enables reputation-based filtering
+/// without centralized authority.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum TrustLevel {
+    /// Explicit distrust - negative endorsement (0x00).
+    Distrust = 0x00,
+
+    /// Neutral - removes any previous trust/distrust (0x01).
+    Neutral = 0x01,
+
+    /// Trusted - positive endorsement (0x02).
+    Trusted = 0x02,
+}
+
+impl TrustLevel {
+    /// Returns the byte value of this trust level.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Returns a human-readable name for this trust level.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Distrust => "Distrust",
+            Self::Neutral => "Neutral",
+            Self::Trusted => "Trusted",
+        }
+    }
+}
+
+impl TryFrom<u8> for TrustLevel {
+    type Error = ModerationParseError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::Distrust),
+            0x01 => Ok(Self::Neutral),
+            0x02 => Ok(Self::Trusted),
+            _ => Err(ModerationParseError::InvalidTrustLevel(value)),
+        }
+    }
+}
+
+impl fmt::Display for TrustLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+/// Report categories for stake-weighted content reports.
+///
+/// Each category has different handling in moderation systems.
+/// Some categories (like illegal content) may trigger indexer-level filtering,
+/// while others (like spam) only affect ranking and user-level filtering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum ReportCategory {
+    /// Spam - unsolicited bulk content (0x00).
+    Spam = 0x00,
+
+    /// Scam - fraudulent schemes (0x01).
+    Scam = 0x01,
+
+    /// Harassment - targeted abuse (0x02).
+    Harassment = 0x02,
+
+    /// Illegal - potentially illegal content (0x03).
+    Illegal = 0x03,
+
+    /// Other - miscellaneous reports (0x04).
+    Other = 0x04,
+}
+
+impl ReportCategory {
+    /// Returns the byte value of this report category.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Returns a human-readable name for this report category.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Spam => "Spam",
+            Self::Scam => "Scam",
+            Self::Harassment => "Harassment",
+            Self::Illegal => "Illegal",
+            Self::Other => "Other",
+        }
+    }
+
+    /// Returns true if this report category should trigger immediate indexer filtering.
+    ///
+    /// Some categories (like illegal content) are too sensitive to wait for
+    /// stake resolution and should be filtered pending review.
+    pub const fn requires_immediate_filtering(&self) -> bool {
+        matches!(self, Self::Illegal)
+    }
+}
+
+impl TryFrom<u8> for ReportCategory {
+    type Error = ModerationParseError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(Self::Spam),
+            0x01 => Ok(Self::Scam),
+            0x02 => Ok(Self::Harassment),
+            0x03 => Ok(Self::Illegal),
+            0x04 => Ok(Self::Other),
+            _ => Err(ModerationParseError::InvalidReportCategory(value)),
+        }
+    }
+}
+
+impl fmt::Display for ReportCategory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+/// Errors that can occur when parsing moderation messages.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ModerationParseError {
+    /// Invalid trust level value.
+    InvalidTrustLevel(u8),
+
+    /// Invalid report category value.
+    InvalidReportCategory(u8),
+
+    /// The target address is too long.
+    TargetAddressTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
+
+    /// The evidence text is too long.
+    EvidenceTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
+
+    /// The reason text is too long.
+    ReasonTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
+
+    /// The payload is too short.
+    PayloadTooShort {
+        /// The minimum required length.
+        minimum: usize,
+        /// The actual length.
+        actual: usize,
+    },
+
+    /// Invalid stake amount (below minimum).
+    StakeTooLow {
+        /// The minimum required stake.
+        minimum: u64,
+        /// The actual stake.
+        actual: u64,
+    },
+}
+
+impl fmt::Display for ModerationParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidTrustLevel(byte) => {
+                write!(f, "invalid trust level: 0x{:02X}", byte)
+            }
+            Self::InvalidReportCategory(byte) => {
+                write!(f, "invalid report category: 0x{:02X}", byte)
+            }
+            Self::TargetAddressTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "target address too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
+                )
+            }
+            Self::EvidenceTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "evidence too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
+                )
+            }
+            Self::ReasonTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "reason too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
+                )
+            }
+            Self::PayloadTooShort { minimum, actual } => {
+                write!(
+                    f,
+                    "moderation payload too short: {} bytes, minimum {} required",
+                    actual, minimum
+                )
+            }
+            Self::StakeTooLow { minimum, actual } => {
+                write!(
+                    f,
+                    "report stake too low: {} zatoshis, minimum {} required",
+                    actual, minimum
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ModerationParseError {}
+
+/// Maximum length for a target address in trust messages.
+pub const MAX_TRUST_ADDRESS_LENGTH: usize = 128;
+
+/// Maximum length for the reason field in trust messages.
+pub const MAX_TRUST_REASON_LENGTH: usize = 200;
+
+/// Maximum length for evidence in report messages.
+pub const MAX_REPORT_EVIDENCE_LENGTH: usize = 300;
+
+/// Minimum stake required for a report (0.01 BCASH = 1_000_000 zatoshis).
+pub const MIN_REPORT_STAKE: u64 = 1_000_000;
+
+/// A parsed trust message from a transaction memo.
+///
+/// Trust messages allow users to explicitly vouch for or warn against other users,
+/// building a decentralized web of trust for reputation-based filtering.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TrustMessage {
+    /// The address being trusted/distrusted.
+    target_address: String,
+
+    /// The trust level being assigned.
+    level: TrustLevel,
+
+    /// Optional reason for the trust assignment.
+    reason: Option<String>,
+}
+
+impl TrustMessage {
+    /// Creates a new trust message.
+    pub fn new(target_address: String, level: TrustLevel, reason: Option<String>) -> Self {
+        Self {
+            target_address,
+            level,
+            reason,
+        }
+    }
+
+    /// Returns the target address.
+    pub fn target_address(&self) -> &str {
+        &self.target_address
+    }
+
+    /// Returns the trust level.
+    pub fn level(&self) -> TrustLevel {
+        self.level
+    }
+
+    /// Returns the optional reason.
+    pub fn reason(&self) -> Option<&str> {
+        self.reason.as_deref()
+    }
+
+    /// Encodes this trust message to bytes for inclusion in a memo.
+    ///
+    /// Format: [target_addr_len(1)][target_addr][level(1)][reason_len(1)][reason]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        // Target address length and bytes
+        bytes.push(self.target_address.len() as u8);
+        bytes.extend_from_slice(self.target_address.as_bytes());
+
+        // Trust level
+        bytes.push(self.level.as_u8());
+
+        // Reason (optional)
+        if let Some(ref reason) = self.reason {
+            bytes.push(reason.len() as u8);
+            bytes.extend_from_slice(reason.as_bytes());
+        } else {
+            bytes.push(0);
+        }
+
+        bytes
+    }
+
+    /// Parses a trust message from a payload.
+    ///
+    /// The payload should NOT include the message type and version bytes.
+    pub fn parse(payload: &[u8]) -> Result<Self, ModerationParseError> {
+        if payload.is_empty() {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: 3, // addr_len + level + reason_len
+                actual: 0,
+            });
+        }
+
+        let mut pos = 0;
+
+        // Target address length
+        let addr_len = payload[pos] as usize;
+        pos += 1;
+
+        if addr_len > MAX_TRUST_ADDRESS_LENGTH {
+            return Err(ModerationParseError::TargetAddressTooLong {
+                max_len: MAX_TRUST_ADDRESS_LENGTH,
+                actual_len: addr_len,
+            });
+        }
+
+        if pos + addr_len >= payload.len() {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: pos + addr_len + 2, // + level + reason_len
+                actual: payload.len(),
+            });
+        }
+
+        let target_address =
+            String::from_utf8_lossy(&payload[pos..pos + addr_len]).to_string();
+        pos += addr_len;
+
+        // Trust level
+        if pos >= payload.len() {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: pos + 2,
+                actual: payload.len(),
+            });
+        }
+        let level = TrustLevel::try_from(payload[pos])?;
+        pos += 1;
+
+        // Reason length
+        if pos >= payload.len() {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: pos + 1,
+                actual: payload.len(),
+            });
+        }
+        let reason_len = payload[pos] as usize;
+        pos += 1;
+
+        let reason = if reason_len > 0 {
+            if reason_len > MAX_TRUST_REASON_LENGTH {
+                return Err(ModerationParseError::ReasonTooLong {
+                    max_len: MAX_TRUST_REASON_LENGTH,
+                    actual_len: reason_len,
+                });
+            }
+
+            if pos + reason_len > payload.len() {
+                return Err(ModerationParseError::PayloadTooShort {
+                    minimum: pos + reason_len,
+                    actual: payload.len(),
+                });
+            }
+
+            Some(String::from_utf8_lossy(&payload[pos..pos + reason_len]).to_string())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            target_address,
+            level,
+            reason,
+        })
+    }
+}
+
+/// A parsed report message from a transaction memo.
+///
+/// Report messages enable stake-weighted content moderation. Reports require
+/// a BCASH stake that is forfeited for false reports or returned with a small
+/// reward for valid ones.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReportMessage {
+    /// The transaction ID of the content being reported (32 bytes).
+    target_txid: [u8; 32],
+
+    /// The category of the report.
+    category: ReportCategory,
+
+    /// The stake amount in zatoshis.
+    stake: u64,
+
+    /// Optional evidence/description.
+    evidence: Option<String>,
+}
+
+impl ReportMessage {
+    /// Creates a new report message.
+    pub fn new(
+        target_txid: [u8; 32],
+        category: ReportCategory,
+        stake: u64,
+        evidence: Option<String>,
+    ) -> Self {
+        Self {
+            target_txid,
+            category,
+            stake,
+            evidence,
+        }
+    }
+
+    /// Returns the target transaction ID.
+    pub fn target_txid(&self) -> &[u8; 32] {
+        &self.target_txid
+    }
+
+    /// Returns the report category.
+    pub fn category(&self) -> ReportCategory {
+        self.category
+    }
+
+    /// Returns the stake amount in zatoshis.
+    pub fn stake(&self) -> u64 {
+        self.stake
+    }
+
+    /// Returns the optional evidence.
+    pub fn evidence(&self) -> Option<&str> {
+        self.evidence.as_deref()
+    }
+
+    /// Encodes this report message to bytes for inclusion in a memo.
+    ///
+    /// Format: [target_txid(32)][category(1)][stake(8)][evidence_len(1)][evidence]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        // Target txid (32 bytes)
+        bytes.extend_from_slice(&self.target_txid);
+
+        // Category
+        bytes.push(self.category.as_u8());
+
+        // Stake (8 bytes, little-endian)
+        bytes.extend_from_slice(&self.stake.to_le_bytes());
+
+        // Evidence (optional)
+        if let Some(ref evidence) = self.evidence {
+            bytes.push(evidence.len() as u8);
+            bytes.extend_from_slice(evidence.as_bytes());
+        } else {
+            bytes.push(0);
+        }
+
+        bytes
+    }
+
+    /// Parses a report message from a payload.
+    ///
+    /// The payload should NOT include the message type and version bytes.
+    pub fn parse(payload: &[u8]) -> Result<Self, ModerationParseError> {
+        // Minimum: txid(32) + category(1) + stake(8) + evidence_len(1) = 42
+        const MIN_LEN: usize = 42;
+
+        if payload.len() < MIN_LEN {
+            return Err(ModerationParseError::PayloadTooShort {
+                minimum: MIN_LEN,
+                actual: payload.len(),
+            });
+        }
+
+        let mut pos = 0;
+
+        // Target txid (32 bytes)
+        let mut target_txid = [0u8; 32];
+        target_txid.copy_from_slice(&payload[pos..pos + 32]);
+        pos += 32;
+
+        // Category
+        let category = ReportCategory::try_from(payload[pos])?;
+        pos += 1;
+
+        // Stake (8 bytes, little-endian)
+        let stake = u64::from_le_bytes(payload[pos..pos + 8].try_into().unwrap());
+        pos += 8;
+
+        if stake < MIN_REPORT_STAKE {
+            return Err(ModerationParseError::StakeTooLow {
+                minimum: MIN_REPORT_STAKE,
+                actual: stake,
+            });
+        }
+
+        // Evidence length
+        let evidence_len = payload[pos] as usize;
+        pos += 1;
+
+        let evidence = if evidence_len > 0 {
+            if evidence_len > MAX_REPORT_EVIDENCE_LENGTH {
+                return Err(ModerationParseError::EvidenceTooLong {
+                    max_len: MAX_REPORT_EVIDENCE_LENGTH,
+                    actual_len: evidence_len,
+                });
+            }
+
+            if pos + evidence_len > payload.len() {
+                return Err(ModerationParseError::PayloadTooShort {
+                    minimum: pos + evidence_len,
+                    actual: payload.len(),
+                });
+            }
+
+            Some(String::from_utf8_lossy(&payload[pos..pos + evidence_len]).to_string())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            target_txid,
+            category,
+            stake,
+            evidence,
+        })
+    }
+}
+
 /// A parsed social message from a transaction memo.
 ///
 /// This struct provides access to the message type, version, and raw payload
@@ -1515,6 +2085,8 @@ mod tests {
             SocialMessageType::RecoveryRequest,
             SocialMessageType::RecoveryApprove,
             SocialMessageType::RecoveryCancel,
+            SocialMessageType::Trust,
+            SocialMessageType::Report,
         ];
 
         for msg_type in types {
@@ -3098,6 +3670,12 @@ mod tests {
         assert!(!SocialMessageType::BridgeUnlink.is_batch());
         assert!(!SocialMessageType::BridgePost.is_batch());
         assert!(!SocialMessageType::BridgeVerify.is_batch());
+
+        // Bridge types are not moderation
+        assert!(!SocialMessageType::BridgeLink.is_moderation());
+        assert!(!SocialMessageType::BridgeUnlink.is_moderation());
+        assert!(!SocialMessageType::BridgePost.is_moderation());
+        assert!(!SocialMessageType::BridgeVerify.is_moderation());
     }
 
     #[test]
@@ -3288,9 +3866,11 @@ mod tests {
             SocialMessageType::RecoveryRequest,
             SocialMessageType::RecoveryApprove,
             SocialMessageType::RecoveryCancel,
+            SocialMessageType::Trust,
+            SocialMessageType::Report,
         ];
 
-        assert_eq!(all_types.len(), 30);
+        assert_eq!(all_types.len(), 32);
 
         // Verify all can be parsed from their byte values
         for msg_type in &all_types {
@@ -3298,5 +3878,418 @@ mod tests {
             let parsed = SocialMessageType::try_from(byte).expect("should parse");
             assert_eq!(&parsed, msg_type);
         }
+    }
+
+    // ==================== Moderation Message Tests (Required for P6.6 Moderation) ====================
+
+    #[test]
+    fn trust_level_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(TrustLevel::Distrust.as_u8(), 0x00);
+        assert_eq!(TrustLevel::Neutral.as_u8(), 0x01);
+        assert_eq!(TrustLevel::Trusted.as_u8(), 0x02);
+    }
+
+    #[test]
+    fn trust_level_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let levels = [TrustLevel::Distrust, TrustLevel::Neutral, TrustLevel::Trusted];
+
+        for level in levels {
+            let byte = level.as_u8();
+            let parsed = TrustLevel::try_from(byte).expect("should parse");
+            assert_eq!(parsed, level);
+        }
+    }
+
+    #[test]
+    fn trust_level_invalid() {
+        let _init_guard = zebra_test::init();
+
+        let invalid_levels = [0x03, 0x04, 0xFF];
+        for byte in invalid_levels {
+            let result = TrustLevel::try_from(byte);
+            assert!(result.is_err());
+            if let Err(ModerationParseError::InvalidTrustLevel(b)) = result {
+                assert_eq!(b, byte);
+            }
+        }
+    }
+
+    #[test]
+    fn trust_level_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", TrustLevel::Distrust), "Distrust");
+        assert_eq!(format!("{}", TrustLevel::Neutral), "Neutral");
+        assert_eq!(format!("{}", TrustLevel::Trusted), "Trusted");
+    }
+
+    #[test]
+    fn report_category_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(ReportCategory::Spam.as_u8(), 0x00);
+        assert_eq!(ReportCategory::Scam.as_u8(), 0x01);
+        assert_eq!(ReportCategory::Harassment.as_u8(), 0x02);
+        assert_eq!(ReportCategory::Illegal.as_u8(), 0x03);
+        assert_eq!(ReportCategory::Other.as_u8(), 0x04);
+    }
+
+    #[test]
+    fn report_category_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let categories = [
+            ReportCategory::Spam,
+            ReportCategory::Scam,
+            ReportCategory::Harassment,
+            ReportCategory::Illegal,
+            ReportCategory::Other,
+        ];
+
+        for category in categories {
+            let byte = category.as_u8();
+            let parsed = ReportCategory::try_from(byte).expect("should parse");
+            assert_eq!(parsed, category);
+        }
+    }
+
+    #[test]
+    fn report_category_invalid() {
+        let _init_guard = zebra_test::init();
+
+        let invalid_categories = [0x05, 0x10, 0xFF];
+        for byte in invalid_categories {
+            let result = ReportCategory::try_from(byte);
+            assert!(result.is_err());
+            if let Err(ModerationParseError::InvalidReportCategory(b)) = result {
+                assert_eq!(b, byte);
+            }
+        }
+    }
+
+    #[test]
+    fn report_category_immediate_filtering() {
+        let _init_guard = zebra_test::init();
+
+        // Only illegal content requires immediate filtering
+        assert!(ReportCategory::Illegal.requires_immediate_filtering());
+
+        // Other categories don't require immediate filtering
+        assert!(!ReportCategory::Spam.requires_immediate_filtering());
+        assert!(!ReportCategory::Scam.requires_immediate_filtering());
+        assert!(!ReportCategory::Harassment.requires_immediate_filtering());
+        assert!(!ReportCategory::Other.requires_immediate_filtering());
+    }
+
+    #[test]
+    fn trust_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let msg = TrustMessage::new(
+            "bs1test12345".to_string(),
+            TrustLevel::Trusted,
+            Some("Helpful in m/botcash".to_string()),
+        );
+
+        assert_eq!(msg.target_address(), "bs1test12345");
+        assert_eq!(msg.level(), TrustLevel::Trusted);
+        assert_eq!(msg.reason(), Some("Helpful in m/botcash"));
+
+        // Encode and parse back
+        let payload = msg.encode();
+        let parsed = TrustMessage::parse(&payload).expect("should parse");
+
+        assert_eq!(parsed.target_address(), msg.target_address());
+        assert_eq!(parsed.level(), msg.level());
+        assert_eq!(parsed.reason(), msg.reason());
+    }
+
+    #[test]
+    fn trust_message_no_reason() {
+        let _init_guard = zebra_test::init();
+
+        let msg = TrustMessage::new(
+            "bs1anon67890".to_string(),
+            TrustLevel::Distrust,
+            None,
+        );
+
+        assert_eq!(msg.target_address(), "bs1anon67890");
+        assert_eq!(msg.level(), TrustLevel::Distrust);
+        assert_eq!(msg.reason(), None);
+
+        // Encode and parse back
+        let payload = msg.encode();
+        let parsed = TrustMessage::parse(&payload).expect("should parse");
+
+        assert_eq!(parsed.target_address(), msg.target_address());
+        assert_eq!(parsed.level(), msg.level());
+        assert_eq!(parsed.reason(), None);
+    }
+
+    #[test]
+    fn trust_message_in_social_message() {
+        let _init_guard = zebra_test::init();
+
+        let trust_msg = TrustMessage::new(
+            "bs1target".to_string(),
+            TrustLevel::Neutral,
+            Some("Changed my mind".to_string()),
+        );
+
+        // Build full social message
+        let mut memo_bytes = vec![0xD0, 0x01]; // Trust type, version 1
+        memo_bytes.extend_from_slice(&trust_msg.encode());
+
+        let memo = create_memo(&memo_bytes);
+        let social_msg = SocialMessage::try_from(&memo).expect("should parse");
+
+        assert_eq!(social_msg.msg_type(), SocialMessageType::Trust);
+        assert!(social_msg.msg_type().is_moderation());
+
+        // Parse the payload as TrustMessage
+        let decoded = TrustMessage::parse(social_msg.payload()).expect("should parse");
+        assert_eq!(decoded.target_address(), "bs1target");
+        assert_eq!(decoded.level(), TrustLevel::Neutral);
+    }
+
+    #[test]
+    fn report_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let target_txid = [0xAB; 32];
+        let msg = ReportMessage::new(
+            target_txid,
+            ReportCategory::Spam,
+            MIN_REPORT_STAKE,
+            Some("Identical to 50 other posts".to_string()),
+        );
+
+        assert_eq!(msg.target_txid(), &target_txid);
+        assert_eq!(msg.category(), ReportCategory::Spam);
+        assert_eq!(msg.stake(), MIN_REPORT_STAKE);
+        assert_eq!(msg.evidence(), Some("Identical to 50 other posts"));
+
+        // Encode and parse back
+        let payload = msg.encode();
+        let parsed = ReportMessage::parse(&payload).expect("should parse");
+
+        assert_eq!(parsed.target_txid(), msg.target_txid());
+        assert_eq!(parsed.category(), msg.category());
+        assert_eq!(parsed.stake(), msg.stake());
+        assert_eq!(parsed.evidence(), msg.evidence());
+    }
+
+    #[test]
+    fn report_message_no_evidence() {
+        let _init_guard = zebra_test::init();
+
+        let target_txid = [0xCD; 32];
+        let msg = ReportMessage::new(
+            target_txid,
+            ReportCategory::Scam,
+            MIN_REPORT_STAKE * 2,
+            None,
+        );
+
+        assert_eq!(msg.evidence(), None);
+
+        // Encode and parse back
+        let payload = msg.encode();
+        let parsed = ReportMessage::parse(&payload).expect("should parse");
+
+        assert_eq!(parsed.target_txid(), msg.target_txid());
+        assert_eq!(parsed.evidence(), None);
+    }
+
+    #[test]
+    fn report_message_stake_too_low() {
+        let _init_guard = zebra_test::init();
+
+        let target_txid = [0xEF; 32];
+
+        // Build payload with stake below minimum
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&target_txid);
+        payload.push(ReportCategory::Spam.as_u8());
+        payload.extend_from_slice(&(MIN_REPORT_STAKE - 1).to_le_bytes());
+        payload.push(0); // no evidence
+
+        let result = ReportMessage::parse(&payload);
+        assert!(result.is_err());
+
+        if let Err(ModerationParseError::StakeTooLow { minimum, actual }) = result {
+            assert_eq!(minimum, MIN_REPORT_STAKE);
+            assert_eq!(actual, MIN_REPORT_STAKE - 1);
+        } else {
+            panic!("Expected StakeTooLow error");
+        }
+    }
+
+    #[test]
+    fn report_message_in_social_message() {
+        let _init_guard = zebra_test::init();
+
+        let target_txid = [0x12; 32];
+        let report_msg = ReportMessage::new(
+            target_txid,
+            ReportCategory::Harassment,
+            MIN_REPORT_STAKE,
+            Some("Targeted abuse".to_string()),
+        );
+
+        // Build full social message
+        let mut memo_bytes = vec![0xD1, 0x01]; // Report type, version 1
+        memo_bytes.extend_from_slice(&report_msg.encode());
+
+        let memo = create_memo(&memo_bytes);
+        let social_msg = SocialMessage::try_from(&memo).expect("should parse");
+
+        assert_eq!(social_msg.msg_type(), SocialMessageType::Report);
+        assert!(social_msg.msg_type().is_moderation());
+
+        // Parse the payload as ReportMessage
+        let decoded = ReportMessage::parse(social_msg.payload()).expect("should parse");
+        assert_eq!(decoded.target_txid(), &target_txid);
+        assert_eq!(decoded.category(), ReportCategory::Harassment);
+    }
+
+    #[test]
+    fn moderation_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(SocialMessageType::Trust.as_u8(), 0xD0);
+        assert_eq!(SocialMessageType::Report.as_u8(), 0xD1);
+    }
+
+    #[test]
+    fn moderation_is_moderation_helper() {
+        let _init_guard = zebra_test::init();
+
+        // Moderation types should return true
+        assert!(SocialMessageType::Trust.is_moderation());
+        assert!(SocialMessageType::Report.is_moderation());
+
+        // Non-moderation types should return false
+        assert!(!SocialMessageType::Post.is_moderation());
+        assert!(!SocialMessageType::Dm.is_moderation());
+        assert!(!SocialMessageType::Batch.is_moderation());
+        assert!(!SocialMessageType::GovernanceVote.is_moderation());
+        assert!(!SocialMessageType::ChannelOpen.is_moderation());
+        assert!(!SocialMessageType::RecoveryConfig.is_moderation());
+        assert!(!SocialMessageType::BridgeLink.is_moderation());
+    }
+
+    #[test]
+    fn moderation_types_not_other_categories() {
+        let _init_guard = zebra_test::init();
+
+        // Moderation types are not value transfers
+        assert!(!SocialMessageType::Trust.is_value_transfer());
+        assert!(!SocialMessageType::Report.is_value_transfer());
+
+        // Moderation types are not attention market
+        assert!(!SocialMessageType::Trust.is_attention_market());
+        assert!(!SocialMessageType::Report.is_attention_market());
+
+        // Moderation types are not governance
+        assert!(!SocialMessageType::Trust.is_governance());
+        assert!(!SocialMessageType::Report.is_governance());
+
+        // Moderation types are not channels
+        assert!(!SocialMessageType::Trust.is_channel());
+        assert!(!SocialMessageType::Report.is_channel());
+
+        // Moderation types are not recovery
+        assert!(!SocialMessageType::Trust.is_recovery());
+        assert!(!SocialMessageType::Report.is_recovery());
+
+        // Moderation types are not batch
+        assert!(!SocialMessageType::Trust.is_batch());
+        assert!(!SocialMessageType::Report.is_batch());
+
+        // Moderation types are not bridge
+        assert!(!SocialMessageType::Trust.is_bridge());
+        assert!(!SocialMessageType::Report.is_bridge());
+    }
+
+    #[test]
+    fn moderation_type_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", SocialMessageType::Trust), "Trust");
+        assert_eq!(format!("{}", SocialMessageType::Report), "Report");
+    }
+
+    #[test]
+    fn moderation_batch_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // Create a trust message
+        let trust_msg = TrustMessage::new(
+            "bs1friend".to_string(),
+            TrustLevel::Trusted,
+            Some("Good contributor".to_string()),
+        );
+
+        // Create a batch containing trust + post
+        let actions = vec![
+            SocialMessage::new(SocialMessageType::Trust, 1, trust_msg.encode()),
+            SocialMessage::new(SocialMessageType::Post, 1, b"Hello!".to_vec()),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("batch should be valid");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should parse batch");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded.actions()[0].msg_type(), SocialMessageType::Trust);
+        assert!(decoded.actions()[0].msg_type().is_moderation());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
+    fn trust_parse_error_payload_too_short() {
+        let _init_guard = zebra_test::init();
+
+        // Empty payload
+        let result = TrustMessage::parse(&[]);
+        assert!(matches!(result, Err(ModerationParseError::PayloadTooShort { .. })));
+
+        // Only address length
+        let result = TrustMessage::parse(&[5]);
+        assert!(matches!(result, Err(ModerationParseError::PayloadTooShort { .. })));
+    }
+
+    #[test]
+    fn trust_parse_error_address_too_long() {
+        let _init_guard = zebra_test::init();
+
+        // Address length exceeding max
+        let mut payload = vec![200]; // len > MAX_TRUST_ADDRESS_LENGTH
+        payload.extend_from_slice(&[b'x'; 200]);
+        payload.push(TrustLevel::Trusted.as_u8());
+        payload.push(0);
+
+        let result = TrustMessage::parse(&payload);
+        assert!(matches!(result, Err(ModerationParseError::TargetAddressTooLong { .. })));
+    }
+
+    #[test]
+    fn report_parse_error_payload_too_short() {
+        let _init_guard = zebra_test::init();
+
+        // Empty payload
+        let result = ReportMessage::parse(&[]);
+        assert!(matches!(result, Err(ModerationParseError::PayloadTooShort { .. })));
+
+        // Partial txid
+        let result = ReportMessage::parse(&[0xAB; 20]);
+        assert!(matches!(result, Err(ModerationParseError::PayloadTooShort { .. })));
     }
 }

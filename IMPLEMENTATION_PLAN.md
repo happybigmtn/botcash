@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.5 Complete - Platform Bridges)
+**Last Updated:** 2026-02-01 (P6.6 Complete - Moderation System)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 30 types including channel, governance, recovery, and bridge types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -1649,17 +1649,17 @@ cd zashi-android && ./gradlew test
 - [ ] Multi-list aggregation with allow-list overrides
 - [ ] Required Tests: List parsing, subscription sync
 
-#### 6.3.3 Reputation System
-- [ ] Karma calculation: `Σ(upvotes) + Σ(tips) - Σ(downvotes)`
-- [ ] Trust transaction type (0xD0)
-- [ ] Web of trust propagation (with decay)
-- [ ] Required Tests: Karma accuracy, trust propagation
+#### 6.3.3 Reputation System ✅
+- [x] Karma calculation: `Σ(upvotes) + Σ(tips) - Σ(downvotes)`
+- [x] Trust transaction type (0xD0) - TrustMessage with TrustLevel enum
+- [x] Web of trust propagation (with decay) - calculate_transitive_trust()
+- [x] Required Tests: 96 zebra-chain social tests including 23+ moderation tests
 
-#### 6.3.4 Stake-Weighted Reports
-- [ ] Report transaction type (0xD1)
-- [ ] Report stake requirement (0.01 BCASH)
-- [ ] False report penalty mechanism
-- [ ] Required Tests: Report submission, stake handling
+#### 6.3.4 Stake-Weighted Reports ✅
+- [x] Report transaction type (0xD1) - ReportMessage with ReportCategory enum
+- [x] Report stake requirement (0.01 BCASH) - MIN_REPORT_STAKE = 1_000_000 zatoshi
+- [x] False report penalty mechanism - stake forfeiture on rejection
+- [x] Required Tests: 50+ tests in indexer moderation module
 
 ---
 

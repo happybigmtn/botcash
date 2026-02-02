@@ -1911,6 +1911,404 @@ pub const BRIDGE_CHALLENGE_SIZE: usize = 32;
 /// Challenge expiration time in seconds (10 minutes).
 pub const BRIDGE_CHALLENGE_EXPIRY_SECS: i64 = 600;
 
+// ====================================================================================
+//                                   MODERATION TYPES
+// ====================================================================================
+
+/// Trust level for the web of trust reputation system.
+///
+/// Users can express explicit trust in other users, building a decentralized
+/// reputation system. Trust propagates through the social graph with decay.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TrustLevel {
+    /// Negative endorsement - warns others about this user.
+    Distrust,
+
+    /// Neutral - removes any previous trust/distrust.
+    Neutral,
+
+    /// Positive endorsement - vouches for this user.
+    Trusted,
+}
+
+impl std::fmt::Display for TrustLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Distrust => write!(f, "distrust"),
+            Self::Neutral => write!(f, "neutral"),
+            Self::Trusted => write!(f, "trusted"),
+        }
+    }
+}
+
+impl TrustLevel {
+    /// Returns the byte value for encoding this trust level.
+    pub const fn as_u8(&self) -> u8 {
+        match self {
+            Self::Distrust => 0,
+            Self::Neutral => 1,
+            Self::Trusted => 2,
+        }
+    }
+}
+
+/// Report categories for stake-weighted content moderation.
+///
+/// Different categories have different handling - some trigger immediate
+/// filtering while others only affect ranking and reputation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReportCategory {
+    /// Unsolicited bulk content.
+    Spam,
+
+    /// Fraudulent schemes.
+    Scam,
+
+    /// Targeted abuse.
+    Harassment,
+
+    /// Potentially illegal content (triggers immediate filtering).
+    Illegal,
+
+    /// Other (miscellaneous).
+    Other,
+}
+
+impl std::fmt::Display for ReportCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spam => write!(f, "spam"),
+            Self::Scam => write!(f, "scam"),
+            Self::Harassment => write!(f, "harassment"),
+            Self::Illegal => write!(f, "illegal"),
+            Self::Other => write!(f, "other"),
+        }
+    }
+}
+
+impl ReportCategory {
+    /// Returns the byte value for encoding this report category.
+    pub const fn as_u8(&self) -> u8 {
+        match self {
+            Self::Spam => 0,
+            Self::Scam => 1,
+            Self::Harassment => 2,
+            Self::Illegal => 3,
+            Self::Other => 4,
+        }
+    }
+
+    /// Returns true if this category requires immediate indexer filtering.
+    ///
+    /// Some categories are too sensitive to wait for stake resolution.
+    pub const fn requires_immediate_filtering(&self) -> bool {
+        matches!(self, Self::Illegal)
+    }
+}
+
+/// Status of a content report.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReportStatus {
+    /// Report is pending review.
+    Pending,
+
+    /// Report was validated (stake returned with reward).
+    Validated,
+
+    /// Report was rejected (stake forfeited).
+    Rejected,
+
+    /// Report expired (no resolution reached).
+    Expired,
+}
+
+impl std::fmt::Display for ReportStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pending => write!(f, "pending"),
+            Self::Validated => write!(f, "validated"),
+            Self::Rejected => write!(f, "rejected"),
+            Self::Expired => write!(f, "expired"),
+        }
+    }
+}
+
+/// Request for expressing trust in another user.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct TrustRequest {
+    /// The address expressing trust.
+    pub from: String,
+
+    /// The address being trusted/distrusted.
+    pub target: String,
+
+    /// The level of trust.
+    pub level: TrustLevel,
+
+    /// Optional reason for this trust assignment.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Response for expressing trust in another user.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct TrustResponse {
+    /// The transaction ID of the trust action.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The target address.
+    target: String,
+
+    /// The trust level assigned.
+    level: TrustLevel,
+}
+
+/// Request for querying trust relationships.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct TrustQueryRequest {
+    /// The address to query trust for.
+    pub address: String,
+
+    /// Whether to include incoming trust (others trusting this address).
+    #[serde(rename = "includeIncoming", default = "default_true")]
+    pub include_incoming: bool,
+
+    /// Whether to include outgoing trust (this address trusting others).
+    #[serde(rename = "includeOutgoing", default = "default_true")]
+    pub include_outgoing: bool,
+
+    /// Maximum number of entries to return.
+    #[serde(default = "default_trust_limit")]
+    pub limit: u32,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_trust_limit() -> u32 {
+    100
+}
+
+/// Summary of a trust relationship.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct TrustSummary {
+    /// The address that expressed trust.
+    #[serde(rename = "fromAddress")]
+    from_address: String,
+
+    /// The address that received trust.
+    #[serde(rename = "toAddress")]
+    to_address: String,
+
+    /// The trust level.
+    level: TrustLevel,
+
+    /// Optional reason for the trust.
+    reason: Option<String>,
+
+    /// Block height when trust was expressed.
+    #[serde(rename = "blockHeight")]
+    #[getter(copy)]
+    block_height: u32,
+
+    /// Transaction ID of the trust action.
+    #[serde(rename = "txid")]
+    txid: String,
+}
+
+/// Response for querying trust relationships.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct TrustQueryResponse {
+    /// The queried address.
+    address: String,
+
+    /// Trust score (incoming trusted count - incoming distrusted count).
+    #[serde(rename = "trustScore")]
+    #[getter(copy)]
+    trust_score: i32,
+
+    /// Number of users trusting this address.
+    #[serde(rename = "trustedByCount")]
+    #[getter(copy)]
+    trusted_by_count: u32,
+
+    /// Number of users distrusting this address.
+    #[serde(rename = "distrustedByCount")]
+    #[getter(copy)]
+    distrusted_by_count: u32,
+
+    /// Trust relationships (both incoming and outgoing based on request).
+    relationships: Vec<TrustSummary>,
+}
+
+/// Request for reporting content.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ReportRequest {
+    /// The reporter's address.
+    pub from: String,
+
+    /// The transaction ID of the content being reported.
+    #[serde(rename = "targetTxid")]
+    pub target_txid: String,
+
+    /// The category of the report.
+    pub category: ReportCategory,
+
+    /// The stake amount in zatoshis (minimum: 1_000_000 = 0.01 BCASH).
+    pub stake: u64,
+
+    /// Optional evidence/description for the report.
+    #[serde(default)]
+    pub evidence: Option<String>,
+}
+
+/// Response for reporting content.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ReportResponse {
+    /// The transaction ID of the report.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The target content's transaction ID.
+    #[serde(rename = "targetTxid")]
+    target_txid: String,
+
+    /// The report category.
+    category: ReportCategory,
+
+    /// The stake amount in zatoshis.
+    #[getter(copy)]
+    stake: u64,
+}
+
+/// Request for querying report status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ReportStatusRequest {
+    /// The transaction ID of the report to query.
+    #[serde(rename = "reportTxid")]
+    pub report_txid: String,
+}
+
+/// Response for querying report status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ReportStatusResponse {
+    /// The report transaction ID.
+    #[serde(rename = "reportTxid")]
+    report_txid: String,
+
+    /// The target content's transaction ID.
+    #[serde(rename = "targetTxid")]
+    target_txid: String,
+
+    /// The report category.
+    category: ReportCategory,
+
+    /// The stake amount in zatoshis.
+    #[getter(copy)]
+    stake: u64,
+
+    /// Current status of the report.
+    status: ReportStatus,
+
+    /// Block height when the report was submitted.
+    #[serde(rename = "blockHeight")]
+    #[getter(copy)]
+    block_height: u32,
+
+    /// Block height when the report was resolved (if resolved).
+    #[serde(rename = "resolvedAtHeight")]
+    resolved_at_height: Option<u32>,
+}
+
+/// Request for listing reports against content.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ReportListRequest {
+    /// Optional content transaction ID to filter reports for.
+    #[serde(rename = "targetTxid")]
+    pub target_txid: Option<String>,
+
+    /// Optional reporter address to filter by.
+    #[serde(rename = "reporterAddress")]
+    pub reporter_address: Option<String>,
+
+    /// Optional category filter.
+    pub category: Option<ReportCategory>,
+
+    /// Optional status filter.
+    pub status: Option<ReportStatus>,
+
+    /// Maximum number of reports to return.
+    #[serde(default = "default_report_limit")]
+    pub limit: u32,
+}
+
+fn default_report_limit() -> u32 {
+    50
+}
+
+/// Summary of a report for list responses.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ReportSummary {
+    /// The report transaction ID.
+    #[serde(rename = "reportTxid")]
+    report_txid: String,
+
+    /// The target content's transaction ID.
+    #[serde(rename = "targetTxid")]
+    target_txid: String,
+
+    /// The reporter's address.
+    #[serde(rename = "reporterAddress")]
+    reporter_address: String,
+
+    /// The report category.
+    category: ReportCategory,
+
+    /// The stake amount in zatoshis.
+    #[getter(copy)]
+    stake: u64,
+
+    /// Current status of the report.
+    status: ReportStatus,
+
+    /// Block height when the report was submitted.
+    #[serde(rename = "blockHeight")]
+    #[getter(copy)]
+    block_height: u32,
+}
+
+/// Response for listing reports.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ReportListResponse {
+    /// List of reports matching the query.
+    reports: Vec<ReportSummary>,
+
+    /// Total number of matching reports (may be more than returned).
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
+/// Minimum stake required for a report (0.01 BCASH = 1_000_000 zatoshis).
+pub const MIN_REPORT_STAKE: u64 = 1_000_000;
+
+/// Maximum length for trust reason text.
+pub const MAX_TRUST_REASON_LENGTH: usize = 200;
+
+/// Maximum length for report evidence text.
+pub const MAX_REPORT_EVIDENCE_LENGTH: usize = 300;
+
+/// Maximum trust query limit.
+pub const MAX_TRUST_LIMIT: u32 = 1000;
+
+/// Maximum report list limit.
+pub const MAX_REPORT_LIMIT: u32 = 1000;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3499,5 +3897,319 @@ mod tests {
         assert_eq!(MAX_PLATFORM_ID_LENGTH, 64);
         assert_eq!(BRIDGE_CHALLENGE_SIZE, 32);
         assert_eq!(BRIDGE_CHALLENGE_EXPIRY_SECS, 600);
+    }
+
+    // ====================================================================================
+    //                               MODERATION TYPE TESTS
+    // ====================================================================================
+
+    #[test]
+    fn trust_level_serialize() {
+        assert_eq!(serde_json::to_string(&TrustLevel::Distrust).unwrap(), "\"distrust\"");
+        assert_eq!(serde_json::to_string(&TrustLevel::Neutral).unwrap(), "\"neutral\"");
+        assert_eq!(serde_json::to_string(&TrustLevel::Trusted).unwrap(), "\"trusted\"");
+    }
+
+    #[test]
+    fn trust_level_deserialize() {
+        let distrust: TrustLevel = serde_json::from_str("\"distrust\"").unwrap();
+        let neutral: TrustLevel = serde_json::from_str("\"neutral\"").unwrap();
+        let trusted: TrustLevel = serde_json::from_str("\"trusted\"").unwrap();
+
+        assert_eq!(distrust, TrustLevel::Distrust);
+        assert_eq!(neutral, TrustLevel::Neutral);
+        assert_eq!(trusted, TrustLevel::Trusted);
+    }
+
+    #[test]
+    fn trust_level_display() {
+        assert_eq!(format!("{}", TrustLevel::Distrust), "distrust");
+        assert_eq!(format!("{}", TrustLevel::Neutral), "neutral");
+        assert_eq!(format!("{}", TrustLevel::Trusted), "trusted");
+    }
+
+    #[test]
+    fn trust_level_as_u8() {
+        assert_eq!(TrustLevel::Distrust.as_u8(), 0);
+        assert_eq!(TrustLevel::Neutral.as_u8(), 1);
+        assert_eq!(TrustLevel::Trusted.as_u8(), 2);
+    }
+
+    #[test]
+    fn report_category_serialize() {
+        assert_eq!(serde_json::to_string(&ReportCategory::Spam).unwrap(), "\"spam\"");
+        assert_eq!(serde_json::to_string(&ReportCategory::Scam).unwrap(), "\"scam\"");
+        assert_eq!(serde_json::to_string(&ReportCategory::Harassment).unwrap(), "\"harassment\"");
+        assert_eq!(serde_json::to_string(&ReportCategory::Illegal).unwrap(), "\"illegal\"");
+        assert_eq!(serde_json::to_string(&ReportCategory::Other).unwrap(), "\"other\"");
+    }
+
+    #[test]
+    fn report_category_deserialize() {
+        let spam: ReportCategory = serde_json::from_str("\"spam\"").unwrap();
+        let scam: ReportCategory = serde_json::from_str("\"scam\"").unwrap();
+        let harassment: ReportCategory = serde_json::from_str("\"harassment\"").unwrap();
+        let illegal: ReportCategory = serde_json::from_str("\"illegal\"").unwrap();
+        let other: ReportCategory = serde_json::from_str("\"other\"").unwrap();
+
+        assert_eq!(spam, ReportCategory::Spam);
+        assert_eq!(scam, ReportCategory::Scam);
+        assert_eq!(harassment, ReportCategory::Harassment);
+        assert_eq!(illegal, ReportCategory::Illegal);
+        assert_eq!(other, ReportCategory::Other);
+    }
+
+    #[test]
+    fn report_category_as_u8() {
+        assert_eq!(ReportCategory::Spam.as_u8(), 0);
+        assert_eq!(ReportCategory::Scam.as_u8(), 1);
+        assert_eq!(ReportCategory::Harassment.as_u8(), 2);
+        assert_eq!(ReportCategory::Illegal.as_u8(), 3);
+        assert_eq!(ReportCategory::Other.as_u8(), 4);
+    }
+
+    #[test]
+    fn report_category_immediate_filtering() {
+        assert!(ReportCategory::Illegal.requires_immediate_filtering());
+        assert!(!ReportCategory::Spam.requires_immediate_filtering());
+        assert!(!ReportCategory::Scam.requires_immediate_filtering());
+        assert!(!ReportCategory::Harassment.requires_immediate_filtering());
+        assert!(!ReportCategory::Other.requires_immediate_filtering());
+    }
+
+    #[test]
+    fn report_status_serialize() {
+        assert_eq!(serde_json::to_string(&ReportStatus::Pending).unwrap(), "\"pending\"");
+        assert_eq!(serde_json::to_string(&ReportStatus::Validated).unwrap(), "\"validated\"");
+        assert_eq!(serde_json::to_string(&ReportStatus::Rejected).unwrap(), "\"rejected\"");
+        assert_eq!(serde_json::to_string(&ReportStatus::Expired).unwrap(), "\"expired\"");
+    }
+
+    #[test]
+    fn report_status_deserialize() {
+        let pending: ReportStatus = serde_json::from_str("\"pending\"").unwrap();
+        let validated: ReportStatus = serde_json::from_str("\"validated\"").unwrap();
+        let rejected: ReportStatus = serde_json::from_str("\"rejected\"").unwrap();
+        let expired: ReportStatus = serde_json::from_str("\"expired\"").unwrap();
+
+        assert_eq!(pending, ReportStatus::Pending);
+        assert_eq!(validated, ReportStatus::Validated);
+        assert_eq!(rejected, ReportStatus::Rejected);
+        assert_eq!(expired, ReportStatus::Expired);
+    }
+
+    #[test]
+    fn trust_request_deserialize() {
+        let json = r#"{"from":"bs1alice","target":"bs1bob","level":"trusted","reason":"Great contributor"}"#;
+        let req: TrustRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.from, "bs1alice");
+        assert_eq!(req.target, "bs1bob");
+        assert_eq!(req.level, TrustLevel::Trusted);
+        assert_eq!(req.reason, Some("Great contributor".to_string()));
+    }
+
+    #[test]
+    fn trust_request_deserialize_no_reason() {
+        let json = r#"{"from":"bs1alice","target":"bs1bob","level":"distrust"}"#;
+        let req: TrustRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.from, "bs1alice");
+        assert_eq!(req.target, "bs1bob");
+        assert_eq!(req.level, TrustLevel::Distrust);
+        assert_eq!(req.reason, None);
+    }
+
+    #[test]
+    fn trust_response_serialize() {
+        let resp = TrustResponse::new(
+            "abc123".to_string(),
+            "bs1bob".to_string(),
+            TrustLevel::Trusted,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"abc123\""));
+        assert!(json.contains("\"target\":\"bs1bob\""));
+        assert!(json.contains("\"level\":\"trusted\""));
+    }
+
+    #[test]
+    fn trust_query_request_deserialize() {
+        let json = r#"{"address":"bs1alice","includeIncoming":true,"includeOutgoing":false,"limit":50}"#;
+        let req: TrustQueryRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.address, "bs1alice");
+        assert!(req.include_incoming);
+        assert!(!req.include_outgoing);
+        assert_eq!(req.limit, 50);
+    }
+
+    #[test]
+    fn trust_query_request_defaults() {
+        let json = r#"{"address":"bs1alice"}"#;
+        let req: TrustQueryRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.address, "bs1alice");
+        assert!(req.include_incoming); // default true
+        assert!(req.include_outgoing); // default true
+        assert_eq!(req.limit, 100); // default
+    }
+
+    #[test]
+    fn trust_summary_serialize() {
+        let summary = TrustSummary::new(
+            "bs1alice".to_string(),
+            "bs1bob".to_string(),
+            TrustLevel::Trusted,
+            Some("Great dev".to_string()),
+            100,
+            "txid123".to_string(),
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"fromAddress\":\"bs1alice\""));
+        assert!(json.contains("\"toAddress\":\"bs1bob\""));
+        assert!(json.contains("\"level\":\"trusted\""));
+        assert!(json.contains("\"blockHeight\":100"));
+    }
+
+    #[test]
+    fn trust_query_response_serialize() {
+        let resp = TrustQueryResponse::new(
+            "bs1alice".to_string(),
+            5,
+            10,
+            2,
+            vec![],
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"address\":\"bs1alice\""));
+        assert!(json.contains("\"trustScore\":5"));
+        assert!(json.contains("\"trustedByCount\":10"));
+        assert!(json.contains("\"distrustedByCount\":2"));
+    }
+
+    #[test]
+    fn report_request_deserialize() {
+        let json = r#"{"from":"bs1reporter","targetTxid":"abc123","category":"spam","stake":1000000,"evidence":"Repeated spam posts"}"#;
+        let req: ReportRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.from, "bs1reporter");
+        assert_eq!(req.target_txid, "abc123");
+        assert_eq!(req.category, ReportCategory::Spam);
+        assert_eq!(req.stake, 1_000_000);
+        assert_eq!(req.evidence, Some("Repeated spam posts".to_string()));
+    }
+
+    #[test]
+    fn report_request_deserialize_no_evidence() {
+        let json = r#"{"from":"bs1reporter","targetTxid":"abc123","category":"harassment","stake":2000000}"#;
+        let req: ReportRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.from, "bs1reporter");
+        assert_eq!(req.target_txid, "abc123");
+        assert_eq!(req.category, ReportCategory::Harassment);
+        assert_eq!(req.stake, 2_000_000);
+        assert_eq!(req.evidence, None);
+    }
+
+    #[test]
+    fn report_response_serialize() {
+        let resp = ReportResponse::new(
+            "reporttxid".to_string(),
+            "contenttxid".to_string(),
+            ReportCategory::Scam,
+            MIN_REPORT_STAKE,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"reporttxid\""));
+        assert!(json.contains("\"targetTxid\":\"contenttxid\""));
+        assert!(json.contains("\"category\":\"scam\""));
+        assert!(json.contains("\"stake\":1000000"));
+    }
+
+    #[test]
+    fn report_status_request_deserialize() {
+        let json = r#"{"reportTxid":"abc123"}"#;
+        let req: ReportStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.report_txid, "abc123");
+    }
+
+    #[test]
+    fn report_status_response_serialize() {
+        let resp = ReportStatusResponse::new(
+            "reporttxid".to_string(),
+            "contenttxid".to_string(),
+            ReportCategory::Illegal,
+            MIN_REPORT_STAKE,
+            ReportStatus::Pending,
+            500,
+            None,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"reportTxid\":\"reporttxid\""));
+        assert!(json.contains("\"targetTxid\":\"contenttxid\""));
+        assert!(json.contains("\"category\":\"illegal\""));
+        assert!(json.contains("\"status\":\"pending\""));
+        assert!(json.contains("\"blockHeight\":500"));
+    }
+
+    #[test]
+    fn report_list_request_deserialize_full() {
+        let json = r#"{"targetTxid":"abc123","reporterAddress":"bs1alice","category":"spam","status":"pending","limit":25}"#;
+        let req: ReportListRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.target_txid, Some("abc123".to_string()));
+        assert_eq!(req.reporter_address, Some("bs1alice".to_string()));
+        assert_eq!(req.category, Some(ReportCategory::Spam));
+        assert_eq!(req.status, Some(ReportStatus::Pending));
+        assert_eq!(req.limit, 25);
+    }
+
+    #[test]
+    fn report_list_request_deserialize_minimal() {
+        let json = r#"{}"#;
+        let req: ReportListRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(req.target_txid, None);
+        assert_eq!(req.reporter_address, None);
+        assert_eq!(req.category, None);
+        assert_eq!(req.status, None);
+        assert_eq!(req.limit, 50); // default
+    }
+
+    #[test]
+    fn report_summary_serialize() {
+        let summary = ReportSummary::new(
+            "reporttxid".to_string(),
+            "contenttxid".to_string(),
+            "bs1reporter".to_string(),
+            ReportCategory::Harassment,
+            MIN_REPORT_STAKE,
+            ReportStatus::Validated,
+            1000,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"reportTxid\":\"reporttxid\""));
+        assert!(json.contains("\"targetTxid\":\"contenttxid\""));
+        assert!(json.contains("\"reporterAddress\":\"bs1reporter\""));
+        assert!(json.contains("\"category\":\"harassment\""));
+        assert!(json.contains("\"status\":\"validated\""));
+    }
+
+    #[test]
+    fn report_list_response_serialize() {
+        let resp = ReportListResponse::new(vec![], 0);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"reports\":[]"));
+        assert!(json.contains("\"totalCount\":0"));
+    }
+
+    #[test]
+    fn moderation_constants() {
+        assert_eq!(MIN_REPORT_STAKE, 1_000_000);
+        assert_eq!(MAX_TRUST_REASON_LENGTH, 200);
+        assert_eq!(MAX_REPORT_EVIDENCE_LENGTH, 300);
+        assert_eq!(MAX_TRUST_LIMIT, 1000);
+        assert_eq!(MAX_REPORT_LIMIT, 1000);
     }
 }
