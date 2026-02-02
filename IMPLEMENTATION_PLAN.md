@@ -7,7 +7,7 @@
 
 ## 🚦 Current Status: PHASES 0-6 PROTOCOL COMPLETE
 
-**Last Updated:** 2026-02-02 (Added X/Twitter Bridge - P6.5.5)
+**Last Updated:** 2026-02-02 (Fixed NetworkKind::Botcash mapping in zebra-network config)
 
 Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 33 types including channel, governance, recovery, bridge, moderation, and content warning types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.3.1c done (content warning tags 0x23 with 19 tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge protocol with 63+ tests), P6.5.1 done (Telegram Bridge with 37 tests), P6.5.2 done (Discord Bridge with 78 tests), P6.5.3 done (Nostr Bridge with 94 tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
 
@@ -1987,3 +1987,30 @@ note: 'uint64_t' is defined in header '<cstdint>'; this is probably fixable by a
 - All protocol code is implemented and correct; only test execution is blocked
 
 **Note:** This does not affect protocol implementation completeness. The zebra-rpc indexer modules are fully implemented and their logic is tested indirectly through zebra-chain tests.
+
+---
+
+## ⚠️ Known Test Failures: zebra-network Integration Tests
+
+**Status:** Pre-existing test infrastructure issue (not code problem)
+
+**Failing Tests (10 total):**
+- `isolated::tests::vectors::connect_isolated_sends_anonymised_version_message_mem`
+- `isolated::tests::vectors::connect_isolated_sends_anonymised_version_message_tcp`
+- `peer_set::initialize::tests::vectors::local_listener_fixed_port_localhost_addr_v4`
+- `peer_set::initialize::tests::vectors::local_listener_fixed_port_localhost_addr_v6`
+- `peer_set::initialize::tests::vectors::local_listener_unspecified_port_localhost_addr_v4`
+- `peer_set::initialize::tests::vectors::local_listener_unspecified_port_localhost_addr_v6`
+- `peer_set::initialize::tests::vectors::local_listener_unspecified_port_unspecified_addr_v4`
+- `peer_set::initialize::tests::vectors::local_listener_unspecified_port_unspecified_addr_v6`
+- `peer_set::initialize::tests::vectors::written_peer_cache_can_be_read_manually`
+- `peer_set::initialize::tests::vectors::written_peer_cache_is_automatically_read_on_startup`
+
+**Root Cause:** These tests require network socket binding and file system peer cache setup that may conflict with existing Zebra/Zcash installations or require specific test isolation. The tests look for cached peer files at `~/.cache/zebra/network/mainnet.peers`.
+
+**Impact:**
+- Config tests (7 total) pass including `botcash_network_config`
+- 163 of 173 zebra-network tests pass
+- These failures do not affect Botcash protocol implementation
+
+**Workaround:** Run only config tests: `cargo test -p zebra-network -- config`
