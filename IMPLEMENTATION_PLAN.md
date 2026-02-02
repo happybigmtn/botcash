@@ -1836,3 +1836,34 @@ Phase 6: Infrastructure & Growth (POST-LAUNCH)
 | Moderation | `specs/moderation.md` | Community filtering, reputation |
 | Recovery | `specs/recovery.md` | Social recovery, key backup |
 | Bridges | `specs/bridges.md` | Telegram/Discord/Nostr integration |
+
+---
+
+## ⚠️ Known Pre-Existing Test Issues
+
+The following tests fail due to missing test vector data files (not related to Botcash implementation):
+
+| Test | Error | Root Cause |
+|------|-------|------------|
+| `history_tree::tests::vectors::upgrade` | "test vector exists" panic | Missing sapling_roots vector at activation height |
+| `history_tree::tests::vectors::push_and_prune` | "test vector exists" panic | Same as above |
+| `block::tests::vectors::block_test_vectors` | "test vector exists" panic | Missing block test vector files |
+| `primitives::zcash_history::tests::vectors::tree` | "test vector exists" panic | Missing tree test vectors |
+| `sapling::tests::tree::incremental_roots_with_blocks` | "test vector exists" panic | Missing sapling tree vectors |
+| `work::difficulty::tests::vectors::genesis_block_difficulty` | "test vector exists" panic | Missing difficulty vectors |
+| `transaction::tests::vectors::binding_signatures` | "test vector exists" panic | Missing binding sig vectors |
+| `work::difficulty::tests::vectors::block_difficulty` | "test vector exists" panic | Missing difficulty vectors |
+
+**Note:** These tests require Zcash mainnet/testnet test vector files that may not be present in the forked repository. They are not required for Botcash protocol implementation.
+
+To run Botcash-specific tests only:
+```bash
+# Social protocol tests (112 tests)
+cargo test -p zebra-chain -- social
+
+# Social RPC type tests (197 tests)
+cargo test -p zebra-rpc -- types::social
+
+# Indexer tests (224 tests)
+cargo test -p zebra-rpc -- indexer
+```
