@@ -1208,6 +1208,335 @@ pub struct ChannelListResponse {
     total_count: u32,
 }
 
+// ==================== Recovery Types ====================
+
+/// Default timelock in blocks (~7 days at 60s blocks).
+pub const DEFAULT_RECOVERY_TIMELOCK_BLOCKS: u32 = 10080;
+
+/// Minimum number of guardians required for recovery.
+pub const MIN_RECOVERY_GUARDIANS: usize = 1;
+
+/// Maximum number of guardians allowed.
+pub const MAX_RECOVERY_GUARDIANS: usize = 15;
+
+/// Default threshold for M-of-N recovery (3-of-5).
+pub const DEFAULT_RECOVERY_THRESHOLD: usize = 3;
+
+/// Status of a recovery configuration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RecoveryStatus {
+    /// Recovery is configured and active.
+    Active,
+    /// Recovery request is pending guardian approval.
+    Pending,
+    /// Sufficient guardians have approved, waiting for timelock.
+    Approved,
+    /// Recovery is in the timelock waiting period.
+    Timelocked,
+    /// Recovery was successfully executed.
+    Executed,
+    /// Recovery was cancelled by the owner.
+    Cancelled,
+    /// Recovery request expired (timelock exceeded without execution).
+    Expired,
+}
+
+impl std::fmt::Display for RecoveryStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => write!(f, "active"),
+            Self::Pending => write!(f, "pending"),
+            Self::Approved => write!(f, "approved"),
+            Self::Timelocked => write!(f, "timelocked"),
+            Self::Executed => write!(f, "executed"),
+            Self::Cancelled => write!(f, "cancelled"),
+            Self::Expired => write!(f, "expired"),
+        }
+    }
+}
+
+/// Request for setting up recovery configuration.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct RecoveryConfigRequest {
+    /// The address to configure recovery for.
+    pub from: String,
+
+    /// List of guardian addresses (their hashes will be stored on-chain).
+    pub guardians: Vec<String>,
+
+    /// Number of guardians required to approve recovery (M in M-of-N).
+    pub threshold: u8,
+
+    /// Timelock period in blocks before recovery can be executed.
+    #[serde(rename = "timelockBlocks", default = "default_recovery_timelock")]
+    pub timelock_blocks: u32,
+}
+
+fn default_recovery_timelock() -> u32 {
+    DEFAULT_RECOVERY_TIMELOCK_BLOCKS
+}
+
+/// Response for setting up recovery configuration.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct RecoveryConfigResponse {
+    /// The transaction ID of the recovery config.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// Unique identifier for this recovery configuration.
+    #[serde(rename = "recoveryId")]
+    recovery_id: String,
+
+    /// Number of guardians registered.
+    #[serde(rename = "guardianCount")]
+    #[getter(copy)]
+    guardian_count: u8,
+
+    /// Threshold required for recovery.
+    #[getter(copy)]
+    threshold: u8,
+
+    /// Timelock period in blocks.
+    #[serde(rename = "timelockBlocks")]
+    #[getter(copy)]
+    timelock_blocks: u32,
+}
+
+/// Request for initiating account recovery.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct RecoveryRequestRequest {
+    /// The new address initiating recovery (from the new device/key).
+    pub from: String,
+
+    /// The target address to recover (the lost account).
+    #[serde(rename = "targetAddress")]
+    pub target_address: String,
+
+    /// The new public key to transfer control to (33 bytes hex-encoded).
+    #[serde(rename = "newPubkey")]
+    pub new_pubkey: String,
+
+    /// Proof of authorization (signed challenge).
+    pub proof: String,
+}
+
+/// Response for initiating account recovery.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct RecoveryRequestResponse {
+    /// The transaction ID of the recovery request.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The recovery configuration ID.
+    #[serde(rename = "recoveryId")]
+    recovery_id: String,
+
+    /// Unique identifier for this recovery request.
+    #[serde(rename = "requestId")]
+    request_id: String,
+
+    /// Block height when the timelock expires.
+    #[serde(rename = "timelockExpiresBlock")]
+    #[getter(copy)]
+    timelock_expires_block: u32,
+
+    /// Number of guardian approvals needed.
+    #[serde(rename = "approvalsNeeded")]
+    #[getter(copy)]
+    approvals_needed: u8,
+}
+
+/// Request for guardian approval of recovery.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct RecoveryApproveRequest {
+    /// The guardian's address.
+    pub from: String,
+
+    /// The recovery request transaction ID to approve.
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+
+    /// The encrypted Shamir share for reconstruction.
+    #[serde(rename = "encryptedShare")]
+    pub encrypted_share: String,
+}
+
+/// Response for guardian approval.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct RecoveryApproveResponse {
+    /// The transaction ID of the approval.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// Number of approvals received so far.
+    #[serde(rename = "approvalsCount")]
+    #[getter(copy)]
+    approvals_count: u8,
+
+    /// Number of approvals still needed.
+    #[serde(rename = "approvalsNeeded")]
+    #[getter(copy)]
+    approvals_needed: u8,
+
+    /// Whether the threshold has been met.
+    #[serde(rename = "thresholdMet")]
+    #[getter(copy)]
+    threshold_met: bool,
+}
+
+/// Request for cancelling a recovery request.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct RecoveryCancelRequest {
+    /// The original owner's address.
+    pub from: String,
+
+    /// The recovery request transaction ID to cancel.
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+}
+
+/// Response for cancelling a recovery request.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct RecoveryCancelResponse {
+    /// The transaction ID of the cancellation.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The cancelled request ID.
+    #[serde(rename = "requestId")]
+    request_id: String,
+
+    /// Whether the cancellation was successful.
+    #[getter(copy)]
+    success: bool,
+}
+
+/// Request for getting recovery status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct RecoveryStatusRequest {
+    /// The address to check recovery status for.
+    pub address: String,
+}
+
+/// Response for recovery status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct RecoveryStatusResponse {
+    /// The address queried.
+    address: String,
+
+    /// Whether recovery is configured for this address.
+    #[serde(rename = "hasRecovery")]
+    #[getter(copy)]
+    has_recovery: bool,
+
+    /// The recovery configuration ID (if configured).
+    #[serde(rename = "recoveryId", skip_serializing_if = "Option::is_none")]
+    recovery_id: Option<String>,
+
+    /// Number of guardians configured.
+    #[serde(rename = "guardianCount", skip_serializing_if = "Option::is_none")]
+    #[getter(copy)]
+    guardian_count: Option<u8>,
+
+    /// Recovery threshold (M of N).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[getter(copy)]
+    threshold: Option<u8>,
+
+    /// Timelock period in blocks.
+    #[serde(rename = "timelockBlocks", skip_serializing_if = "Option::is_none")]
+    #[getter(copy)]
+    timelock_blocks: Option<u32>,
+
+    /// Current recovery status.
+    status: RecoveryStatus,
+
+    /// Pending request information (if any).
+    #[serde(rename = "pendingRequest", skip_serializing_if = "Option::is_none")]
+    pending_request: Option<PendingRecoveryInfo>,
+}
+
+/// Information about a pending recovery request.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct PendingRecoveryInfo {
+    /// The request ID.
+    #[serde(rename = "requestId")]
+    request_id: String,
+
+    /// Block height when the request was made.
+    #[serde(rename = "requestedAtBlock")]
+    #[getter(copy)]
+    requested_at_block: u32,
+
+    /// Block height when the timelock expires.
+    #[serde(rename = "timelockExpiresBlock")]
+    #[getter(copy)]
+    timelock_expires_block: u32,
+
+    /// Number of approvals received.
+    #[serde(rename = "approvalsCount")]
+    #[getter(copy)]
+    approvals_count: u8,
+
+    /// Number of approvals needed.
+    #[serde(rename = "approvalsNeeded")]
+    #[getter(copy)]
+    approvals_needed: u8,
+
+    /// Addresses of guardians who have approved.
+    #[serde(rename = "approvedGuardians")]
+    approved_guardians: Vec<String>,
+}
+
+/// Request for listing guardians for an address.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GuardianListRequest {
+    /// The address to list guardians for.
+    pub address: String,
+}
+
+/// Summary of a guardian.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GuardianSummary {
+    /// The guardian's address hash (for privacy).
+    #[serde(rename = "addressHash")]
+    address_hash: String,
+
+    /// Index in the guardian list (0-based).
+    #[getter(copy)]
+    index: u8,
+
+    /// Whether this guardian is active (not revoked).
+    #[serde(rename = "isActive")]
+    #[getter(copy)]
+    is_active: bool,
+
+    /// Block height when the guardian was added.
+    #[serde(rename = "addedAtBlock")]
+    #[getter(copy)]
+    added_at_block: u32,
+}
+
+/// Response for listing guardians.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct GuardianListResponse {
+    /// The address queried.
+    address: String,
+
+    /// List of guardians.
+    guardians: Vec<GuardianSummary>,
+
+    /// Recovery threshold (M of N).
+    #[getter(copy)]
+    threshold: u8,
+
+    /// Total number of active guardians.
+    #[serde(rename = "activeCount")]
+    #[getter(copy)]
+    active_count: u8,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2192,5 +2521,267 @@ mod tests {
         assert_eq!(DEFAULT_CHANNEL_TIMEOUT_BLOCKS, 1440);
         assert_eq!(MAX_CHANNEL_PARTIES, 10);
         assert_eq!(MIN_CHANNEL_DEPOSIT, 100_000);
+    }
+
+    // ==================== Recovery Tests ====================
+
+    #[test]
+    fn recovery_config_request_deserialize() {
+        let json = r#"{
+            "from": "bs1owner",
+            "guardians": ["bs1guardian1", "bs1guardian2", "bs1guardian3"],
+            "threshold": 2,
+            "timelockBlocks": 10080
+        }"#;
+        let req: RecoveryConfigRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1owner");
+        assert_eq!(req.guardians.len(), 3);
+        assert_eq!(req.threshold, 2);
+        assert_eq!(req.timelock_blocks, 10080);
+    }
+
+    #[test]
+    fn recovery_config_request_defaults() {
+        let json = r#"{"from":"bs1owner","guardians":["bs1g1","bs1g2","bs1g3"],"threshold":2}"#;
+        let req: RecoveryConfigRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.timelock_blocks, DEFAULT_RECOVERY_TIMELOCK_BLOCKS); // default 10080
+    }
+
+    #[test]
+    fn recovery_config_response_serialize() {
+        let resp = RecoveryConfigResponse::new(
+            "txid123".to_string(),
+            "recovery_id_456".to_string(),
+            3,
+            2,
+            10080,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid123\""));
+        assert!(json.contains("\"recoveryId\":\"recovery_id_456\""));
+        assert!(json.contains("\"guardianCount\":3"));
+        assert!(json.contains("\"threshold\":2"));
+        assert!(json.contains("\"timelockBlocks\":10080"));
+    }
+
+    #[test]
+    fn recovery_request_request_deserialize() {
+        let json = r#"{
+            "from": "bs1newdevice",
+            "targetAddress": "bs1oldaddress",
+            "newPubkey": "02abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+            "proof": "signed_challenge"
+        }"#;
+        let req: RecoveryRequestRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1newdevice");
+        assert_eq!(req.target_address, "bs1oldaddress");
+        assert_eq!(req.new_pubkey.len(), 66); // 33 bytes hex
+        assert_eq!(req.proof, "signed_challenge");
+    }
+
+    #[test]
+    fn recovery_request_response_serialize() {
+        let resp = RecoveryRequestResponse::new(
+            "txid789".to_string(),
+            "recovery_id".to_string(),
+            "request_id".to_string(),
+            20160, // timelock expires in ~14 days
+            2,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid789\""));
+        assert!(json.contains("\"recoveryId\":\"recovery_id\""));
+        assert!(json.contains("\"requestId\":\"request_id\""));
+        assert!(json.contains("\"timelockExpiresBlock\":20160"));
+        assert!(json.contains("\"approvalsNeeded\":2"));
+    }
+
+    #[test]
+    fn recovery_approve_request_deserialize() {
+        let json = r#"{
+            "from": "bs1guardian1",
+            "requestId": "request_abc123",
+            "encryptedShare": "encrypted_shamir_share_hex"
+        }"#;
+        let req: RecoveryApproveRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1guardian1");
+        assert_eq!(req.request_id, "request_abc123");
+        assert_eq!(req.encrypted_share, "encrypted_shamir_share_hex");
+    }
+
+    #[test]
+    fn recovery_approve_response_serialize() {
+        let resp = RecoveryApproveResponse::new(
+            "txid_approve".to_string(),
+            2, // approvals count
+            1, // approvals needed
+            true, // threshold met
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid_approve\""));
+        assert!(json.contains("\"approvalsCount\":2"));
+        assert!(json.contains("\"approvalsNeeded\":1"));
+        assert!(json.contains("\"thresholdMet\":true"));
+    }
+
+    #[test]
+    fn recovery_cancel_request_deserialize() {
+        let json = r#"{"from":"bs1owner","requestId":"request_to_cancel"}"#;
+        let req: RecoveryCancelRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1owner");
+        assert_eq!(req.request_id, "request_to_cancel");
+    }
+
+    #[test]
+    fn recovery_cancel_response_serialize() {
+        let resp = RecoveryCancelResponse::new(
+            "txid_cancel".to_string(),
+            "request_cancelled".to_string(),
+            true,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid_cancel\""));
+        assert!(json.contains("\"requestId\":\"request_cancelled\""));
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn recovery_status_request_deserialize() {
+        let json = r#"{"address":"bs1myaddress"}"#;
+        let req: RecoveryStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1myaddress");
+    }
+
+    #[test]
+    fn recovery_status_response_with_pending_request() {
+        let pending = PendingRecoveryInfo::new(
+            "request123".to_string(),
+            1000,
+            11080,
+            1,
+            2,
+            vec!["bs1guardian1".to_string()],
+        );
+        let resp = RecoveryStatusResponse::new(
+            "bs1myaddress".to_string(),
+            true,
+            Some("recovery_id".to_string()),
+            Some(3),
+            Some(2),
+            Some(10080),
+            RecoveryStatus::Pending,
+            Some(pending),
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"address\":\"bs1myaddress\""));
+        assert!(json.contains("\"hasRecovery\":true"));
+        assert!(json.contains("\"recoveryId\":\"recovery_id\""));
+        assert!(json.contains("\"guardianCount\":3"));
+        assert!(json.contains("\"threshold\":2"));
+        assert!(json.contains("\"status\":\"pending\""));
+        assert!(json.contains("\"pendingRequest\""));
+        assert!(json.contains("\"requestId\":\"request123\""));
+    }
+
+    #[test]
+    fn recovery_status_response_no_recovery() {
+        let resp = RecoveryStatusResponse::new(
+            "bs1newaddress".to_string(),
+            false,
+            None,
+            None,
+            None,
+            None,
+            RecoveryStatus::Active, // Would be Active even for "no recovery configured"
+            None,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"hasRecovery\":false"));
+        assert!(!json.contains("recoveryId")); // skip_serializing_if = None
+        assert!(!json.contains("pendingRequest"));
+    }
+
+    #[test]
+    fn recovery_status_enum_values() {
+        let statuses = [
+            (RecoveryStatus::Active, "active"),
+            (RecoveryStatus::Pending, "pending"),
+            (RecoveryStatus::Approved, "approved"),
+            (RecoveryStatus::Timelocked, "timelocked"),
+            (RecoveryStatus::Executed, "executed"),
+            (RecoveryStatus::Cancelled, "cancelled"),
+            (RecoveryStatus::Expired, "expired"),
+        ];
+        for (status, expected) in statuses {
+            assert_eq!(format!("{}", status), expected);
+        }
+    }
+
+    #[test]
+    fn guardian_list_request_deserialize() {
+        let json = r#"{"address":"bs1protected"}"#;
+        let req: GuardianListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1protected");
+    }
+
+    #[test]
+    fn guardian_summary_serialize() {
+        let summary = GuardianSummary::new(
+            "sha256_hash_of_address".to_string(),
+            0,
+            true,
+            500,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"addressHash\":\"sha256_hash_of_address\""));
+        assert!(json.contains("\"index\":0"));
+        assert!(json.contains("\"isActive\":true"));
+        assert!(json.contains("\"addedAtBlock\":500"));
+    }
+
+    #[test]
+    fn guardian_list_response_serialize() {
+        let g1 = GuardianSummary::new("hash1".to_string(), 0, true, 100);
+        let g2 = GuardianSummary::new("hash2".to_string(), 1, true, 100);
+        let g3 = GuardianSummary::new("hash3".to_string(), 2, false, 100); // revoked
+
+        let resp = GuardianListResponse::new(
+            "bs1protected".to_string(),
+            vec![g1, g2, g3],
+            2,
+            2, // 2 active out of 3
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"address\":\"bs1protected\""));
+        assert!(json.contains("\"guardians\":["));
+        assert!(json.contains("\"threshold\":2"));
+        assert!(json.contains("\"activeCount\":2"));
+    }
+
+    #[test]
+    fn recovery_constants() {
+        assert_eq!(DEFAULT_RECOVERY_TIMELOCK_BLOCKS, 10080);
+        assert_eq!(MIN_RECOVERY_GUARDIANS, 1);
+        assert_eq!(MAX_RECOVERY_GUARDIANS, 15);
+        assert_eq!(DEFAULT_RECOVERY_THRESHOLD, 3);
+    }
+
+    #[test]
+    fn pending_recovery_info_serialize() {
+        let info = PendingRecoveryInfo::new(
+            "req123".to_string(),
+            1000,
+            11080,
+            2,
+            3,
+            vec!["g1".to_string(), "g2".to_string()],
+        );
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"requestId\":\"req123\""));
+        assert!(json.contains("\"requestedAtBlock\":1000"));
+        assert!(json.contains("\"timelockExpiresBlock\":11080"));
+        assert!(json.contains("\"approvalsCount\":2"));
+        assert!(json.contains("\"approvalsNeeded\":3"));
+        assert!(json.contains("\"approvedGuardians\":[\"g1\",\"g2\"]"));
     }
 }

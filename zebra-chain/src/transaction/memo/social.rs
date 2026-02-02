@@ -28,6 +28,7 @@
 //! - **Polls (0x70-0x71)**: Poll creation and voting
 //! - **Governance (0xE0-0xE1)**: On-chain voting and proposals
 //! - **Channels (0xC0-0xC2)**: Layer-2 social channels for high-frequency messaging
+//! - **Recovery (0xF0-0xF3)**: Key recovery and social recovery mechanisms
 
 use std::fmt;
 
@@ -66,6 +67,7 @@ pub const BATCH_ACTION_LENGTH_SIZE: usize = 2;
 /// - `0x8_`: Batching
 /// - `0xC_`: Channels (layer-2 social channels)
 /// - `0xE_`: Governance (voting, proposals)
+/// - `0xF_`: Recovery (social recovery, key rotation)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SocialMessageType {
     /// Agent/user profile metadata (0x10).
@@ -188,6 +190,34 @@ pub enum SocialMessageType {
     /// receives sufficient support (>10%).
     /// Format: [proposal_type(1)][title_len(1)][title][description_len(2)][description][params...]
     GovernanceProposal = 0xE1,
+
+    /// Recovery configuration setup (0xF0).
+    ///
+    /// Registers a social recovery configuration with guardians who can
+    /// collectively help recover the account if keys are lost.
+    /// Format: [guardian_count(1)][guardian_hash(32)]...[threshold(1)][timelock_blocks(4)]
+    RecoveryConfig = 0xF0,
+
+    /// Recovery request initiation (0xF1).
+    ///
+    /// Initiates an account recovery process from a new device or key.
+    /// Starts the timelock period during which the original owner can cancel.
+    /// Format: [target_address_len(1)][target_address][new_pubkey(33)][proof_len(1)][proof]
+    RecoveryRequest = 0xF1,
+
+    /// Recovery approval from guardian (0xF2).
+    ///
+    /// A guardian approves a recovery request by providing their encrypted
+    /// Shamir share. M-of-N guardians must approve for recovery to succeed.
+    /// Format: [request_txid(32)][encrypted_share_len(1)][encrypted_share]
+    RecoveryApprove = 0xF2,
+
+    /// Recovery cancellation by owner (0xF3).
+    ///
+    /// The original account owner cancels a pending recovery request.
+    /// Must be submitted before the timelock expires to prevent unauthorized recovery.
+    /// Format: [request_txid(32)][owner_sig_len(1)][owner_sig]
+    RecoveryCancel = 0xF3,
 }
 
 impl SocialMessageType {
@@ -222,6 +252,10 @@ impl SocialMessageType {
             Self::ChannelSettle => "ChannelSettle",
             Self::GovernanceVote => "GovernanceVote",
             Self::GovernanceProposal => "GovernanceProposal",
+            Self::RecoveryConfig => "RecoveryConfig",
+            Self::RecoveryRequest => "RecoveryRequest",
+            Self::RecoveryApprove => "RecoveryApprove",
+            Self::RecoveryCancel => "RecoveryCancel",
         }
     }
 
@@ -263,6 +297,20 @@ impl SocialMessageType {
     pub const fn is_governance(&self) -> bool {
         matches!(self, Self::GovernanceVote | Self::GovernanceProposal)
     }
+
+    /// Returns true if this is a recovery message type.
+    ///
+    /// Recovery messages are used for social recovery mechanisms that allow
+    /// users to recover access to their accounts using trusted guardians.
+    pub const fn is_recovery(&self) -> bool {
+        matches!(
+            self,
+            Self::RecoveryConfig
+                | Self::RecoveryRequest
+                | Self::RecoveryApprove
+                | Self::RecoveryCancel
+        )
+    }
 }
 
 impl TryFrom<u8> for SocialMessageType {
@@ -292,6 +340,10 @@ impl TryFrom<u8> for SocialMessageType {
             0xC2 => Ok(Self::ChannelSettle),
             0xE0 => Ok(Self::GovernanceVote),
             0xE1 => Ok(Self::GovernanceProposal),
+            0xF0 => Ok(Self::RecoveryConfig),
+            0xF1 => Ok(Self::RecoveryRequest),
+            0xF2 => Ok(Self::RecoveryApprove),
+            0xF3 => Ok(Self::RecoveryCancel),
             _ => Err(SocialParseError::UnknownMessageType(value)),
         }
     }
@@ -482,10 +534,11 @@ impl TryFrom<&Memo> for SocialMessage {
         let version = bytes[1];
 
         // Check if this looks like a social message (type in valid range)
-        // Social messages use 0x10-0xEF range:
+        // Social messages use 0x10-0xFE range:
         // - 0x10-0x7F: Standard message types
-        // - 0x80-0xEF: Experimental/extended types (batching, governance, etc.)
-        if type_byte < 0x10 || type_byte > 0xEF {
+        // - 0x80-0xEF: Experimental/extended types (batching, governance, channels)
+        // - 0xF0-0xFE: Recovery and advanced features
+        if type_byte < 0x10 || type_byte > 0xFE {
             return Err(SocialParseError::NotSocialMessage);
         }
 
@@ -903,6 +956,10 @@ mod tests {
             SocialMessageType::ChannelSettle,
             SocialMessageType::GovernanceVote,
             SocialMessageType::GovernanceProposal,
+            SocialMessageType::RecoveryConfig,
+            SocialMessageType::RecoveryRequest,
+            SocialMessageType::RecoveryApprove,
+            SocialMessageType::RecoveryCancel,
         ];
 
         for msg_type in types {
@@ -1132,11 +1189,12 @@ mod tests {
     }
 
     #[test]
-    fn all_22_message_types_exist() {
+    fn all_message_types_exist_pre_recovery() {
         let _init_guard = zebra_test::init();
 
-        // Verify we have exactly 22 message types (16 core + 1 batch + 3 channels + 2 governance)
-        let all_types = [
+        // Verify the 22 pre-recovery message types (16 core + 1 batch + 3 channels + 2 governance)
+        // Note: Recovery adds 4 more types, tested in all_26_message_types_exist
+        let pre_recovery_types = [
             SocialMessageType::Profile,
             SocialMessageType::Post,
             SocialMessageType::Comment,
@@ -1161,11 +1219,11 @@ mod tests {
             SocialMessageType::GovernanceProposal,
         ];
 
-        assert_eq!(all_types.len(), 22, "Should have exactly 22 message types");
+        assert_eq!(pre_recovery_types.len(), 22, "Should have exactly 22 pre-recovery message types");
 
         // Verify each has a unique byte value
         let mut seen_bytes = std::collections::HashSet::new();
-        for msg_type in all_types {
+        for msg_type in pre_recovery_types {
             let byte = msg_type.as_u8();
             assert!(
                 seen_bytes.insert(byte),
@@ -1906,5 +1964,366 @@ mod tests {
 
         // Verify first byte is party count
         assert_eq!(decoded.payload()[0], 5);
+    }
+
+    // ========================================================================
+    // Recovery Message Tests (Required for P6.4 Social Recovery)
+    // ========================================================================
+
+    #[test]
+    fn recovery_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        // Verify recovery type byte values match spec
+        assert_eq!(SocialMessageType::RecoveryConfig.as_u8(), 0xF0);
+        assert_eq!(SocialMessageType::RecoveryRequest.as_u8(), 0xF1);
+        assert_eq!(SocialMessageType::RecoveryApprove.as_u8(), 0xF2);
+        assert_eq!(SocialMessageType::RecoveryCancel.as_u8(), 0xF3);
+
+        // Verify names
+        assert_eq!(SocialMessageType::RecoveryConfig.name(), "RecoveryConfig");
+        assert_eq!(SocialMessageType::RecoveryRequest.name(), "RecoveryRequest");
+        assert_eq!(SocialMessageType::RecoveryApprove.name(), "RecoveryApprove");
+        assert_eq!(SocialMessageType::RecoveryCancel.name(), "RecoveryCancel");
+    }
+
+    #[test]
+    fn recovery_config_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // RecoveryConfig format: [guardian_count(1)][guardian_hash(32)]...[threshold(1)][timelock_blocks(4)]
+        let mut payload = Vec::new();
+        payload.push(3); // 3 guardians
+
+        // Add 3 guardian hashes (SHA256 of addresses)
+        for i in 0..3 {
+            let mut hash = [0u8; 32];
+            hash[0] = i + 1;
+            hash[31] = 0xFF; // Ensure non-zero ending for memo parsing
+            payload.extend_from_slice(&hash);
+        }
+
+        payload.push(2); // threshold: 2-of-3
+        let timelock: u32 = 10080; // ~7 days at 60s blocks
+        payload.extend_from_slice(&timelock.to_le_bytes());
+
+        let msg = SocialMessage::new(
+            SocialMessageType::RecoveryConfig,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xF0); // RecoveryConfig type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::RecoveryConfig);
+        assert!(decoded.msg_type().is_recovery());
+        assert_eq!(decoded.payload()[0], 3); // 3 guardians
+    }
+
+    #[test]
+    fn recovery_request_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // RecoveryRequest format: [target_address_len(1)][target_address][new_pubkey(33)][proof_len(1)][proof]
+        let mut payload = Vec::new();
+
+        let target = b"bs1oldaddress...";
+        payload.push(target.len() as u8);
+        payload.extend_from_slice(target);
+
+        // 33-byte compressed public key
+        let new_pubkey = [0xAB; 33];
+        payload.extend_from_slice(&new_pubkey);
+
+        let proof = b"signed_challenge_proof";
+        payload.push(proof.len() as u8);
+        payload.extend_from_slice(proof);
+
+        let msg = SocialMessage::new(
+            SocialMessageType::RecoveryRequest,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xF1); // RecoveryRequest type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::RecoveryRequest);
+        assert!(decoded.msg_type().is_recovery());
+    }
+
+    #[test]
+    fn recovery_approve_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // RecoveryApprove format: [request_txid(32)][encrypted_share_len(1)][encrypted_share]
+        let mut payload = Vec::new();
+
+        // Request transaction ID (32 bytes)
+        payload.extend_from_slice(&[0xCD; 32]);
+
+        // Encrypted Shamir share
+        let encrypted_share = b"encrypted_shamir_share_data_here";
+        payload.push(encrypted_share.len() as u8);
+        payload.extend_from_slice(encrypted_share);
+
+        let msg = SocialMessage::new(
+            SocialMessageType::RecoveryApprove,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xF2); // RecoveryApprove type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::RecoveryApprove);
+        assert!(decoded.msg_type().is_recovery());
+    }
+
+    #[test]
+    fn recovery_cancel_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // RecoveryCancel format: [request_txid(32)][owner_sig_len(1)][owner_sig]
+        let mut payload = Vec::new();
+
+        // Request transaction ID (32 bytes)
+        payload.extend_from_slice(&[0xEF; 32]);
+
+        // Owner signature to prove authorization
+        let owner_sig = b"owner_signature_bytes";
+        payload.push(owner_sig.len() as u8);
+        payload.extend_from_slice(owner_sig);
+
+        let msg = SocialMessage::new(
+            SocialMessageType::RecoveryCancel,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xF3); // RecoveryCancel type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::RecoveryCancel);
+        assert!(decoded.msg_type().is_recovery());
+    }
+
+    #[test]
+    fn recovery_types_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Recovery messages can be batched with other actions
+        let actions = vec![
+            SocialMessage::new(
+                SocialMessageType::RecoveryApprove,
+                SOCIAL_PROTOCOL_VERSION,
+                {
+                    let mut payload = vec![0xAB; 32]; // request_txid
+                    payload.push(16);
+                    payload.extend_from_slice(b"encrypted_share_");
+                    payload
+                },
+            ),
+            SocialMessage::new(
+                SocialMessageType::Post,
+                SOCIAL_PROTOCOL_VERSION,
+                b"Approved recovery for @friend!".to_vec(),
+            ),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("valid batch");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should decode");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(
+            decoded.actions()[0].msg_type(),
+            SocialMessageType::RecoveryApprove
+        );
+        assert!(decoded.actions()[0].msg_type().is_recovery());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
+    fn recovery_types_not_value_transfer() {
+        let _init_guard = zebra_test::init();
+
+        // Recovery types are not value transfers
+        assert!(!SocialMessageType::RecoveryConfig.is_value_transfer());
+        assert!(!SocialMessageType::RecoveryRequest.is_value_transfer());
+        assert!(!SocialMessageType::RecoveryApprove.is_value_transfer());
+        assert!(!SocialMessageType::RecoveryCancel.is_value_transfer());
+
+        // Recovery types are not attention market
+        assert!(!SocialMessageType::RecoveryConfig.is_attention_market());
+        assert!(!SocialMessageType::RecoveryRequest.is_attention_market());
+        assert!(!SocialMessageType::RecoveryApprove.is_attention_market());
+        assert!(!SocialMessageType::RecoveryCancel.is_attention_market());
+
+        // Recovery types are not governance
+        assert!(!SocialMessageType::RecoveryConfig.is_governance());
+        assert!(!SocialMessageType::RecoveryRequest.is_governance());
+        assert!(!SocialMessageType::RecoveryApprove.is_governance());
+        assert!(!SocialMessageType::RecoveryCancel.is_governance());
+
+        // Recovery types are not channels
+        assert!(!SocialMessageType::RecoveryConfig.is_channel());
+        assert!(!SocialMessageType::RecoveryRequest.is_channel());
+        assert!(!SocialMessageType::RecoveryApprove.is_channel());
+        assert!(!SocialMessageType::RecoveryCancel.is_channel());
+
+        // Recovery types are not batch
+        assert!(!SocialMessageType::RecoveryConfig.is_batch());
+        assert!(!SocialMessageType::RecoveryRequest.is_batch());
+        assert!(!SocialMessageType::RecoveryApprove.is_batch());
+        assert!(!SocialMessageType::RecoveryCancel.is_batch());
+    }
+
+    #[test]
+    fn recovery_is_recovery_helper() {
+        let _init_guard = zebra_test::init();
+
+        // Recovery types should return true
+        assert!(SocialMessageType::RecoveryConfig.is_recovery());
+        assert!(SocialMessageType::RecoveryRequest.is_recovery());
+        assert!(SocialMessageType::RecoveryApprove.is_recovery());
+        assert!(SocialMessageType::RecoveryCancel.is_recovery());
+
+        // Non-recovery types should return false
+        assert!(!SocialMessageType::Post.is_recovery());
+        assert!(!SocialMessageType::Dm.is_recovery());
+        assert!(!SocialMessageType::Batch.is_recovery());
+        assert!(!SocialMessageType::GovernanceVote.is_recovery());
+        assert!(!SocialMessageType::ChannelOpen.is_recovery());
+    }
+
+    #[test]
+    fn recovery_type_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", SocialMessageType::RecoveryConfig), "RecoveryConfig");
+        assert_eq!(format!("{}", SocialMessageType::RecoveryRequest), "RecoveryRequest");
+        assert_eq!(format!("{}", SocialMessageType::RecoveryApprove), "RecoveryApprove");
+        assert_eq!(format!("{}", SocialMessageType::RecoveryCancel), "RecoveryCancel");
+    }
+
+    #[test]
+    fn recovery_type_roundtrip_from_u8() {
+        let _init_guard = zebra_test::init();
+
+        // Test all recovery types can roundtrip through u8
+        let recovery_types = [
+            SocialMessageType::RecoveryConfig,
+            SocialMessageType::RecoveryRequest,
+            SocialMessageType::RecoveryApprove,
+            SocialMessageType::RecoveryCancel,
+        ];
+
+        for msg_type in recovery_types {
+            let byte = msg_type.as_u8();
+            let parsed = SocialMessageType::try_from(byte).expect("should parse");
+            assert_eq!(parsed, msg_type);
+        }
+    }
+
+    #[test]
+    fn all_26_message_types_exist() {
+        let _init_guard = zebra_test::init();
+
+        // Verify we have exactly 26 message types (22 + 4 recovery)
+        let all_types = [
+            SocialMessageType::Profile,
+            SocialMessageType::Post,
+            SocialMessageType::Comment,
+            SocialMessageType::Upvote,
+            SocialMessageType::Follow,
+            SocialMessageType::Unfollow,
+            SocialMessageType::Dm,
+            SocialMessageType::DmGroup,
+            SocialMessageType::Tip,
+            SocialMessageType::Bounty,
+            SocialMessageType::AttentionBoost,
+            SocialMessageType::CreditTip,
+            SocialMessageType::CreditClaim,
+            SocialMessageType::Media,
+            SocialMessageType::Poll,
+            SocialMessageType::Vote,
+            SocialMessageType::Batch,
+            SocialMessageType::ChannelOpen,
+            SocialMessageType::ChannelClose,
+            SocialMessageType::ChannelSettle,
+            SocialMessageType::GovernanceVote,
+            SocialMessageType::GovernanceProposal,
+            SocialMessageType::RecoveryConfig,
+            SocialMessageType::RecoveryRequest,
+            SocialMessageType::RecoveryApprove,
+            SocialMessageType::RecoveryCancel,
+        ];
+
+        assert_eq!(all_types.len(), 26, "Should have exactly 26 message types");
+
+        // Verify each has a unique byte value
+        let mut seen_bytes = std::collections::HashSet::new();
+        for msg_type in all_types {
+            let byte = msg_type.as_u8();
+            assert!(
+                seen_bytes.insert(byte),
+                "Duplicate byte value: 0x{:02X}",
+                byte
+            );
+        }
+    }
+
+    #[test]
+    fn recovery_config_with_many_guardians() {
+        let _init_guard = zebra_test::init();
+
+        // Test recovery config with maximum reasonable guardians (e.g., 10)
+        let mut payload = Vec::new();
+        let guardian_count = 10u8;
+        payload.push(guardian_count);
+
+        // Add 10 guardian hashes
+        for i in 0..guardian_count {
+            let mut hash = [0u8; 32];
+            hash[0] = i + 1;
+            hash[31] = 0xFF;
+            payload.extend_from_slice(&hash);
+        }
+
+        payload.push(6); // threshold: 6-of-10
+        let timelock: u32 = 0x01020304; // Non-zero bytes to avoid trimming
+        payload.extend_from_slice(&timelock.to_le_bytes());
+
+        let msg = SocialMessage::new(
+            SocialMessageType::RecoveryConfig,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::RecoveryConfig);
+        assert_eq!(decoded.payload()[0], 10); // 10 guardians
     }
 }

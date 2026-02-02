@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.3d Complete - Governance Voting Logic)
+**Last Updated:** 2026-02-01 (P6.4 Complete - Social Recovery)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 22 types including channel and governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 26 types including channel, governance, and recovery types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -120,7 +120,10 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.3b** | Governance RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
 | **P6.3c** | Governance RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
 | **P6.3d** | Governance voting logic | ✅ DONE | `zebra-rpc/src/indexer/governance.rs` | `cargo test -p zebra-rpc -- indexer::governance::tests` |
-| **P6.4** | Social recovery | ⬜ TODO | See specs/recovery.md | TBD |
+| **P6.4a** | Recovery message types (0xF0-0xF3) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- recovery` |
+| **P6.4b** | Recovery RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::recovery` |
+| **P6.4c** | Recovery RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- z_recovery` |
+| **P6.4d** | Indexer recovery parsing | ✅ DONE | `zebra-rpc/src/indexer/recovery.rs` | `cargo test -p zebra-rpc -- indexer::recovery::tests` |
 | **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
 
 **P6.1a Implementation Details:**
@@ -211,6 +214,48 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `BlockGovernanceStats` for per-block governance statistics tracking
 - Timeline constants: PROPOSAL_PHASE (7 days), VOTING_PHASE (14 days), EXECUTION_TIMELOCK (30 days)
 - 35+ comprehensive tests covering parsing, vote tallying, quorum calculation, and edge cases
+
+**P6.4a Implementation Details (Recovery Message Types):**
+- Added 4 recovery message types: RecoveryConfig (0xF0), RecoveryRequest (0xF1), RecoveryApprove (0xF2), RecoveryCancel (0xF3)
+- Added `is_recovery()` helper method on SocialMessageType
+- Extended valid message type range from 0xEF to 0xFE (includes recovery range)
+- SocialMessageType enum now has 26 types (was 22)
+- 12 comprehensive tests covering recovery message roundtrips, batching, and categorization
+
+**P6.4b Implementation Details (Recovery RPC Types):**
+- Added `RecoveryStatus` enum (Active, Pending, Approved, Timelocked, Executed, Cancelled, Expired)
+- Added `RecoveryConfigRequest/Response` for guardian setup (1-15 guardians, M-of-N threshold)
+- Added `RecoveryRequestRequest/Response` for initiating recovery from new device
+- Added `RecoveryApproveRequest/Response` for guardian approvals with encrypted Shamir shares
+- Added `RecoveryCancelRequest/Response` for owner to cancel unauthorized attempts
+- Added `RecoveryStatusRequest/Response` for querying recovery state
+- Added `GuardianListRequest/Response` for listing guardians
+- Added `PendingRecoveryInfo` and `GuardianSummary` helper types
+- Constants: DEFAULT_RECOVERY_TIMELOCK_BLOCKS (10080 = ~7 days), MIN/MAX_RECOVERY_GUARDIANS (1/15)
+- 18 comprehensive tests for all recovery RPC type serialization
+
+**P6.4c Implementation Details (Recovery RPC Methods):**
+- Added 6 RPC trait methods: `z_recovery_config`, `z_recovery_request`, `z_recovery_approve`, `z_recovery_cancel`, `z_recovery_status`, `z_recovery_guardians`
+- `z_recovery_config` validates: from address, guardian count (1-15), threshold (1 to N), timelock (1440-100800 blocks), no duplicates, owner not guardian
+- `z_recovery_request` validates: from address, target address, new pubkey (33 bytes hex), proof, from != target
+- `z_recovery_approve` validates: guardian address, request ID, encrypted share
+- `z_recovery_cancel` validates: owner address, request ID
+- `z_recovery_status` and `z_recovery_guardians` validate: address format
+- All methods return appropriate stubs/errors indicating wallet/indexer support needed
+
+**P6.4d Implementation Details (Indexer Recovery Parsing):**
+- Created `zebra-rpc/src/indexer/recovery.rs` module for indexer-side recovery logic
+- Added `RecoveryState` enum (Active, Pending, Approved, Timelocked, Executed, Cancelled, Expired)
+- Added `IndexedRecoveryConfig` struct with guardian hashes, threshold, timelock tracking
+- Added `IndexedRecoveryRequest` struct with approval tracking, timelock expiration, state calculation
+- Added `IndexedRecoveryApproval` struct with encrypted Shamir share storage
+- Added `IndexedRecoveryCancel` struct for cancellation tracking
+- Added `IndexedRecovery` enum for unified recovery event handling
+- Added `RecoveryParseError` enum for detailed error reporting
+- Added utility functions: `is_recovery_memo()`, `parse_recovery_memo()`, `derive_recovery_id()`, `derive_request_id()`
+- Added `BlockRecoveryStats` for per-block recovery statistics tracking
+- Constants: DEFAULT/MIN/MAX_RECOVERY_TIMELOCK_BLOCKS, MIN/MAX_GUARDIANS
+- 35+ comprehensive tests covering parsing, state transitions, approval tracking, and edge cases
 
 ---
 

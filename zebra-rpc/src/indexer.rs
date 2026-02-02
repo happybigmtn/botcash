@@ -14,6 +14,7 @@ pub mod batch;
 pub mod channels;
 pub mod governance;
 pub mod methods;
+pub mod recovery;
 pub mod server;
 
 // The generated indexer proto

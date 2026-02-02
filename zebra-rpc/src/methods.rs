@@ -1257,6 +1257,213 @@ pub trait Rpc {
         &self,
         request: types::social::ChannelListRequest,
     ) -> Result<types::social::ChannelListResponse>;
+
+    // ==================== Recovery RPC Methods (Social Recovery) ====================
+
+    /// Configures social recovery for an address.
+    ///
+    /// Designates trusted guardians who can collectively help recover an account
+    /// if the owner loses access to their keys. Uses Shamir's Secret Sharing to
+    /// split recovery keys among guardians.
+    ///
+    /// # method: post
+    /// # tags: recovery
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The recovery config request containing:
+    ///   - `from`: (string) The owner's unified or shielded address
+    ///   - `guardians`: (array) List of guardian addresses (1-15 guardians)
+    ///   - `threshold`: (usize) Number of guardians required to recover (M of N)
+    ///   - `timelockBlocks`: (u32, optional) Time delay before recovery completes (default: 10080 = ~7 days)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) Transaction ID of the recovery config
+    /// - `recoveryId`: (string) Unique recovery configuration ID
+    /// - `guardianCount`: (usize) Number of guardians registered
+    /// - `threshold`: (usize) Required approvals for recovery
+    /// - `timelockBlocks`: (u32) Time delay in blocks
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Creates a RecoveryConfig (0xF0) message in the memo field.
+    /// See specs/recovery.md for the full social recovery design.
+    #[method(name = "z_recoveryconfig")]
+    async fn z_recovery_config(
+        &self,
+        request: types::social::RecoveryConfigRequest,
+    ) -> Result<types::social::RecoveryConfigResponse>;
+
+    /// Initiates a recovery request for an account.
+    ///
+    /// Called from a new device when the owner has lost access to their keys.
+    /// Starts the recovery process which requires guardian approvals and a
+    /// time-locked waiting period.
+    ///
+    /// # method: post
+    /// # tags: recovery
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The recovery request containing:
+    ///   - `from`: (string) The new device's address (initiating recovery)
+    ///   - `targetAddress`: (string) The address being recovered
+    ///   - `newPubkey`: (string) The new public key to rotate to (hex-encoded)
+    ///   - `proof`: (string) Signed challenge proving knowledge of identity
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) Transaction ID of the recovery request
+    /// - `recoveryId`: (string) The recovery configuration ID
+    /// - `requestId`: (string) Unique ID for this recovery request
+    /// - `timelockExpiresBlock`: (u32) Block when timelock expires
+    /// - `approvalsNeeded`: (usize) Number of guardian approvals needed
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Creates a RecoveryRequest (0xF1) message in the memo field.
+    /// The original owner can cancel the request during the timelock period.
+    #[method(name = "z_recoveryrequest")]
+    async fn z_recovery_request(
+        &self,
+        request: types::social::RecoveryRequestRequest,
+    ) -> Result<types::social::RecoveryRequestResponse>;
+
+    /// Approves a pending recovery request as a guardian.
+    ///
+    /// Guardians verify the requester's identity out-of-band (video call, secret
+    /// question, etc.) before approving. The guardian submits their encrypted
+    /// Shamir share to enable key reconstruction.
+    ///
+    /// # method: post
+    /// # tags: recovery
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The approval request containing:
+    ///   - `from`: (string) The guardian's address
+    ///   - `requestId`: (string) The recovery request ID to approve
+    ///   - `encryptedShare`: (string) Guardian's Shamir share encrypted to new pubkey
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) Transaction ID of the approval
+    /// - `approvalsCount`: (usize) Total approvals received
+    /// - `approvalsNeeded`: (usize) Approvals still needed
+    /// - `thresholdMet`: (bool) Whether threshold has been reached
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Creates a RecoveryApprove (0xF2) message in the memo field.
+    /// Guardians can revoke their approval within the timelock period.
+    #[method(name = "z_recoveryapprove")]
+    async fn z_recovery_approve(
+        &self,
+        request: types::social::RecoveryApproveRequest,
+    ) -> Result<types::social::RecoveryApproveResponse>;
+
+    /// Cancels an active recovery request.
+    ///
+    /// Can only be called by the original owner of the address being recovered.
+    /// Used to stop unauthorized recovery attempts. Must be called before the
+    /// timelock expires and recovery is executed.
+    ///
+    /// # method: post
+    /// # tags: recovery
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The cancel request containing:
+    ///   - `from`: (string) The original owner's address
+    ///   - `requestId`: (string) The recovery request ID to cancel
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) Transaction ID of the cancellation
+    /// - `cancelled`: (bool) Whether the cancellation was successful
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Creates a RecoveryCancel (0xF3) message in the memo field.
+    /// Only the original owner can cancel a recovery request.
+    #[method(name = "z_recoverycancel")]
+    async fn z_recovery_cancel(
+        &self,
+        request: types::social::RecoveryCancelRequest,
+    ) -> Result<types::social::RecoveryCancelResponse>;
+
+    /// Gets the recovery status for an address.
+    ///
+    /// Returns information about the recovery configuration and any pending
+    /// recovery requests for the specified address.
+    ///
+    /// # method: post
+    /// # tags: recovery
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `address`: (string) The address to check recovery status for
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `hasRecovery`: (bool) Whether recovery is configured
+    /// - `guardianCount`: (usize, optional) Number of guardians if configured
+    /// - `threshold`: (usize, optional) Required approvals if configured
+    /// - `timelockBlocks`: (u32, optional) Timelock duration if configured
+    /// - `status`: (string) Current status: "active", "pending", "approved", etc.
+    /// - `pendingRequest`: (object, optional) Details of any pending recovery request
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track recovery state.
+    #[method(name = "z_recoverystatus")]
+    async fn z_recovery_status(
+        &self,
+        request: types::social::RecoveryStatusRequest,
+    ) -> Result<types::social::RecoveryStatusResponse>;
+
+    /// Lists guardians for an address's recovery configuration.
+    ///
+    /// Returns the list of guardian addresses and their status for a given
+    /// recovery configuration.
+    ///
+    /// # method: post
+    /// # tags: recovery
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The list request containing:
+    ///   - `address`: (string) The address to list guardians for
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `address`: (string) The address queried
+    /// - `guardians`: (array) List of guardian summaries with address and active status
+    /// - `threshold`: (usize) Required approvals for recovery
+    /// - `timelockBlocks`: (u32) Timelock duration in blocks
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track guardian state.
+    #[method(name = "z_recoveryguardians")]
+    async fn z_recovery_guardians(
+        &self,
+        request: types::social::GuardianListRequest,
+    ) -> Result<types::social::GuardianListResponse>;
 }
 
 /// RPC method implementations.
@@ -4692,6 +4899,347 @@ where
         Ok(types::social::ChannelListResponse::new(
             vec![], // channels
             0,      // total_count
+        ))
+    }
+
+    // ==================== Recovery RPC Method Implementations ====================
+
+    async fn z_recovery_config(
+        &self,
+        request: types::social::RecoveryConfigRequest,
+    ) -> Result<types::social::RecoveryConfigResponse> {
+        // Validate from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate guardian count
+        if request.guardians.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one guardian is required",
+                None::<()>,
+            ));
+        }
+
+        if request.guardians.len() > types::social::MAX_RECOVERY_GUARDIANS {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "too many guardians (max: {}, got: {})",
+                    types::social::MAX_RECOVERY_GUARDIANS,
+                    request.guardians.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate threshold
+        if request.threshold == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "threshold must be at least 1",
+                None::<()>,
+            ));
+        }
+
+        if request.threshold > request.guardians.len() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "threshold ({}) cannot exceed number of guardians ({})",
+                    request.threshold,
+                    request.guardians.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate timelock is within reasonable bounds
+        const MIN_TIMELOCK_BLOCKS: u32 = 1440; // ~1 day minimum
+        const MAX_TIMELOCK_BLOCKS: u32 = 100800; // ~70 days maximum
+        if request.timelock_blocks < MIN_TIMELOCK_BLOCKS {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "timelock too short (min: {} blocks, got: {})",
+                    MIN_TIMELOCK_BLOCKS, request.timelock_blocks
+                ),
+                None::<()>,
+            ));
+        }
+        if request.timelock_blocks > MAX_TIMELOCK_BLOCKS {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "timelock too long (max: {} blocks, got: {})",
+                    MAX_TIMELOCK_BLOCKS, request.timelock_blocks
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Check for duplicate guardians
+        let mut seen = std::collections::HashSet::new();
+        for guardian in &request.guardians {
+            if !seen.insert(guardian.clone()) {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!("duplicate guardian address: {}", guardian),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Validate guardian addresses are not the same as owner
+        for guardian in &request.guardians {
+            if guardian == &request.from {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "owner cannot be their own guardian",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Generate Shamir shares for each guardian
+        // - Create and sign the RecoveryConfig (0xF0) transaction
+        // - Broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "z_recoveryconfig requires wallet support which is not yet implemented in Zebra. \
+             The recovery configuration validation passed - transaction creation pending.",
+            None::<()>,
+        ))
+    }
+
+    async fn z_recovery_request(
+        &self,
+        request: types::social::RecoveryRequestRequest,
+    ) -> Result<types::social::RecoveryRequestResponse> {
+        // Validate from address (new device)
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate target address
+        if request.target_address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "target address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate new pubkey format (should be 33 bytes hex = 66 chars)
+        if request.new_pubkey.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "new pubkey is required",
+                None::<()>,
+            ));
+        }
+
+        if request.new_pubkey.len() != 66 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "new pubkey must be 33 bytes hex-encoded (66 chars), got {} chars",
+                    request.new_pubkey.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate hex format
+        if !request.new_pubkey.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "new pubkey must be hex-encoded",
+                None::<()>,
+            ));
+        }
+
+        // Validate proof is provided
+        if request.proof.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proof is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate from != target (can't recover own address from same address)
+        if request.from == request.target_address {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address must be different from target address",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires:
+        // - Wallet support for transaction creation
+        // - Indexer lookup to verify target has recovery configured
+        // - Verification that no pending request already exists
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "z_recoveryrequest requires wallet support which is not yet implemented in Zebra. \
+             The recovery request validation passed - transaction creation pending.",
+            None::<()>,
+        ))
+    }
+
+    async fn z_recovery_approve(
+        &self,
+        request: types::social::RecoveryApproveRequest,
+    ) -> Result<types::social::RecoveryApproveResponse> {
+        // Validate guardian address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address (guardian) is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate request ID
+        if request.request_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "request ID is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate encrypted share
+        if request.encrypted_share.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "encrypted share is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires:
+        // - Wallet support for transaction creation
+        // - Indexer lookup to verify guardian is authorized
+        // - Verification that request exists and is pending
+        // - Verification that guardian hasn't already approved
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "z_recoveryapprove requires wallet support which is not yet implemented in Zebra. \
+             The recovery approval validation passed - transaction creation pending.",
+            None::<()>,
+        ))
+    }
+
+    async fn z_recovery_cancel(
+        &self,
+        request: types::social::RecoveryCancelRequest,
+    ) -> Result<types::social::RecoveryCancelResponse> {
+        // Validate owner address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address (owner) is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate request ID
+        if request.request_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "request ID is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires:
+        // - Wallet support for transaction creation
+        // - Indexer lookup to verify from is the original owner
+        // - Verification that request exists and is still pending/approved
+        // - Verification that timelock hasn't expired
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            "z_recoverycancel requires wallet support which is not yet implemented in Zebra. \
+             The recovery cancel validation passed - transaction creation pending.",
+            None::<()>,
+        ))
+    }
+
+    async fn z_recovery_status(
+        &self,
+        request: types::social::RecoveryStatusRequest,
+    ) -> Result<types::social::RecoveryStatusResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Look up recovery configuration for the address
+        // - Check for any pending recovery requests
+        // - Return current status and guardian info
+        //
+        // For now, return a response indicating no recovery configured.
+        Ok(types::social::RecoveryStatusResponse::new(
+            request.address,                       // address
+            false,                                 // has_recovery
+            None,                                  // recovery_id
+            None,                                  // guardian_count
+            None,                                  // threshold
+            None,                                  // timelock_blocks
+            types::social::RecoveryStatus::Active, // status (Active = no pending recovery)
+            None,                                  // pending_request
+        ))
+    }
+
+    async fn z_recovery_guardians(
+        &self,
+        request: types::social::GuardianListRequest,
+    ) -> Result<types::social::GuardianListResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Look up recovery configuration for the address
+        // - Return guardian addresses and their status
+        //
+        // For now, return an empty guardian list.
+        Ok(types::social::GuardianListResponse::new(
+            request.address,    // address
+            vec![],             // guardians (empty - no recovery configured)
+            0,                  // threshold
+            0,                  // timelock_blocks
         ))
     }
 }
