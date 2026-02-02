@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-6 PROTOCOL COMPLETE
 
-**Last Updated:** 2026-02-02 (Added Telegram Bridge - P6.5.1)
+**Last Updated:** 2026-02-02 (Added Discord Bridge - P6.5.2)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 33 types including channel, governance, recovery, bridge, moderation, and content warning types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.3.1c done (content warning tags 0x23 with 19 tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge with 63+ tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 33 types including channel, governance, recovery, bridge, moderation, and content warning types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.3.1c done (content warning tags 0x23 with 19 tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge protocol with 63+ tests), P6.5.1 done (Telegram Bridge with 37 tests), P6.5.2 done (Discord Bridge with 78 tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -1793,12 +1793,25 @@ cd zashi-android && ./gradlew test
 - Fee sponsorship tracking with daily limits
 - 37 comprehensive tests covering models, config, identity service, client
 
-#### 6.5.2 Discord Bridge
-- [ ] Discord.js bot setup
-- [ ] Slash commands (/bcash link, /bcash post)
-- [ ] Channel bridging configuration
-- [ ] Rich embed formatting
-- [ ] Required Tests: Command parsing, embed generation
+#### 6.5.2 Discord Bridge ✅ DONE
+- [x] Discord.py bot setup
+- [x] Slash commands (/bcash_link, /bcash_post, etc.)
+- [x] Channel bridging configuration
+- [x] Rich embed formatting
+- [x] Required Tests: 78 tests passing (command parsing, embed generation, identity service, models)
+
+**P6.5.2 Implementation Details:**
+- Created `bridges/discord/` Python package using discord.py v2.3+
+- Configuration via pydantic-settings (env vars, .env file, YAML)
+- SQLAlchemy async models: LinkedIdentity, RelayedMessage, RateLimitEntry, SponsoredTransaction, BridgedChannel
+- BotcashClient for JSON-RPC communication with node
+- IdentityService handles link/verify/unlink workflow with challenge-response
+- 11 slash commands: /bcash_help, /bcash_link, /bcash_verify, /bcash_unlink, /bcash_status, /bcash_balance, /bcash_post, /bcash_dm, /bcash_feed, /bcash_privacy, /bcash_follow, /bcash_unfollow
+- Privacy modes: full_mirror, selective (default), read_only, private
+- Rich Discord embeds with Botcash branding colors
+- Rate limiting per user per minute
+- Fee sponsorship tracking with daily limits
+- 78 comprehensive tests covering models, config, identity service, client, embeds
 
 #### 6.5.3 Nostr Bridge
 - [ ] Relay implementation (WebSocket server)
