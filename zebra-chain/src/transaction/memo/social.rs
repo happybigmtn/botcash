@@ -65,6 +65,7 @@ pub const BATCH_ACTION_LENGTH_SIZE: usize = 2;
 /// - `0x6_`: Media
 /// - `0x7_`: Polls
 /// - `0x8_`: Batching
+/// - `0xB_`: Bridges (cross-platform identity linking)
 /// - `0xC_`: Channels (layer-2 social channels)
 /// - `0xE_`: Governance (voting, proposals)
 /// - `0xF_`: Recovery (social recovery, key rotation)
@@ -157,6 +158,34 @@ pub enum SocialMessageType {
     /// Format: [0x80][version][count][action1_len(2)][action1]...[actionN_len(2)][actionN]
     Batch = 0x80,
 
+    /// Bridge identity link (0xB0).
+    ///
+    /// Links an external platform identity (Telegram, Discord, Nostr, Mastodon)
+    /// to a Botcash address using a signed challenge-response proof.
+    /// Format: [platform(1)][platform_id_len(1)][platform_id][challenge(32)][signature_len(1)][signature]
+    BridgeLink = 0xB0,
+
+    /// Bridge identity unlink (0xB1).
+    ///
+    /// Removes an existing identity link from a platform.
+    /// Only the linked Botcash address owner can unlink.
+    /// Format: [platform(1)][platform_id_len(1)][platform_id]
+    BridgeUnlink = 0xB1,
+
+    /// Bridge cross-post (0xB2).
+    ///
+    /// Posts content from an external platform to Botcash via a bridge.
+    /// Includes attribution to the original platform and user.
+    /// Format: [platform(1)][original_id_len(1)][original_id][content_len(2)][content]
+    BridgePost = 0xB2,
+
+    /// Bridge verification request (0xB3).
+    ///
+    /// Requests verification of a bridge identity link.
+    /// Used by bridges to prove ownership before relaying messages.
+    /// Format: [platform(1)][platform_id_len(1)][platform_id][nonce(8)]
+    BridgeVerify = 0xB3,
+
     /// Channel open (0xC0).
     ///
     /// Opens a new Layer-2 social channel between parties for high-frequency
@@ -247,6 +276,10 @@ impl SocialMessageType {
             Self::Poll => "Poll",
             Self::Vote => "Vote",
             Self::Batch => "Batch",
+            Self::BridgeLink => "BridgeLink",
+            Self::BridgeUnlink => "BridgeUnlink",
+            Self::BridgePost => "BridgePost",
+            Self::BridgeVerify => "BridgeVerify",
             Self::ChannelOpen => "ChannelOpen",
             Self::ChannelClose => "ChannelClose",
             Self::ChannelSettle => "ChannelSettle",
@@ -311,6 +344,18 @@ impl SocialMessageType {
                 | Self::RecoveryCancel
         )
     }
+
+    /// Returns true if this is a bridge message type.
+    ///
+    /// Bridge messages are used for cross-platform identity linking,
+    /// allowing users to connect their Botcash addresses to external
+    /// platforms like Telegram, Discord, Nostr, and Mastodon.
+    pub const fn is_bridge(&self) -> bool {
+        matches!(
+            self,
+            Self::BridgeLink | Self::BridgeUnlink | Self::BridgePost | Self::BridgeVerify
+        )
+    }
 }
 
 impl TryFrom<u8> for SocialMessageType {
@@ -335,6 +380,10 @@ impl TryFrom<u8> for SocialMessageType {
             0x70 => Ok(Self::Poll),
             0x71 => Ok(Self::Vote),
             0x80 => Ok(Self::Batch),
+            0xB0 => Ok(Self::BridgeLink),
+            0xB1 => Ok(Self::BridgeUnlink),
+            0xB2 => Ok(Self::BridgePost),
+            0xB3 => Ok(Self::BridgeVerify),
             0xC0 => Ok(Self::ChannelOpen),
             0xC1 => Ok(Self::ChannelClose),
             0xC2 => Ok(Self::ChannelSettle),
@@ -430,6 +479,512 @@ impl fmt::Display for SocialParseError {
 }
 
 impl std::error::Error for SocialParseError {}
+
+// ==================== Bridge Types ====================
+
+/// Supported bridge platforms for cross-platform identity linking.
+///
+/// Each platform has a unique identifier used in bridge messages to specify
+/// which external platform is being linked or verified.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum BridgePlatform {
+    /// Telegram messaging platform (0x01).
+    Telegram = 0x01,
+
+    /// Discord chat platform (0x02).
+    Discord = 0x02,
+
+    /// Nostr decentralized protocol (0x03).
+    Nostr = 0x03,
+
+    /// Mastodon/ActivityPub (0x04).
+    Mastodon = 0x04,
+
+    /// X/Twitter (0x05) - primarily read-only bridging.
+    Twitter = 0x05,
+}
+
+impl BridgePlatform {
+    /// Returns the byte value of this platform.
+    #[inline]
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Returns a human-readable name for this platform.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Telegram => "Telegram",
+            Self::Discord => "Discord",
+            Self::Nostr => "Nostr",
+            Self::Mastodon => "Mastodon",
+            Self::Twitter => "Twitter",
+        }
+    }
+
+    /// Returns true if this platform supports bidirectional bridging.
+    ///
+    /// Some platforms (like Twitter/X) have API restrictions that make
+    /// bidirectional bridging difficult or impractical.
+    pub const fn is_bidirectional(&self) -> bool {
+        !matches!(self, Self::Twitter)
+    }
+}
+
+impl TryFrom<u8> for BridgePlatform {
+    type Error = BridgeParseError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x01 => Ok(Self::Telegram),
+            0x02 => Ok(Self::Discord),
+            0x03 => Ok(Self::Nostr),
+            0x04 => Ok(Self::Mastodon),
+            0x05 => Ok(Self::Twitter),
+            _ => Err(BridgeParseError::UnknownPlatform(value)),
+        }
+    }
+}
+
+impl fmt::Display for BridgePlatform {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+/// Errors that can occur when parsing bridge messages.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BridgeParseError {
+    /// Unknown or unsupported platform.
+    UnknownPlatform(u8),
+
+    /// The platform ID is too long.
+    PlatformIdTooLong {
+        /// The maximum allowed length.
+        max_len: usize,
+        /// The actual length.
+        actual_len: usize,
+    },
+
+    /// The challenge is invalid or missing.
+    InvalidChallenge,
+
+    /// The signature is invalid or missing.
+    InvalidSignature,
+
+    /// The payload is too short.
+    PayloadTooShort {
+        /// The minimum required length.
+        minimum: usize,
+        /// The actual length.
+        actual: usize,
+    },
+}
+
+impl fmt::Display for BridgeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownPlatform(byte) => {
+                write!(f, "unknown bridge platform: 0x{:02X}", byte)
+            }
+            Self::PlatformIdTooLong { max_len, actual_len } => {
+                write!(
+                    f,
+                    "platform ID too long: {} bytes, maximum {} allowed",
+                    actual_len, max_len
+                )
+            }
+            Self::InvalidChallenge => write!(f, "invalid or missing challenge"),
+            Self::InvalidSignature => write!(f, "invalid or missing signature"),
+            Self::PayloadTooShort { minimum, actual } => {
+                write!(
+                    f,
+                    "bridge payload too short: {} bytes, minimum {} required",
+                    actual, minimum
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for BridgeParseError {}
+
+/// Maximum length for a platform user ID.
+pub const MAX_PLATFORM_ID_LENGTH: usize = 64;
+
+/// Size of the challenge in bridge link messages (32 bytes).
+pub const BRIDGE_CHALLENGE_SIZE: usize = 32;
+
+/// Maximum size of a bridge signature (varies by platform).
+pub const MAX_BRIDGE_SIGNATURE_SIZE: usize = 128;
+
+/// A parsed bridge message from a transaction memo.
+///
+/// This struct provides access to the bridge-specific fields for identity
+/// linking and cross-platform messaging operations.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BridgeMessage {
+    /// The target platform for this bridge operation.
+    platform: BridgePlatform,
+
+    /// The platform-specific user identifier.
+    platform_id: String,
+
+    /// Optional challenge for link verification (32 bytes).
+    challenge: Option<[u8; BRIDGE_CHALLENGE_SIZE]>,
+
+    /// Optional signature proving ownership.
+    signature: Option<Vec<u8>>,
+
+    /// Optional content for cross-posts.
+    content: Option<String>,
+
+    /// Optional original post ID on the source platform.
+    original_id: Option<String>,
+
+    /// Optional nonce for verification requests.
+    nonce: Option<u64>,
+}
+
+impl BridgeMessage {
+    /// Creates a new bridge link message.
+    pub fn new_link(
+        platform: BridgePlatform,
+        platform_id: String,
+        challenge: [u8; BRIDGE_CHALLENGE_SIZE],
+        signature: Vec<u8>,
+    ) -> Self {
+        Self {
+            platform,
+            platform_id,
+            challenge: Some(challenge),
+            signature: Some(signature),
+            content: None,
+            original_id: None,
+            nonce: None,
+        }
+    }
+
+    /// Creates a new bridge unlink message.
+    pub fn new_unlink(platform: BridgePlatform, platform_id: String) -> Self {
+        Self {
+            platform,
+            platform_id,
+            challenge: None,
+            signature: None,
+            content: None,
+            original_id: None,
+            nonce: None,
+        }
+    }
+
+    /// Creates a new bridge cross-post message.
+    pub fn new_post(
+        platform: BridgePlatform,
+        original_id: String,
+        content: String,
+    ) -> Self {
+        Self {
+            platform,
+            platform_id: String::new(),
+            challenge: None,
+            signature: None,
+            content: Some(content),
+            original_id: Some(original_id),
+            nonce: None,
+        }
+    }
+
+    /// Creates a new bridge verification request message.
+    pub fn new_verify(platform: BridgePlatform, platform_id: String, nonce: u64) -> Self {
+        Self {
+            platform,
+            platform_id,
+            challenge: None,
+            signature: None,
+            content: None,
+            original_id: None,
+            nonce: Some(nonce),
+        }
+    }
+
+    /// Returns the platform for this bridge message.
+    #[inline]
+    pub fn platform(&self) -> BridgePlatform {
+        self.platform
+    }
+
+    /// Returns the platform-specific user identifier.
+    #[inline]
+    pub fn platform_id(&self) -> &str {
+        &self.platform_id
+    }
+
+    /// Returns the challenge bytes if present.
+    #[inline]
+    pub fn challenge(&self) -> Option<&[u8; BRIDGE_CHALLENGE_SIZE]> {
+        self.challenge.as_ref()
+    }
+
+    /// Returns the signature bytes if present.
+    #[inline]
+    pub fn signature(&self) -> Option<&[u8]> {
+        self.signature.as_deref()
+    }
+
+    /// Returns the content for cross-posts.
+    #[inline]
+    pub fn content(&self) -> Option<&str> {
+        self.content.as_deref()
+    }
+
+    /// Returns the original post ID for cross-posts.
+    #[inline]
+    pub fn original_id(&self) -> Option<&str> {
+        self.original_id.as_deref()
+    }
+
+    /// Returns the nonce for verification requests.
+    #[inline]
+    pub fn nonce(&self) -> Option<u64> {
+        self.nonce
+    }
+
+    /// Encodes this bridge message into bytes.
+    ///
+    /// The encoding varies by message type (link, unlink, post, verify).
+    pub fn encode(&self, msg_type: SocialMessageType) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        match msg_type {
+            SocialMessageType::BridgeLink => {
+                // Format: [platform(1)][platform_id_len(1)][platform_id][challenge(32)][sig_len(1)][sig]
+                bytes.push(self.platform.as_u8());
+                let id_bytes = self.platform_id.as_bytes();
+                bytes.push(id_bytes.len() as u8);
+                bytes.extend_from_slice(id_bytes);
+                if let Some(challenge) = &self.challenge {
+                    bytes.extend_from_slice(challenge);
+                }
+                if let Some(sig) = &self.signature {
+                    bytes.push(sig.len() as u8);
+                    bytes.extend_from_slice(sig);
+                }
+            }
+            SocialMessageType::BridgeUnlink => {
+                // Format: [platform(1)][platform_id_len(1)][platform_id]
+                bytes.push(self.platform.as_u8());
+                let id_bytes = self.platform_id.as_bytes();
+                bytes.push(id_bytes.len() as u8);
+                bytes.extend_from_slice(id_bytes);
+            }
+            SocialMessageType::BridgePost => {
+                // Format: [platform(1)][original_id_len(1)][original_id][content_len(2)][content]
+                bytes.push(self.platform.as_u8());
+                if let Some(orig_id) = &self.original_id {
+                    let orig_bytes = orig_id.as_bytes();
+                    bytes.push(orig_bytes.len() as u8);
+                    bytes.extend_from_slice(orig_bytes);
+                } else {
+                    bytes.push(0);
+                }
+                if let Some(content) = &self.content {
+                    let content_bytes = content.as_bytes();
+                    let len = content_bytes.len() as u16;
+                    bytes.push((len & 0xFF) as u8);
+                    bytes.push((len >> 8) as u8);
+                    bytes.extend_from_slice(content_bytes);
+                } else {
+                    bytes.push(0);
+                    bytes.push(0);
+                }
+            }
+            SocialMessageType::BridgeVerify => {
+                // Format: [platform(1)][platform_id_len(1)][platform_id][nonce(8)]
+                bytes.push(self.platform.as_u8());
+                let id_bytes = self.platform_id.as_bytes();
+                bytes.push(id_bytes.len() as u8);
+                bytes.extend_from_slice(id_bytes);
+                if let Some(nonce) = self.nonce {
+                    bytes.extend_from_slice(&nonce.to_le_bytes());
+                }
+            }
+            _ => {}
+        }
+
+        bytes
+    }
+
+    /// Parses a bridge message from payload bytes.
+    pub fn parse(msg_type: SocialMessageType, payload: &[u8]) -> Result<Self, BridgeParseError> {
+        if payload.is_empty() {
+            return Err(BridgeParseError::PayloadTooShort {
+                minimum: 2,
+                actual: 0,
+            });
+        }
+
+        let platform = BridgePlatform::try_from(payload[0])?;
+
+        match msg_type {
+            SocialMessageType::BridgeLink => {
+                // Format: [platform(1)][platform_id_len(1)][platform_id][challenge(32)][sig_len(1)][sig]
+                if payload.len() < 2 {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: 2,
+                        actual: payload.len(),
+                    });
+                }
+
+                let id_len = payload[1] as usize;
+                if id_len > MAX_PLATFORM_ID_LENGTH {
+                    return Err(BridgeParseError::PlatformIdTooLong {
+                        max_len: MAX_PLATFORM_ID_LENGTH,
+                        actual_len: id_len,
+                    });
+                }
+
+                let id_end = 2 + id_len;
+                if payload.len() < id_end {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: id_end,
+                        actual: payload.len(),
+                    });
+                }
+
+                let platform_id = String::from_utf8_lossy(&payload[2..id_end]).to_string();
+
+                let challenge_end = id_end + BRIDGE_CHALLENGE_SIZE;
+                if payload.len() < challenge_end {
+                    return Err(BridgeParseError::InvalidChallenge);
+                }
+
+                let mut challenge = [0u8; BRIDGE_CHALLENGE_SIZE];
+                challenge.copy_from_slice(&payload[id_end..challenge_end]);
+
+                if payload.len() < challenge_end + 1 {
+                    return Err(BridgeParseError::InvalidSignature);
+                }
+
+                let sig_len = payload[challenge_end] as usize;
+                let sig_end = challenge_end + 1 + sig_len;
+                if payload.len() < sig_end {
+                    return Err(BridgeParseError::InvalidSignature);
+                }
+
+                let signature = payload[challenge_end + 1..sig_end].to_vec();
+
+                Ok(Self::new_link(platform, platform_id, challenge, signature))
+            }
+            SocialMessageType::BridgeUnlink => {
+                // Format: [platform(1)][platform_id_len(1)][platform_id]
+                if payload.len() < 2 {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: 2,
+                        actual: payload.len(),
+                    });
+                }
+
+                let id_len = payload[1] as usize;
+                if id_len > MAX_PLATFORM_ID_LENGTH {
+                    return Err(BridgeParseError::PlatformIdTooLong {
+                        max_len: MAX_PLATFORM_ID_LENGTH,
+                        actual_len: id_len,
+                    });
+                }
+
+                let id_end = 2 + id_len;
+                if payload.len() < id_end {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: id_end,
+                        actual: payload.len(),
+                    });
+                }
+
+                let platform_id = String::from_utf8_lossy(&payload[2..id_end]).to_string();
+
+                Ok(Self::new_unlink(platform, platform_id))
+            }
+            SocialMessageType::BridgePost => {
+                // Format: [platform(1)][original_id_len(1)][original_id][content_len(2)][content]
+                if payload.len() < 2 {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: 2,
+                        actual: payload.len(),
+                    });
+                }
+
+                let orig_len = payload[1] as usize;
+                let orig_end = 2 + orig_len;
+                if payload.len() < orig_end + 2 {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: orig_end + 2,
+                        actual: payload.len(),
+                    });
+                }
+
+                let original_id = String::from_utf8_lossy(&payload[2..orig_end]).to_string();
+
+                let content_len = u16::from_le_bytes([payload[orig_end], payload[orig_end + 1]]) as usize;
+                let content_end = orig_end + 2 + content_len;
+                if payload.len() < content_end {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: content_end,
+                        actual: payload.len(),
+                    });
+                }
+
+                let content = String::from_utf8_lossy(&payload[orig_end + 2..content_end]).to_string();
+
+                Ok(Self::new_post(platform, original_id, content))
+            }
+            SocialMessageType::BridgeVerify => {
+                // Format: [platform(1)][platform_id_len(1)][platform_id][nonce(8)]
+                if payload.len() < 2 {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: 2,
+                        actual: payload.len(),
+                    });
+                }
+
+                let id_len = payload[1] as usize;
+                if id_len > MAX_PLATFORM_ID_LENGTH {
+                    return Err(BridgeParseError::PlatformIdTooLong {
+                        max_len: MAX_PLATFORM_ID_LENGTH,
+                        actual_len: id_len,
+                    });
+                }
+
+                let id_end = 2 + id_len;
+                if payload.len() < id_end + 8 {
+                    return Err(BridgeParseError::PayloadTooShort {
+                        minimum: id_end + 8,
+                        actual: payload.len(),
+                    });
+                }
+
+                let platform_id = String::from_utf8_lossy(&payload[2..id_end]).to_string();
+                let nonce = u64::from_le_bytes([
+                    payload[id_end],
+                    payload[id_end + 1],
+                    payload[id_end + 2],
+                    payload[id_end + 3],
+                    payload[id_end + 4],
+                    payload[id_end + 5],
+                    payload[id_end + 6],
+                    payload[id_end + 7],
+                ]);
+
+                Ok(Self::new_verify(platform, platform_id, nonce))
+            }
+            _ => Err(BridgeParseError::PayloadTooShort {
+                minimum: 1,
+                actual: 0,
+            }),
+        }
+    }
+}
 
 /// A parsed social message from a transaction memo.
 ///
@@ -2325,5 +2880,423 @@ mod tests {
 
         assert_eq!(decoded.msg_type(), SocialMessageType::RecoveryConfig);
         assert_eq!(decoded.payload()[0], 10); // 10 guardians
+    }
+
+    // ==================== Bridge Tests ====================
+
+    #[test]
+    fn bridge_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(SocialMessageType::BridgeLink.as_u8(), 0xB0);
+        assert_eq!(SocialMessageType::BridgeUnlink.as_u8(), 0xB1);
+        assert_eq!(SocialMessageType::BridgePost.as_u8(), 0xB2);
+        assert_eq!(SocialMessageType::BridgeVerify.as_u8(), 0xB3);
+
+        assert_eq!(SocialMessageType::BridgeLink.name(), "BridgeLink");
+        assert_eq!(SocialMessageType::BridgeUnlink.name(), "BridgeUnlink");
+        assert_eq!(SocialMessageType::BridgePost.name(), "BridgePost");
+        assert_eq!(SocialMessageType::BridgeVerify.name(), "BridgeVerify");
+    }
+
+    #[test]
+    fn bridge_platform_values() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(BridgePlatform::Telegram.as_u8(), 0x01);
+        assert_eq!(BridgePlatform::Discord.as_u8(), 0x02);
+        assert_eq!(BridgePlatform::Nostr.as_u8(), 0x03);
+        assert_eq!(BridgePlatform::Mastodon.as_u8(), 0x04);
+        assert_eq!(BridgePlatform::Twitter.as_u8(), 0x05);
+
+        assert_eq!(BridgePlatform::Telegram.name(), "Telegram");
+        assert_eq!(BridgePlatform::Discord.name(), "Discord");
+        assert_eq!(BridgePlatform::Nostr.name(), "Nostr");
+        assert_eq!(BridgePlatform::Mastodon.name(), "Mastodon");
+        assert_eq!(BridgePlatform::Twitter.name(), "Twitter");
+    }
+
+    #[test]
+    fn bridge_platform_bidirectional() {
+        let _init_guard = zebra_test::init();
+
+        // Most platforms support bidirectional bridging
+        assert!(BridgePlatform::Telegram.is_bidirectional());
+        assert!(BridgePlatform::Discord.is_bidirectional());
+        assert!(BridgePlatform::Nostr.is_bidirectional());
+        assert!(BridgePlatform::Mastodon.is_bidirectional());
+
+        // Twitter is read-only due to API restrictions
+        assert!(!BridgePlatform::Twitter.is_bidirectional());
+    }
+
+    #[test]
+    fn bridge_platform_try_from() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(BridgePlatform::try_from(0x01).unwrap(), BridgePlatform::Telegram);
+        assert_eq!(BridgePlatform::try_from(0x02).unwrap(), BridgePlatform::Discord);
+        assert_eq!(BridgePlatform::try_from(0x03).unwrap(), BridgePlatform::Nostr);
+        assert_eq!(BridgePlatform::try_from(0x04).unwrap(), BridgePlatform::Mastodon);
+        assert_eq!(BridgePlatform::try_from(0x05).unwrap(), BridgePlatform::Twitter);
+
+        // Unknown platforms should error
+        assert!(BridgePlatform::try_from(0x00).is_err());
+        assert!(BridgePlatform::try_from(0x06).is_err());
+        assert!(BridgePlatform::try_from(0xFF).is_err());
+    }
+
+    #[test]
+    fn bridge_link_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let platform = BridgePlatform::Telegram;
+        let platform_id = "123456789".to_string();
+        let challenge = [0xAB; BRIDGE_CHALLENGE_SIZE];
+        let signature = vec![0xCD; 64];
+
+        let msg = BridgeMessage::new_link(platform, platform_id.clone(), challenge, signature.clone());
+
+        assert_eq!(msg.platform(), BridgePlatform::Telegram);
+        assert_eq!(msg.platform_id(), "123456789");
+        assert_eq!(msg.challenge(), Some(&challenge));
+        assert_eq!(msg.signature(), Some(signature.as_slice()));
+
+        // Encode and parse back
+        let payload = msg.encode(SocialMessageType::BridgeLink);
+        let parsed = BridgeMessage::parse(SocialMessageType::BridgeLink, &payload).unwrap();
+
+        assert_eq!(parsed.platform(), platform);
+        assert_eq!(parsed.platform_id(), platform_id);
+        assert_eq!(parsed.challenge(), Some(&challenge));
+        assert_eq!(parsed.signature(), Some(signature.as_slice()));
+    }
+
+    #[test]
+    fn bridge_unlink_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let platform = BridgePlatform::Discord;
+        let platform_id = "987654321012345678".to_string(); // Discord snowflake ID
+
+        let msg = BridgeMessage::new_unlink(platform, platform_id.clone());
+
+        assert_eq!(msg.platform(), BridgePlatform::Discord);
+        assert_eq!(msg.platform_id(), "987654321012345678");
+        assert!(msg.challenge().is_none());
+        assert!(msg.signature().is_none());
+
+        // Encode and parse back
+        let payload = msg.encode(SocialMessageType::BridgeUnlink);
+        let parsed = BridgeMessage::parse(SocialMessageType::BridgeUnlink, &payload).unwrap();
+
+        assert_eq!(parsed.platform(), platform);
+        assert_eq!(parsed.platform_id(), platform_id);
+    }
+
+    #[test]
+    fn bridge_post_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let platform = BridgePlatform::Nostr;
+        let original_id = "note1abc123xyz".to_string();
+        let content = "Hello from Nostr! This is a cross-posted message.".to_string();
+
+        let msg = BridgeMessage::new_post(platform, original_id.clone(), content.clone());
+
+        assert_eq!(msg.platform(), BridgePlatform::Nostr);
+        assert_eq!(msg.original_id(), Some(original_id.as_str()));
+        assert_eq!(msg.content(), Some(content.as_str()));
+
+        // Encode and parse back
+        let payload = msg.encode(SocialMessageType::BridgePost);
+        let parsed = BridgeMessage::parse(SocialMessageType::BridgePost, &payload).unwrap();
+
+        assert_eq!(parsed.platform(), platform);
+        assert_eq!(parsed.original_id(), Some(original_id.as_str()));
+        assert_eq!(parsed.content(), Some(content.as_str()));
+    }
+
+    #[test]
+    fn bridge_verify_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        let platform = BridgePlatform::Mastodon;
+        let platform_id = "@alice@mastodon.social".to_string();
+        let nonce = 0x123456789ABCDEF0u64;
+
+        let msg = BridgeMessage::new_verify(platform, platform_id.clone(), nonce);
+
+        assert_eq!(msg.platform(), BridgePlatform::Mastodon);
+        assert_eq!(msg.platform_id(), "@alice@mastodon.social");
+        assert_eq!(msg.nonce(), Some(nonce));
+
+        // Encode and parse back
+        let payload = msg.encode(SocialMessageType::BridgeVerify);
+        let parsed = BridgeMessage::parse(SocialMessageType::BridgeVerify, &payload).unwrap();
+
+        assert_eq!(parsed.platform(), platform);
+        assert_eq!(parsed.platform_id(), platform_id);
+        assert_eq!(parsed.nonce(), Some(nonce));
+    }
+
+    #[test]
+    fn bridge_is_bridge_helper() {
+        let _init_guard = zebra_test::init();
+
+        // Bridge types should return true
+        assert!(SocialMessageType::BridgeLink.is_bridge());
+        assert!(SocialMessageType::BridgeUnlink.is_bridge());
+        assert!(SocialMessageType::BridgePost.is_bridge());
+        assert!(SocialMessageType::BridgeVerify.is_bridge());
+
+        // Non-bridge types should return false
+        assert!(!SocialMessageType::Post.is_bridge());
+        assert!(!SocialMessageType::Dm.is_bridge());
+        assert!(!SocialMessageType::Batch.is_bridge());
+        assert!(!SocialMessageType::GovernanceVote.is_bridge());
+        assert!(!SocialMessageType::ChannelOpen.is_bridge());
+        assert!(!SocialMessageType::RecoveryConfig.is_bridge());
+    }
+
+    #[test]
+    fn bridge_types_not_other_categories() {
+        let _init_guard = zebra_test::init();
+
+        // Bridge types are not value transfers
+        assert!(!SocialMessageType::BridgeLink.is_value_transfer());
+        assert!(!SocialMessageType::BridgeUnlink.is_value_transfer());
+        assert!(!SocialMessageType::BridgePost.is_value_transfer());
+        assert!(!SocialMessageType::BridgeVerify.is_value_transfer());
+
+        // Bridge types are not attention market
+        assert!(!SocialMessageType::BridgeLink.is_attention_market());
+        assert!(!SocialMessageType::BridgeUnlink.is_attention_market());
+        assert!(!SocialMessageType::BridgePost.is_attention_market());
+        assert!(!SocialMessageType::BridgeVerify.is_attention_market());
+
+        // Bridge types are not governance
+        assert!(!SocialMessageType::BridgeLink.is_governance());
+        assert!(!SocialMessageType::BridgeUnlink.is_governance());
+        assert!(!SocialMessageType::BridgePost.is_governance());
+        assert!(!SocialMessageType::BridgeVerify.is_governance());
+
+        // Bridge types are not channels
+        assert!(!SocialMessageType::BridgeLink.is_channel());
+        assert!(!SocialMessageType::BridgeUnlink.is_channel());
+        assert!(!SocialMessageType::BridgePost.is_channel());
+        assert!(!SocialMessageType::BridgeVerify.is_channel());
+
+        // Bridge types are not recovery
+        assert!(!SocialMessageType::BridgeLink.is_recovery());
+        assert!(!SocialMessageType::BridgeUnlink.is_recovery());
+        assert!(!SocialMessageType::BridgePost.is_recovery());
+        assert!(!SocialMessageType::BridgeVerify.is_recovery());
+
+        // Bridge types are not batch
+        assert!(!SocialMessageType::BridgeLink.is_batch());
+        assert!(!SocialMessageType::BridgeUnlink.is_batch());
+        assert!(!SocialMessageType::BridgePost.is_batch());
+        assert!(!SocialMessageType::BridgeVerify.is_batch());
+    }
+
+    #[test]
+    fn bridge_type_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", SocialMessageType::BridgeLink), "BridgeLink");
+        assert_eq!(format!("{}", SocialMessageType::BridgeUnlink), "BridgeUnlink");
+        assert_eq!(format!("{}", SocialMessageType::BridgePost), "BridgePost");
+        assert_eq!(format!("{}", SocialMessageType::BridgeVerify), "BridgeVerify");
+
+        assert_eq!(format!("{}", BridgePlatform::Telegram), "Telegram");
+        assert_eq!(format!("{}", BridgePlatform::Discord), "Discord");
+        assert_eq!(format!("{}", BridgePlatform::Nostr), "Nostr");
+        assert_eq!(format!("{}", BridgePlatform::Mastodon), "Mastodon");
+        assert_eq!(format!("{}", BridgePlatform::Twitter), "Twitter");
+    }
+
+    #[test]
+    fn bridge_message_try_from_bytes() {
+        let _init_guard = zebra_test::init();
+
+        let bridge_types = vec![
+            SocialMessageType::BridgeLink,
+            SocialMessageType::BridgeUnlink,
+            SocialMessageType::BridgePost,
+            SocialMessageType::BridgeVerify,
+        ];
+
+        for msg_type in &bridge_types {
+            let byte = msg_type.as_u8();
+            let parsed = SocialMessageType::try_from(byte).expect("should parse");
+            assert_eq!(&parsed, msg_type);
+        }
+    }
+
+    #[test]
+    fn bridge_social_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // BridgeLink format: [platform(1)][platform_id_len(1)][platform_id][challenge(32)][sig_len(1)][sig]
+        let mut payload = Vec::new();
+        payload.push(BridgePlatform::Telegram.as_u8());
+        let platform_id = b"12345678901";
+        payload.push(platform_id.len() as u8);
+        payload.extend_from_slice(platform_id);
+        payload.extend_from_slice(&[0xAB; BRIDGE_CHALLENGE_SIZE]); // challenge
+        payload.push(64);
+        payload.extend_from_slice(&[0xCD; 64]); // signature
+
+        let msg = SocialMessage::new(
+            SocialMessageType::BridgeLink,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xB0); // BridgeLink type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::BridgeLink);
+        assert!(decoded.msg_type().is_bridge());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn bridge_types_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Bridge messages can be batched with other actions
+        let actions = vec![
+            SocialMessage::new(
+                SocialMessageType::BridgeLink,
+                SOCIAL_PROTOCOL_VERSION,
+                {
+                    let mut payload = vec![BridgePlatform::Discord.as_u8()];
+                    let id = b"123456789012345678";
+                    payload.push(id.len() as u8);
+                    payload.extend_from_slice(id);
+                    payload.extend_from_slice(&[0xAB; 32]); // challenge
+                    payload.push(64);
+                    payload.extend_from_slice(&[0xCD; 64]); // sig
+                    payload
+                },
+            ),
+            SocialMessage::new(
+                SocialMessageType::Post,
+                SOCIAL_PROTOCOL_VERSION,
+                b"Linked my Discord account!".to_vec(),
+            ),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("valid batch");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should decode");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded.actions()[0].msg_type(), SocialMessageType::BridgeLink);
+        assert!(decoded.actions()[0].msg_type().is_bridge());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
+    fn bridge_parse_error_unknown_platform() {
+        let _init_guard = zebra_test::init();
+
+        let payload = vec![0xFF, 5, b'h', b'e', b'l', b'l', b'o'];
+        let result = BridgeMessage::parse(SocialMessageType::BridgeUnlink, &payload);
+        assert!(result.is_err());
+
+        if let Err(BridgeParseError::UnknownPlatform(byte)) = result {
+            assert_eq!(byte, 0xFF);
+        } else {
+            panic!("Expected UnknownPlatform error");
+        }
+    }
+
+    #[test]
+    fn bridge_parse_error_platform_id_too_long() {
+        let _init_guard = zebra_test::init();
+
+        // Create a payload with platform ID length exceeding MAX_PLATFORM_ID_LENGTH
+        let mut payload = vec![BridgePlatform::Telegram.as_u8()];
+        payload.push(100); // Length > MAX_PLATFORM_ID_LENGTH (64)
+        payload.extend_from_slice(&[b'x'; 100]);
+
+        let result = BridgeMessage::parse(SocialMessageType::BridgeUnlink, &payload);
+        assert!(result.is_err());
+
+        if let Err(BridgeParseError::PlatformIdTooLong { max_len, actual_len }) = result {
+            assert_eq!(max_len, MAX_PLATFORM_ID_LENGTH);
+            assert_eq!(actual_len, 100);
+        } else {
+            panic!("Expected PlatformIdTooLong error");
+        }
+    }
+
+    #[test]
+    fn bridge_parse_error_payload_too_short() {
+        let _init_guard = zebra_test::init();
+
+        // Empty payload
+        let result = BridgeMessage::parse(SocialMessageType::BridgeLink, &[]);
+        assert!(matches!(result, Err(BridgeParseError::PayloadTooShort { .. })));
+
+        // Only platform byte
+        let result = BridgeMessage::parse(SocialMessageType::BridgeLink, &[0x01]);
+        assert!(matches!(result, Err(BridgeParseError::PayloadTooShort { .. })));
+    }
+
+    #[test]
+    fn bridge_all_types_count() {
+        let _init_guard = zebra_test::init();
+
+        // Verify SocialMessageType now has 30 variants (26 + 4 bridge types)
+        let all_types = vec![
+            SocialMessageType::Profile,
+            SocialMessageType::Post,
+            SocialMessageType::Comment,
+            SocialMessageType::Upvote,
+            SocialMessageType::Follow,
+            SocialMessageType::Unfollow,
+            SocialMessageType::Dm,
+            SocialMessageType::DmGroup,
+            SocialMessageType::Tip,
+            SocialMessageType::Bounty,
+            SocialMessageType::AttentionBoost,
+            SocialMessageType::CreditTip,
+            SocialMessageType::CreditClaim,
+            SocialMessageType::Media,
+            SocialMessageType::Poll,
+            SocialMessageType::Vote,
+            SocialMessageType::Batch,
+            SocialMessageType::BridgeLink,
+            SocialMessageType::BridgeUnlink,
+            SocialMessageType::BridgePost,
+            SocialMessageType::BridgeVerify,
+            SocialMessageType::ChannelOpen,
+            SocialMessageType::ChannelClose,
+            SocialMessageType::ChannelSettle,
+            SocialMessageType::GovernanceVote,
+            SocialMessageType::GovernanceProposal,
+            SocialMessageType::RecoveryConfig,
+            SocialMessageType::RecoveryRequest,
+            SocialMessageType::RecoveryApprove,
+            SocialMessageType::RecoveryCancel,
+        ];
+
+        assert_eq!(all_types.len(), 30);
+
+        // Verify all can be parsed from their byte values
+        for msg_type in &all_types {
+            let byte = msg_type.as_u8();
+            let parsed = SocialMessageType::try_from(byte).expect("should parse");
+            assert_eq!(&parsed, msg_type);
+        }
     }
 }

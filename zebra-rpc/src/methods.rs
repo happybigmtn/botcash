@@ -1464,6 +1464,205 @@ pub trait Rpc {
         &self,
         request: types::social::GuardianListRequest,
     ) -> Result<types::social::GuardianListResponse>;
+
+    // ==================== Bridge Methods ====================
+
+    /// Links an external platform identity to a Botcash address.
+    ///
+    /// Creates an on-chain identity link between a Botcash address and an
+    /// external platform account (Telegram, Discord, Nostr, Mastodon, Twitter).
+    /// Requires a signed proof of ownership from both identities.
+    ///
+    /// # method: post
+    /// # tags: bridge
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The link request containing:
+    ///   - `from`: (string) The Botcash address to link
+    ///   - `platform`: (string) The platform ("telegram", "discord", "nostr", "mastodon", "twitter")
+    ///   - `platformId`: (string) The platform-specific user identifier
+    ///   - `proof`: (string) Signed challenge proving ownership (hex-encoded)
+    ///   - `privacyMode`: (string, optional) Privacy mode ("full", "selective", "readonly", "private")
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) The transaction ID of the link
+    /// - `platform`: (string) The linked platform
+    /// - `platformId`: (string) The linked platform user ID
+    /// - `address`: (string) The linked Botcash address
+    /// - `status`: (string) Current link status
+    /// - `linkedAtBlock`: (u32) Block height when linked
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension for cross-platform identity bridging.
+    /// Requires wallet support to sign and submit the link transaction.
+    #[method(name = "z_bridgelink")]
+    async fn z_bridge_link(
+        &self,
+        request: types::social::BridgeLinkRequest,
+    ) -> Result<types::social::BridgeLinkResponse>;
+
+    /// Unlinks an external platform identity from a Botcash address.
+    ///
+    /// Removes an existing identity link. Only the owner of the Botcash
+    /// address can unlink.
+    ///
+    /// # method: post
+    /// # tags: bridge
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The unlink request containing:
+    ///   - `from`: (string) The Botcash address that owns the link
+    ///   - `platform`: (string) The platform to unlink
+    ///   - `platformId`: (string) The platform user ID to unlink
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) The transaction ID of the unlink
+    /// - `platform`: (string) The unlinked platform
+    /// - `platformId`: (string) The unlinked platform user ID
+    /// - `success`: (bool) Whether the unlink was successful
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires wallet support.
+    #[method(name = "z_bridgeunlink")]
+    async fn z_bridge_unlink(
+        &self,
+        request: types::social::BridgeUnlinkRequest,
+    ) -> Result<types::social::BridgeUnlinkResponse>;
+
+    /// Posts content from an external platform to Botcash via a bridge.
+    ///
+    /// Creates a cross-post that includes attribution to the original
+    /// platform and post. Used by bridge services to relay content.
+    ///
+    /// # method: post
+    /// # tags: bridge
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The post request containing:
+    ///   - `from`: (string) The Botcash address to post from
+    ///   - `platform`: (string) The source platform
+    ///   - `originalId`: (string) The original post ID on the source platform
+    ///   - `content`: (string) The content to post
+    ///   - `inReplyTo`: (string, optional) Transaction ID if this is a reply
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) The transaction ID of the post
+    /// - `platform`: (string) The source platform
+    /// - `originalId`: (string) The original post ID
+    /// - `postedAtBlock`: (u32) Block height when posted
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension for bridge operators.
+    /// The posting address must have an active link to the source platform.
+    #[method(name = "z_bridgepost")]
+    async fn z_bridge_post(
+        &self,
+        request: types::social::BridgePostRequest,
+    ) -> Result<types::social::BridgePostResponse>;
+
+    /// Queries the bridge link status for a Botcash address.
+    ///
+    /// Returns information about all platform links for the specified address,
+    /// including link status, privacy mode, and activity statistics.
+    ///
+    /// # method: post
+    /// # tags: bridge
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `address`: (string) The Botcash address to query
+    ///   - `platform`: (string, optional) Filter by specific platform
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `address`: (string) The queried address
+    /// - `links`: (array) List of bridge links with status and statistics
+    /// - `activeLinksCount`: (u32) Number of active links
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_bridgestatus")]
+    async fn z_bridge_status(
+        &self,
+        request: types::social::BridgeStatusRequest,
+    ) -> Result<types::social::BridgeStatusResponse>;
+
+    /// Lists all bridge links matching the filter criteria.
+    ///
+    /// Returns a paginated list of bridge links across all addresses,
+    /// useful for bridge operators and indexers.
+    ///
+    /// # method: post
+    /// # tags: bridge
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The list request containing:
+    ///   - `platform`: (string, optional) Filter by platform
+    ///   - `status`: (string, optional) Filter by link status
+    ///   - `limit`: (u32, optional) Maximum results (default 100)
+    ///   - `offset`: (u32, optional) Pagination offset
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `links`: (array) List of bridge link summaries
+    /// - `totalCount`: (u32) Total matching links
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Requires indexer support.
+    #[method(name = "z_bridgelist")]
+    async fn z_bridge_list(
+        &self,
+        request: types::social::BridgeListRequest,
+    ) -> Result<types::social::BridgeListResponse>;
+
+    /// Gets a verification challenge for proving bridge identity ownership.
+    ///
+    /// Generates a challenge that must be signed on both the Botcash
+    /// address and the external platform to prove ownership.
+    ///
+    /// # method: post
+    /// # tags: bridge
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The verify request containing:
+    ///   - `address`: (string) The Botcash address requesting verification
+    ///   - `platform`: (string) The platform to verify
+    ///   - `platformId`: (string) The platform user ID to verify
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `challenge`: (string) The challenge to sign (hex-encoded)
+    /// - `expiresAt`: (i64) Unix timestamp when the challenge expires
+    /// - `instructions`: (string) Human-readable signing instructions
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Challenges expire after 10 minutes.
+    #[method(name = "z_bridgeverify")]
+    async fn z_bridge_verify(
+        &self,
+        request: types::social::BridgeVerifyRequest,
+    ) -> Result<types::social::BridgeVerifyResponse>;
 }
 
 /// RPC method implementations.
@@ -4947,7 +5146,7 @@ where
             ));
         }
 
-        if request.threshold > request.guardians.len() {
+        if usize::from(request.threshold) > request.guardians.len() {
             return Err(ErrorObject::owned(
                 ErrorCode::InvalidParams.code(),
                 format!(
@@ -5240,6 +5439,354 @@ where
             vec![],             // guardians (empty - no recovery configured)
             0,                  // threshold
             0,                  // timelock_blocks
+        ))
+    }
+
+    // ==================== Bridge RPC Method Implementations ====================
+
+    async fn z_bridge_link(
+        &self,
+        request: types::social::BridgeLinkRequest,
+    ) -> Result<types::social::BridgeLinkResponse> {
+        // Validate from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate platform_id length
+        if request.platform_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "platformId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.platform_id.len() > types::social::MAX_PLATFORM_ID_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "platformId exceeds maximum length of {} characters (got {})",
+                    types::social::MAX_PLATFORM_ID_LENGTH,
+                    request.platform_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate proof is provided
+        if request.proof.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proof is required (signed challenge)",
+                None::<()>,
+            ));
+        }
+
+        // Validate proof is hex-encoded
+        if !request.proof.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "proof must be hex-encoded",
+                None::<()>,
+            ));
+        }
+
+        // Validate proof length (should be at least 64 chars for a 32-byte signature)
+        if request.proof.len() < 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "proof too short (minimum 64 hex chars for signature, got {})",
+                    request.proof.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Verify the proof (signed challenge) against the platform's verification mechanism
+        // - Create a BridgeLink (0xB0) memo message
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_bridgelink requires wallet support which is not yet implemented in Zebra. \
+                Would link {} identity {} to address {} with {:?} privacy mode",
+                request.platform, request.platform_id, request.from, request.privacy_mode
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_bridge_unlink(
+        &self,
+        request: types::social::BridgeUnlinkRequest,
+    ) -> Result<types::social::BridgeUnlinkResponse> {
+        // Validate from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate platform_id
+        if request.platform_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "platformId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.platform_id.len() > types::social::MAX_PLATFORM_ID_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "platformId exceeds maximum length of {} characters (got {})",
+                    types::social::MAX_PLATFORM_ID_LENGTH,
+                    request.platform_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Verify the from address owns the bridge link
+        // - Create a BridgeUnlink (0xB1) memo message
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_bridgeunlink requires wallet support which is not yet implemented in Zebra. \
+                Would unlink {} identity {} from address {}",
+                request.platform, request.platform_id, request.from
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_bridge_post(
+        &self,
+        request: types::social::BridgePostRequest,
+    ) -> Result<types::social::BridgePostResponse> {
+        // Validate from address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate original_id
+        if request.original_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "originalId is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate content
+        if request.content.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "content is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate content length (memo max is 512 bytes, need room for headers)
+        const MAX_BRIDGE_CONTENT_SIZE: usize = 450;
+        if request.content.len() > MAX_BRIDGE_CONTENT_SIZE {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "content exceeds maximum length of {} bytes (got {})",
+                    MAX_BRIDGE_CONTENT_SIZE,
+                    request.content.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate in_reply_to if provided (should be 64 hex chars = 32 bytes txid)
+        if let Some(ref reply_to) = request.in_reply_to {
+            if reply_to.len() != 64 {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!(
+                        "inReplyTo must be 64 hex characters (32 bytes txid), got {}",
+                        reply_to.len()
+                    ),
+                    None::<()>,
+                ));
+            }
+            if !reply_to.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    "inReplyTo must contain only hexadecimal characters",
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Verify the from address has an active bridge link for this platform
+        // - Create a BridgePost (0xB2) memo message
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_bridgepost requires wallet support which is not yet implemented in Zebra. \
+                Would post {} content from {} (original ID: {})",
+                request.platform, request.from, request.original_id
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_bridge_status(
+        &self,
+        request: types::social::BridgeStatusRequest,
+    ) -> Result<types::social::BridgeStatusResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Look up all bridge links for the address
+        // - Filter by platform if specified
+        // - Return link details and activity stats
+        //
+        // For now, return an empty response (no indexer = no bridge links visible).
+        Ok(types::social::BridgeStatusResponse::new(
+            request.address, // address
+            vec![],          // links (empty - no indexer)
+            0,               // active_links_count
+        ))
+    }
+
+    async fn z_bridge_list(
+        &self,
+        request: types::social::BridgeListRequest,
+    ) -> Result<types::social::BridgeListResponse> {
+        // Validate limit (reasonable bounds)
+        const MAX_LIST_LIMIT: u32 = 1000;
+        if request.limit > MAX_LIST_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    MAX_LIST_LIMIT, request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Query all bridge links
+        // - Filter by platform and status if specified
+        // - Apply pagination (limit/offset)
+        // - Return link summaries
+        //
+        // For now, return an empty list (no indexer = no bridge links visible).
+        Ok(types::social::BridgeListResponse::new(
+            vec![], // links
+            0,      // total_count
+        ))
+    }
+
+    async fn z_bridge_verify(
+        &self,
+        request: types::social::BridgeVerifyRequest,
+    ) -> Result<types::social::BridgeVerifyResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate platform_id
+        if request.platform_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "platformId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.platform_id.len() > types::social::MAX_PLATFORM_ID_LENGTH {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "platformId exceeds maximum length of {} characters (got {})",
+                    types::social::MAX_PLATFORM_ID_LENGTH,
+                    request.platform_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Generate a challenge for verification
+        // In production, this would be stored server-side with expiration
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(request.address.as_bytes());
+        hasher.update(request.platform.to_string().as_bytes());
+        hasher.update(request.platform_id.as_bytes());
+        // Add timestamp for uniqueness (truncated to 10-minute windows for determinism in tests)
+        let timestamp = chrono::Utc::now().timestamp() / 600 * 600;
+        hasher.update(&timestamp.to_le_bytes());
+        let challenge = hasher.finalize();
+
+        // Calculate expiration time
+        let expires_at = chrono::Utc::now().timestamp() + types::social::BRIDGE_CHALLENGE_EXPIRY_SECS;
+
+        // Generate platform-specific instructions
+        let instructions = match request.platform {
+            types::social::BridgePlatform::Telegram => {
+                "Send the challenge hash to the Botcash bridge bot using /verify command"
+            }
+            types::social::BridgePlatform::Discord => {
+                "Post the challenge hash in your server's #botcash-verify channel"
+            }
+            types::social::BridgePlatform::Nostr => {
+                "Sign the challenge with your Nostr private key and submit the signature"
+            }
+            types::social::BridgePlatform::Mastodon => {
+                "Post the challenge hash as a public toot with #BotcashVerify hashtag"
+            }
+            types::social::BridgePlatform::Twitter => {
+                "Tweet the challenge hash with #BotcashVerify (read-only bridge)"
+            }
+        };
+
+        Ok(types::social::BridgeVerifyResponse::new(
+            hex::encode(challenge), // challenge
+            expires_at,             // expires_at
+            instructions.to_string(), // instructions
         ))
     }
 }

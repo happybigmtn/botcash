@@ -1537,6 +1537,380 @@ pub struct GuardianListResponse {
     active_count: u8,
 }
 
+// ==================== Bridge Types ====================
+
+/// Supported bridge platforms for cross-platform identity linking.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BridgePlatform {
+    /// Telegram messaging platform.
+    Telegram,
+    /// Discord chat platform.
+    Discord,
+    /// Nostr decentralized protocol.
+    Nostr,
+    /// Mastodon/ActivityPub.
+    Mastodon,
+    /// X/Twitter (primarily read-only bridging).
+    Twitter,
+}
+
+impl BridgePlatform {
+    /// Returns a human-readable name for this platform.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Telegram => "Telegram",
+            Self::Discord => "Discord",
+            Self::Nostr => "Nostr",
+            Self::Mastodon => "Mastodon",
+            Self::Twitter => "Twitter",
+        }
+    }
+
+    /// Returns true if this platform supports bidirectional bridging.
+    pub const fn is_bidirectional(&self) -> bool {
+        !matches!(self, Self::Twitter)
+    }
+}
+
+impl std::fmt::Display for BridgePlatform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+/// Privacy mode for bridge message relaying.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BridgePrivacyMode {
+    /// Full mirror: relay all messages both directions.
+    Full,
+    /// Selective: only relay explicit /post commands.
+    Selective,
+    /// Read only: only receive Botcash posts, don't relay from platform.
+    ReadOnly,
+    /// Private: only relay DMs, no public posts.
+    Private,
+}
+
+impl std::fmt::Display for BridgePrivacyMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Full => write!(f, "full"),
+            Self::Selective => write!(f, "selective"),
+            Self::ReadOnly => write!(f, "readonly"),
+            Self::Private => write!(f, "private"),
+        }
+    }
+}
+
+/// Status of a bridge identity link.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BridgeLinkStatus {
+    /// Link is active and verified.
+    Active,
+    /// Link is pending verification.
+    Pending,
+    /// Link has been unlinked.
+    Unlinked,
+    /// Link verification failed.
+    Failed,
+    /// Link is temporarily suspended.
+    Suspended,
+}
+
+impl std::fmt::Display for BridgeLinkStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => write!(f, "active"),
+            Self::Pending => write!(f, "pending"),
+            Self::Unlinked => write!(f, "unlinked"),
+            Self::Failed => write!(f, "failed"),
+            Self::Suspended => write!(f, "suspended"),
+        }
+    }
+}
+
+/// Request for linking an external platform identity.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BridgeLinkRequest {
+    /// The Botcash address to link.
+    pub from: String,
+
+    /// The platform to link (telegram, discord, nostr, mastodon, twitter).
+    pub platform: BridgePlatform,
+
+    /// The platform-specific user identifier.
+    #[serde(rename = "platformId")]
+    pub platform_id: String,
+
+    /// The signed challenge proving ownership (hex-encoded).
+    pub proof: String,
+
+    /// Privacy mode for this link.
+    #[serde(rename = "privacyMode", default = "default_bridge_privacy_mode")]
+    pub privacy_mode: BridgePrivacyMode,
+}
+
+fn default_bridge_privacy_mode() -> BridgePrivacyMode {
+    BridgePrivacyMode::Selective
+}
+
+/// Response for linking an external platform identity.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeLinkResponse {
+    /// The transaction ID of the link transaction.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The platform that was linked.
+    platform: BridgePlatform,
+
+    /// The platform user ID that was linked.
+    #[serde(rename = "platformId")]
+    platform_id: String,
+
+    /// The Botcash address that was linked.
+    address: String,
+
+    /// Current status of the link.
+    status: BridgeLinkStatus,
+
+    /// Block height when the link was created.
+    #[serde(rename = "linkedAtBlock")]
+    #[getter(copy)]
+    linked_at_block: u32,
+}
+
+/// Request for unlinking an external platform identity.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BridgeUnlinkRequest {
+    /// The Botcash address that owns the link.
+    pub from: String,
+
+    /// The platform to unlink.
+    pub platform: BridgePlatform,
+
+    /// The platform-specific user identifier to unlink.
+    #[serde(rename = "platformId")]
+    pub platform_id: String,
+}
+
+/// Response for unlinking an external platform identity.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeUnlinkResponse {
+    /// The transaction ID of the unlink transaction.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The platform that was unlinked.
+    platform: BridgePlatform,
+
+    /// The platform user ID that was unlinked.
+    #[serde(rename = "platformId")]
+    platform_id: String,
+
+    /// Whether the unlink was successful.
+    #[getter(copy)]
+    success: bool,
+}
+
+/// Request for posting content from an external platform via bridge.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BridgePostRequest {
+    /// The Botcash address to post from.
+    pub from: String,
+
+    /// The source platform.
+    pub platform: BridgePlatform,
+
+    /// The original post ID on the source platform.
+    #[serde(rename = "originalId")]
+    pub original_id: String,
+
+    /// The content to post.
+    pub content: String,
+
+    /// Whether this is a reply to another post.
+    #[serde(rename = "inReplyTo", skip_serializing_if = "Option::is_none")]
+    pub in_reply_to: Option<String>,
+}
+
+/// Response for posting content from an external platform via bridge.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgePostResponse {
+    /// The transaction ID of the post.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The source platform.
+    platform: BridgePlatform,
+
+    /// The original post ID on the source platform.
+    #[serde(rename = "originalId")]
+    original_id: String,
+
+    /// Block height when the post was created.
+    #[serde(rename = "postedAtBlock")]
+    #[getter(copy)]
+    posted_at_block: u32,
+}
+
+/// Request for querying bridge link status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BridgeStatusRequest {
+    /// The Botcash address to query.
+    pub address: String,
+
+    /// Optional platform filter.
+    #[serde(default)]
+    pub platform: Option<BridgePlatform>,
+}
+
+/// Information about a single bridge link.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeLinkInfo {
+    /// The platform.
+    platform: BridgePlatform,
+
+    /// The platform user ID.
+    #[serde(rename = "platformId")]
+    platform_id: String,
+
+    /// Current status of the link.
+    status: BridgeLinkStatus,
+
+    /// Privacy mode for this link.
+    #[serde(rename = "privacyMode")]
+    privacy_mode: BridgePrivacyMode,
+
+    /// Block height when the link was created.
+    #[serde(rename = "linkedAtBlock")]
+    #[getter(copy)]
+    linked_at_block: u32,
+
+    /// Number of messages relayed via this bridge.
+    #[serde(rename = "messagesRelayed")]
+    #[getter(copy)]
+    messages_relayed: u64,
+
+    /// Block height when last message was relayed.
+    #[serde(rename = "lastActiveBlock", skip_serializing_if = "Option::is_none")]
+    last_active_block: Option<u32>,
+}
+
+/// Response for querying bridge link status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeStatusResponse {
+    /// The Botcash address queried.
+    address: String,
+
+    /// List of active bridge links.
+    links: Vec<BridgeLinkInfo>,
+
+    /// Total number of active links.
+    #[serde(rename = "activeLinksCount")]
+    #[getter(copy)]
+    active_links_count: u32,
+}
+
+/// Request for listing all bridge links (admin/indexer use).
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BridgeListRequest {
+    /// Optional platform filter.
+    #[serde(default)]
+    pub platform: Option<BridgePlatform>,
+
+    /// Optional status filter.
+    #[serde(default)]
+    pub status: Option<BridgeLinkStatus>,
+
+    /// Maximum number of results to return.
+    #[serde(default = "default_bridge_list_limit")]
+    pub limit: u32,
+
+    /// Offset for pagination.
+    #[serde(default)]
+    pub offset: u32,
+}
+
+fn default_bridge_list_limit() -> u32 {
+    100
+}
+
+/// Summary of a bridge link for listing.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeLinkSummary {
+    /// The Botcash address.
+    address: String,
+
+    /// The platform.
+    platform: BridgePlatform,
+
+    /// The platform user ID.
+    #[serde(rename = "platformId")]
+    platform_id: String,
+
+    /// Current status.
+    status: BridgeLinkStatus,
+
+    /// Block height when linked.
+    #[serde(rename = "linkedAtBlock")]
+    #[getter(copy)]
+    linked_at_block: u32,
+}
+
+/// Response for listing bridge links.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeListResponse {
+    /// List of bridge links matching the query.
+    links: Vec<BridgeLinkSummary>,
+
+    /// Total count matching the filter (may be more than returned).
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
+/// Request for getting a challenge to verify bridge ownership.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BridgeVerifyRequest {
+    /// The Botcash address requesting verification.
+    pub address: String,
+
+    /// The platform to verify.
+    pub platform: BridgePlatform,
+
+    /// The platform user ID to verify.
+    #[serde(rename = "platformId")]
+    pub platform_id: String,
+}
+
+/// Response for getting a bridge verification challenge.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct BridgeVerifyResponse {
+    /// The challenge to sign (hex-encoded).
+    challenge: String,
+
+    /// Unix timestamp when the challenge expires.
+    #[serde(rename = "expiresAt")]
+    #[getter(copy)]
+    expires_at: i64,
+
+    /// Instructions for how to sign the challenge on this platform.
+    instructions: String,
+}
+
+/// Maximum length for a platform user ID.
+pub const MAX_PLATFORM_ID_LENGTH: usize = 64;
+
+/// Size of the challenge in bridge verification (32 bytes).
+pub const BRIDGE_CHALLENGE_SIZE: usize = 32;
+
+/// Challenge expiration time in seconds (10 minutes).
+pub const BRIDGE_CHALLENGE_EXPIRY_SECS: i64 = 600;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2783,5 +3157,347 @@ mod tests {
         assert!(json.contains("\"approvalsCount\":2"));
         assert!(json.contains("\"approvalsNeeded\":3"));
         assert!(json.contains("\"approvedGuardians\":[\"g1\",\"g2\"]"));
+    }
+
+    // ==================== Bridge Types Tests ====================
+
+    #[test]
+    fn bridge_platform_serialize() {
+        assert_eq!(serde_json::to_string(&BridgePlatform::Telegram).unwrap(), "\"telegram\"");
+        assert_eq!(serde_json::to_string(&BridgePlatform::Discord).unwrap(), "\"discord\"");
+        assert_eq!(serde_json::to_string(&BridgePlatform::Nostr).unwrap(), "\"nostr\"");
+        assert_eq!(serde_json::to_string(&BridgePlatform::Mastodon).unwrap(), "\"mastodon\"");
+        assert_eq!(serde_json::to_string(&BridgePlatform::Twitter).unwrap(), "\"twitter\"");
+    }
+
+    #[test]
+    fn bridge_platform_deserialize() {
+        assert_eq!(
+            serde_json::from_str::<BridgePlatform>("\"telegram\"").unwrap(),
+            BridgePlatform::Telegram
+        );
+        assert_eq!(
+            serde_json::from_str::<BridgePlatform>("\"discord\"").unwrap(),
+            BridgePlatform::Discord
+        );
+        assert_eq!(
+            serde_json::from_str::<BridgePlatform>("\"nostr\"").unwrap(),
+            BridgePlatform::Nostr
+        );
+        assert_eq!(
+            serde_json::from_str::<BridgePlatform>("\"mastodon\"").unwrap(),
+            BridgePlatform::Mastodon
+        );
+        assert_eq!(
+            serde_json::from_str::<BridgePlatform>("\"twitter\"").unwrap(),
+            BridgePlatform::Twitter
+        );
+    }
+
+    #[test]
+    fn bridge_platform_bidirectional() {
+        assert!(BridgePlatform::Telegram.is_bidirectional());
+        assert!(BridgePlatform::Discord.is_bidirectional());
+        assert!(BridgePlatform::Nostr.is_bidirectional());
+        assert!(BridgePlatform::Mastodon.is_bidirectional());
+        assert!(!BridgePlatform::Twitter.is_bidirectional());
+    }
+
+    #[test]
+    fn bridge_platform_display() {
+        assert_eq!(format!("{}", BridgePlatform::Telegram), "Telegram");
+        assert_eq!(format!("{}", BridgePlatform::Discord), "Discord");
+        assert_eq!(format!("{}", BridgePlatform::Nostr), "Nostr");
+        assert_eq!(format!("{}", BridgePlatform::Mastodon), "Mastodon");
+        assert_eq!(format!("{}", BridgePlatform::Twitter), "Twitter");
+    }
+
+    #[test]
+    fn bridge_privacy_mode_serialize() {
+        assert_eq!(serde_json::to_string(&BridgePrivacyMode::Full).unwrap(), "\"full\"");
+        assert_eq!(serde_json::to_string(&BridgePrivacyMode::Selective).unwrap(), "\"selective\"");
+        assert_eq!(serde_json::to_string(&BridgePrivacyMode::ReadOnly).unwrap(), "\"readonly\"");
+        assert_eq!(serde_json::to_string(&BridgePrivacyMode::Private).unwrap(), "\"private\"");
+    }
+
+    #[test]
+    fn bridge_link_status_serialize() {
+        assert_eq!(serde_json::to_string(&BridgeLinkStatus::Active).unwrap(), "\"active\"");
+        assert_eq!(serde_json::to_string(&BridgeLinkStatus::Pending).unwrap(), "\"pending\"");
+        assert_eq!(serde_json::to_string(&BridgeLinkStatus::Unlinked).unwrap(), "\"unlinked\"");
+        assert_eq!(serde_json::to_string(&BridgeLinkStatus::Failed).unwrap(), "\"failed\"");
+        assert_eq!(serde_json::to_string(&BridgeLinkStatus::Suspended).unwrap(), "\"suspended\"");
+    }
+
+    #[test]
+    fn bridge_link_request_deserialize() {
+        let json = r#"{
+            "from": "bs1test",
+            "platform": "telegram",
+            "platformId": "123456789",
+            "proof": "abcd1234",
+            "privacyMode": "selective"
+        }"#;
+        let req: BridgeLinkRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1test");
+        assert_eq!(req.platform, BridgePlatform::Telegram);
+        assert_eq!(req.platform_id, "123456789");
+        assert_eq!(req.proof, "abcd1234");
+        assert_eq!(req.privacy_mode, BridgePrivacyMode::Selective);
+    }
+
+    #[test]
+    fn bridge_link_request_default_privacy_mode() {
+        let json = r#"{
+            "from": "bs1test",
+            "platform": "discord",
+            "platformId": "987654321",
+            "proof": "efgh5678"
+        }"#;
+        let req: BridgeLinkRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.privacy_mode, BridgePrivacyMode::Selective);
+    }
+
+    #[test]
+    fn bridge_link_response_serialize() {
+        let resp = BridgeLinkResponse::new(
+            "tx123".to_string(),
+            BridgePlatform::Nostr,
+            "npub1abc".to_string(),
+            "bs1test".to_string(),
+            BridgeLinkStatus::Active,
+            1000,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"tx123\""));
+        assert!(json.contains("\"platform\":\"nostr\""));
+        assert!(json.contains("\"platformId\":\"npub1abc\""));
+        assert!(json.contains("\"address\":\"bs1test\""));
+        assert!(json.contains("\"status\":\"active\""));
+        assert!(json.contains("\"linkedAtBlock\":1000"));
+    }
+
+    #[test]
+    fn bridge_unlink_request_deserialize() {
+        let json = r#"{
+            "from": "bs1test",
+            "platform": "mastodon",
+            "platformId": "@alice@mastodon.social"
+        }"#;
+        let req: BridgeUnlinkRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1test");
+        assert_eq!(req.platform, BridgePlatform::Mastodon);
+        assert_eq!(req.platform_id, "@alice@mastodon.social");
+    }
+
+    #[test]
+    fn bridge_unlink_response_serialize() {
+        let resp = BridgeUnlinkResponse::new(
+            "tx456".to_string(),
+            BridgePlatform::Discord,
+            "123456789".to_string(),
+            true,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"tx456\""));
+        assert!(json.contains("\"platform\":\"discord\""));
+        assert!(json.contains("\"platformId\":\"123456789\""));
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn bridge_post_request_deserialize() {
+        let json = r#"{
+            "from": "bs1test",
+            "platform": "twitter",
+            "originalId": "1234567890123456789",
+            "content": "Hello from Twitter!"
+        }"#;
+        let req: BridgePostRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1test");
+        assert_eq!(req.platform, BridgePlatform::Twitter);
+        assert_eq!(req.original_id, "1234567890123456789");
+        assert_eq!(req.content, "Hello from Twitter!");
+        assert!(req.in_reply_to.is_none());
+    }
+
+    #[test]
+    fn bridge_post_request_with_reply() {
+        let json = r#"{
+            "from": "bs1test",
+            "platform": "nostr",
+            "originalId": "note1abc",
+            "content": "This is a reply!",
+            "inReplyTo": "tx789"
+        }"#;
+        let req: BridgePostRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.in_reply_to, Some("tx789".to_string()));
+    }
+
+    #[test]
+    fn bridge_post_response_serialize() {
+        let resp = BridgePostResponse::new(
+            "tx789".to_string(),
+            BridgePlatform::Telegram,
+            "msg123".to_string(),
+            2000,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"tx789\""));
+        assert!(json.contains("\"platform\":\"telegram\""));
+        assert!(json.contains("\"originalId\":\"msg123\""));
+        assert!(json.contains("\"postedAtBlock\":2000"));
+    }
+
+    #[test]
+    fn bridge_status_request_deserialize() {
+        let json = r#"{
+            "address": "bs1test",
+            "platform": "discord"
+        }"#;
+        let req: BridgeStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1test");
+        assert_eq!(req.platform, Some(BridgePlatform::Discord));
+    }
+
+    #[test]
+    fn bridge_status_request_no_platform() {
+        let json = r#"{"address": "bs1test"}"#;
+        let req: BridgeStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1test");
+        assert!(req.platform.is_none());
+    }
+
+    #[test]
+    fn bridge_link_info_serialize() {
+        let info = BridgeLinkInfo::new(
+            BridgePlatform::Nostr,
+            "npub1test".to_string(),
+            BridgeLinkStatus::Active,
+            BridgePrivacyMode::Full,
+            1000,
+            50,
+            Some(2000),
+        );
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"platform\":\"nostr\""));
+        assert!(json.contains("\"platformId\":\"npub1test\""));
+        assert!(json.contains("\"status\":\"active\""));
+        assert!(json.contains("\"privacyMode\":\"full\""));
+        assert!(json.contains("\"linkedAtBlock\":1000"));
+        assert!(json.contains("\"messagesRelayed\":50"));
+        assert!(json.contains("\"lastActiveBlock\":2000"));
+    }
+
+    #[test]
+    fn bridge_status_response_serialize() {
+        let info = BridgeLinkInfo::new(
+            BridgePlatform::Telegram,
+            "12345".to_string(),
+            BridgeLinkStatus::Active,
+            BridgePrivacyMode::Selective,
+            500,
+            10,
+            None,
+        );
+        let resp = BridgeStatusResponse::new(
+            "bs1test".to_string(),
+            vec![info],
+            1,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"address\":\"bs1test\""));
+        assert!(json.contains("\"links\":["));
+        assert!(json.contains("\"activeLinksCount\":1"));
+    }
+
+    #[test]
+    fn bridge_list_request_deserialize() {
+        let json = r#"{
+            "platform": "mastodon",
+            "status": "active",
+            "limit": 50,
+            "offset": 10
+        }"#;
+        let req: BridgeListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.platform, Some(BridgePlatform::Mastodon));
+        assert_eq!(req.status, Some(BridgeLinkStatus::Active));
+        assert_eq!(req.limit, 50);
+        assert_eq!(req.offset, 10);
+    }
+
+    #[test]
+    fn bridge_list_request_defaults() {
+        let json = r#"{}"#;
+        let req: BridgeListRequest = serde_json::from_str(json).unwrap();
+        assert!(req.platform.is_none());
+        assert!(req.status.is_none());
+        assert_eq!(req.limit, 100); // default
+        assert_eq!(req.offset, 0);
+    }
+
+    #[test]
+    fn bridge_link_summary_serialize() {
+        let summary = BridgeLinkSummary::new(
+            "bs1test".to_string(),
+            BridgePlatform::Discord,
+            "123456789".to_string(),
+            BridgeLinkStatus::Active,
+            1500,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"address\":\"bs1test\""));
+        assert!(json.contains("\"platform\":\"discord\""));
+        assert!(json.contains("\"platformId\":\"123456789\""));
+        assert!(json.contains("\"status\":\"active\""));
+        assert!(json.contains("\"linkedAtBlock\":1500"));
+    }
+
+    #[test]
+    fn bridge_list_response_serialize() {
+        let summary = BridgeLinkSummary::new(
+            "bs1user".to_string(),
+            BridgePlatform::Telegram,
+            "987654".to_string(),
+            BridgeLinkStatus::Active,
+            2000,
+        );
+        let resp = BridgeListResponse::new(vec![summary], 1);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"links\":["));
+        assert!(json.contains("\"totalCount\":1"));
+    }
+
+    #[test]
+    fn bridge_verify_request_deserialize() {
+        let json = r#"{
+            "address": "bs1test",
+            "platform": "nostr",
+            "platformId": "npub1abc"
+        }"#;
+        let req: BridgeVerifyRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1test");
+        assert_eq!(req.platform, BridgePlatform::Nostr);
+        assert_eq!(req.platform_id, "npub1abc");
+    }
+
+    #[test]
+    fn bridge_verify_response_serialize() {
+        let resp = BridgeVerifyResponse::new(
+            "0123456789abcdef".to_string(),
+            1700000000,
+            "Sign this challenge with your Nostr key".to_string(),
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"challenge\":\"0123456789abcdef\""));
+        assert!(json.contains("\"expiresAt\":1700000000"));
+        assert!(json.contains("\"instructions\":\"Sign this challenge"));
+    }
+
+    #[test]
+    fn bridge_constants() {
+        assert_eq!(MAX_PLATFORM_ID_LENGTH, 64);
+        assert_eq!(BRIDGE_CHALLENGE_SIZE, 32);
+        assert_eq!(BRIDGE_CHALLENGE_EXPIRY_SECS, 600);
     }
 }

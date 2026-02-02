@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.4 Complete - Social Recovery)
+**Last Updated:** 2026-02-01 (P6.5 Complete - Platform Bridges)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 26 types including channel, governance, and recovery types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 30 types including channel, governance, recovery, and bridge types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -124,7 +124,10 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.4b** | Recovery RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::recovery` |
 | **P6.4c** | Recovery RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- z_recovery` |
 | **P6.4d** | Indexer recovery parsing | ✅ DONE | `zebra-rpc/src/indexer/recovery.rs` | `cargo test -p zebra-rpc -- indexer::recovery::tests` |
-| **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
+| **P6.5a** | Bridge message types (0xB0-0xB3) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- bridge` |
+| **P6.5b** | Bridge RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::bridge` |
+| **P6.5c** | Bridge RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- bridge` |
+| **P6.5d** | Indexer bridge parsing | ✅ DONE | `zebra-rpc/src/indexer/bridges.rs` | `cargo test -p zebra-rpc -- indexer::bridges::tests` |
 
 **P6.1a Implementation Details:**
 - Added `SocialMessageType::Batch = 0x80` for batched transactions
@@ -256,6 +259,55 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `BlockRecoveryStats` for per-block recovery statistics tracking
 - Constants: DEFAULT/MIN/MAX_RECOVERY_TIMELOCK_BLOCKS, MIN/MAX_GUARDIANS
 - 35+ comprehensive tests covering parsing, state transitions, approval tracking, and edge cases
+
+**P6.5a Implementation Details (Bridge Message Types):**
+- Added 4 bridge message types: BridgeLink (0xB0), BridgeUnlink (0xB1), BridgePost (0xB2), BridgeVerify (0xB3)
+- Added `BridgePlatform` enum with 5 platforms: Telegram, Discord, Nostr, Mastodon, Twitter
+- Added `BridgeMessage` struct with platform, platform_id, challenge, signature, content, original_id, nonce fields
+- Added `BridgeParseError` enum for bridge-specific error handling
+- Added constructor methods: new_link(), new_unlink(), new_post(), new_verify()
+- Added encode() and parse() methods for binary serialization
+- Added `is_bridge()` helper method on SocialMessageType
+- SocialMessageType enum now has 30 types (was 26)
+- Constants: MAX_PLATFORM_ID_LENGTH (64), BRIDGE_CHALLENGE_SIZE (32), MAX_BRIDGE_SIGNATURE_SIZE (128)
+- 18 comprehensive tests covering message roundtrips, platform validation, and error cases
+
+**P6.5b Implementation Details (Bridge RPC Types):**
+- Added `BridgePlatform` enum with platform name and bidirectionality helpers
+- Added `BridgePrivacyMode` enum (Full, Selective, ReadOnly, Private)
+- Added `BridgeLinkStatus` enum (Active, Pending, Unlinked, Failed, Suspended)
+- Added `BridgeLinkRequest` struct with from, platform, platform_id, proof, privacy_mode fields
+- Added `BridgeLinkResponse` struct with txid, platform, platform_id, address, status, linked_at_block
+- Added `BridgeUnlinkRequest/Response` structs for unlinking platform identities
+- Added `BridgePostRequest/Response` structs for cross-posting content
+- Added `BridgeStatusRequest/Response` structs with BridgeLinkInfo for status queries
+- Added `BridgeListRequest/Response` structs with BridgeLinkSummary for pagination
+- Added `BridgeVerifyRequest/Response` structs for challenge-response verification
+- Constants: MAX_PLATFORM_ID_LENGTH (64), BRIDGE_CHALLENGE_SIZE (32), BRIDGE_CHALLENGE_EXPIRY_SECS (600)
+- 25 comprehensive tests for all bridge RPC type serialization
+
+**P6.5c Implementation Details (Bridge RPC Methods):**
+- Added 6 RPC trait methods: `z_bridge_link`, `z_bridge_unlink`, `z_bridge_post`, `z_bridge_status`, `z_bridge_list`, `z_bridge_verify`
+- `z_bridge_link` validates: from address, platform_id (max 64 chars), proof (hex-encoded, min 64 chars)
+- `z_bridge_unlink` validates: from address, platform_id format
+- `z_bridge_post` validates: from address, original_id, content (max 450 bytes), in_reply_to (txid format)
+- `z_bridge_status` returns empty links list (no indexer = no links visible)
+- `z_bridge_list` validates: limit (max 1000), returns empty list (no indexer support)
+- `z_bridge_verify` generates SHA256 challenge from address+platform+platform_id+timestamp, with 10-minute expiry
+- Platform-specific verification instructions for each supported platform
+
+**P6.5d Implementation Details (Indexer Bridge Parsing):**
+- Created `zebra-rpc/src/indexer/bridges.rs` module for indexer-side bridge parsing
+- Added `IndexedBridgeLink` struct with tx_id, block_height, platform, platform_id, challenge, signature
+- Added `IndexedBridgeUnlink` struct with tx_id, block_height, platform, platform_id
+- Added `IndexedBridgePost` struct with tx_id, block_height, platform, original_id, content
+- Added `IndexedBridgeVerify` struct with tx_id, block_height, platform, platform_id, nonce
+- Added `IndexedBridge` enum for unified bridge event handling
+- Added `BridgeIndexError` enum for detailed error reporting
+- Added utility functions: `is_bridge_memo()`, `bridge_type_from_memo()`, `parse_bridge_memo()`
+- Added `BlockBridgeStats` for per-block bridge statistics with platform breakdown
+- 20 comprehensive tests covering parsing, validation, statistics, and edge cases
+- Total: 63+ bridge tests across zebra-chain (18) and zebra-rpc (45)
 
 ---
 

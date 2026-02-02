@@ -53,8 +53,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use zebra_chain::transaction::{
-    memo::Memo,
     social::{SocialMessage, SocialMessageType, SocialParseError},
+    Memo,
 };
 
 /// Default timelock duration in blocks (~7 days at 60s blocks).
@@ -521,13 +521,13 @@ pub fn parse_recovery_memo(
     let social = SocialMessage::try_from(memo).map_err(RecoveryParseError::from)?;
 
     // Check if it's a recovery message type
-    if !social.message_type().is_recovery() {
+    if !social.msg_type().is_recovery() {
         return Err(RecoveryParseError::NotRecoveryMessage);
     }
 
     let payload = social.payload();
 
-    match social.message_type() {
+    match social.msg_type() {
         SocialMessageType::RecoveryConfig => {
             parse_recovery_config(payload, tx_id, block_height)
         }

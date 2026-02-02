@@ -11,6 +11,7 @@ use zebra_chain::{
 mod tests;
 
 pub mod batch;
+pub mod bridges;
 pub mod channels;
 pub mod governance;
 pub mod methods;
