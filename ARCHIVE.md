@@ -54,3 +54,5 @@
 
 -[x]Binarymemoencoding(70-80%sizereduction)—Alreadyimplementedinsocial.rs
 
+-[x]Batchmessagetype(0x80)withMAX_BATCH_ACTIONS=5—`zebra-chain/src/transaction/memo/social.rs`
+
