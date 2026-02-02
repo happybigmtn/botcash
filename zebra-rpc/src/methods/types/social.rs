@@ -1908,8 +1908,8 @@ pub const MAX_MULTISIG_KEYS: u8 = 15;
 /// Size of a compressed public key in bytes.
 pub const COMPRESSED_PUBKEY_SIZE: usize = 33;
 
-/// Size of a Schnorr signature in bytes.
-pub const SCHNORR_SIGNATURE_SIZE: usize = 64;
+// NOTE: SCHNORR_SIGNATURE_SIZE is already defined above (line ~1224) for channel disputes.
+// Multi-sig code uses the same constant.
 
 /// Request for setting up a multi-sig identity.
 ///
