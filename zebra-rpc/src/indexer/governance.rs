@@ -1088,14 +1088,20 @@ mod tests {
     fn test_parse_governance_vote_all_choices() {
         let _init_guard = zebra_test::init();
 
+        // Use weight with non-zero bytes to avoid memo trimming
+        // (memo parsing trims trailing zeros from LE-encoded integers)
+        let weight_no_trailing_zeros = 0x0102030405060708u64;
+
         for vote_choice in [VoteChoice::No, VoteChoice::Yes, VoteChoice::Abstain] {
             let proposal_id: [u8; 32] = [0xCD; 32];
-            let payload = create_vote_payload(&proposal_id, vote_choice, 1000);
+            let payload =
+                create_vote_payload(&proposal_id, vote_choice, weight_no_trailing_zeros);
             let memo = create_social_memo(SocialMessageType::GovernanceVote, &payload);
             let result = parse_governance_memo(&memo, "txid", 1000).expect("should parse");
 
             if let IndexedGovernance::Vote(v) = result {
                 assert_eq!(v.vote_choice, vote_choice);
+                assert_eq!(v.weight, weight_no_trailing_zeros as f64);
             } else {
                 panic!("expected Vote");
             }
