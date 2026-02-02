@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-6 PROTOCOL COMPLETE
 
-**Last Updated:** 2026-02-02 (Added Discord Bridge - P6.5.2)
+**Last Updated:** 2026-02-02 (Added Nostr Bridge - P6.5.3)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 33 types including channel, governance, recovery, bridge, moderation, and content warning types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.3.1c done (content warning tags 0x23 with 19 tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge protocol with 63+ tests), P6.5.1 done (Telegram Bridge with 37 tests), P6.5.2 done (Discord Bridge with 78 tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 33 types including channel, governance, recovery, bridge, moderation, and content warning types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **COMPLETE**: P6.1a-c done (batching with 48 tests), P6.2a-e done (Layer-2 channels with 35+ tests), P6.3a-d done (governance with 35+ tests), P6.3.1c done (content warning tags 0x23 with 19 tests), P6.4a-e done (recovery including key rotation and multi-sig identities with 45+ tests), P6.5a-d done (bridge protocol with 63+ tests), P6.5.1 done (Telegram Bridge with 37 tests), P6.5.2 done (Discord Bridge with 78 tests), P6.5.3 done (Nostr Bridge with 94 tests), P6.6a-d done (moderation Trust/Report 0xD0/0xD1 with 50+ tests), P6.6e done (Community Block Lists 0xD2/0xD3 with 63 tests), P6.7a-b done (price oracle with 12 tests), P6.8a-b done (protocol upgrades with 40+ tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -1813,12 +1813,25 @@ cd zashi-android && ./gradlew test
 - Fee sponsorship tracking with daily limits
 - 78 comprehensive tests covering models, config, identity service, client, embeds
 
-#### 6.5.3 Nostr Bridge
-- [ ] Relay implementation (WebSocket server)
-- [ ] Protocol mapping (Kind 1 ↔ Post, Kind 4 ↔ DM)
-- [ ] Address linking (npub ↔ bs1)
-- [ ] Zap → BCASH conversion
-- [ ] Required Tests: Event relay, address resolution
+#### 6.5.3 Nostr Bridge ✅ DONE
+- [x] Relay implementation (WebSocket server)
+- [x] Protocol mapping (Kind 1 ↔ Post, Kind 4 ↔ DM)
+- [x] Address linking (npub ↔ bs1)
+- [x] Zap → BCASH conversion
+- [x] Required Tests: 94 tests passing (event relay, address resolution, protocol mapping)
+
+**P6.5.3 Implementation Details:**
+- Created `bridges/nostr/` Python package using websockets 12+ and bech32
+- Configuration via pydantic-settings (env vars, .env file, YAML)
+- SQLAlchemy async models: LinkedIdentity, RelayedMessage, RateLimitEntry, SponsoredTransaction, StoredEvent, ZapConversion
+- BotcashClient for JSON-RPC communication with node
+- IdentityService handles link/verify/unlink workflow with challenge-response (npub ↔ bs1 address)
+- NostrRelay WebSocket server implementing NIP-01 (basic protocol), NIP-04 (encrypted DMs), NIP-57 (zaps)
+- Protocol mapping: Kind 0 (metadata) ↔ profile, Kind 1 (note) ↔ post, Kind 3 (contacts) ↔ follow, Kind 4 (dm) ↔ dm, Kind 7 (reaction) ↔ upvote, Kind 9734/9735 (zaps) ↔ tip
+- Bidirectional event relay with rate limiting per pubkey per minute
+- Zap conversion: millisats → BCASH with configurable conversion rate
+- Privacy modes: full_mirror, selective (default), read_only, private
+- 94 comprehensive tests covering nostr_types (28), config (13), models (12), identity (24), protocol_mapper (17)
 
 #### 6.5.4 ActivityPub/Fediverse Bridge
 - [ ] Actor representation (@bs1...@botcash.social)
