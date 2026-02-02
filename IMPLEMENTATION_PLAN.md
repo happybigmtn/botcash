@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.2 Complete - Layer-2 Social Channels)
+**Last Updated:** 2026-02-01 (P6.3d Complete - Governance Voting Logic)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 22 types including channel and governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-c done (governance message types 0xE0/0xE1, RPC types, and 4 RPC methods with validation).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 22 types including channel and governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -119,7 +119,7 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.3a** | Governance message types (0xE0, 0xE1) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- governance` |
 | **P6.3b** | Governance RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
 | **P6.3c** | Governance RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
-| **P6.3d** | Governance voting logic | ⬜ TODO | See specs/governance.md | TBD |
+| **P6.3d** | Governance voting logic | ✅ DONE | `zebra-rpc/src/indexer/governance.rs` | `cargo test -p zebra-rpc -- indexer::governance::tests` |
 | **P6.4** | Social recovery | ⬜ TODO | See specs/recovery.md | TBD |
 | **P6.5** | Platform bridges | ⬜ TODO | See specs/bridges.md | TBD |
 
@@ -196,6 +196,21 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - `z_governance_list` validates: status filter (all/pending/voting/passed/rejected/executed), limit (max 1000)
 - All methods return appropriate stubs/errors indicating wallet/indexer support needed
 - Tests reuse the 15 governance type tests from P6.3b (types test serialization, methods use validated types)
+
+**P6.3d Implementation Details:**
+- Created `zebra-rpc/src/indexer/governance.rs` module for indexer-side governance logic
+- Added `VoteChoice` enum (No=0, Yes=1, Abstain=2) with byte encoding
+- Added `ProposalType` enum (Other=0, Parameter=1, Upgrade=2, Spending=3)
+- Added `ProposalStatus` enum (Pending, Voting, Passed, Rejected, Executed) with lifecycle tracking
+- Added `IndexedProposal` struct with proposal parsing, timeline calculation, and status determination
+- Added `IndexedVote` struct with vote parsing from 0xE0 memo payload
+- Added `IndexedGovernance` enum for unified governance event handling
+- Added `VoteTally` struct with vote aggregation, quorum (20%), and approval (66%) calculation
+- Implemented `calculate_voting_power()` formula: `sqrt(karma) + sqrt(bcash_balance)`
+- Added utility functions: `is_governance_memo()`, `governance_type_from_memo()`, `parse_governance_memo()`
+- Added `BlockGovernanceStats` for per-block governance statistics tracking
+- Timeline constants: PROPOSAL_PHASE (7 days), VOTING_PHASE (14 days), EXECUTION_TIMELOCK (30 days)
+- 35+ comprehensive tests covering parsing, vote tallying, quorum calculation, and edge cases
 
 ---
 

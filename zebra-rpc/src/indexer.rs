@@ -12,6 +12,7 @@ mod tests;
 
 pub mod batch;
 pub mod channels;
+pub mod governance;
 pub mod methods;
 pub mod server;
 

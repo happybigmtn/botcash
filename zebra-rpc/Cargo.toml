@@ -72,6 +72,7 @@ tracing = { workspace = true }
 
 hex = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["serde_derive"] }
+sha2 = { workspace = true }
 
 # For the `stop` RPC method.
 nix = { workspace = true, features = ["signal"] }
