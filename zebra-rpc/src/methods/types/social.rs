@@ -3958,7 +3958,7 @@ mod tests {
             "disputeSeq": 150,
             "proofHash": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
             "signatures": [
-                {"partyIndex": 0, "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"}
+                {"partyIndex": 0, "signature": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"}
             ]
         }"#;
         let req: ChannelDisputeRequest = serde_json::from_str(json).unwrap();
@@ -4208,7 +4208,7 @@ mod tests {
         let json = r#"{
             "from": "bs1newdevice",
             "targetAddress": "bs1oldaddress",
-            "newPubkey": "02abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+            "newPubkey": "02abababababababababababababababababababababababababababababababab",
             "proof": "signed_challenge"
         }"#;
         let req: RecoveryRequestRequest = serde_json::from_str(json).unwrap();
