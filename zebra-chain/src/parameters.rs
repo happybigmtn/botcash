@@ -14,6 +14,7 @@
 
 pub mod attention;
 pub mod constants;
+pub mod oracle;
 mod genesis;
 mod network;
 mod network_upgrade;

@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.6 Complete - Moderation System)
+**Last Updated:** 2026-02-01 (P6.7 Complete - Price Oracle/Dynamic Fees)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 32 types including channel, governance, recovery, bridge, and moderation types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-d done (governance message types 0xE0/0xE1, RPC types, 4 RPC methods with validation, and indexer voting logic with 35+ tests), P6.4a-d done (recovery message types 0xF0-0xF3, RPC types, 6 RPC methods with validation, and indexer recovery parsing with 35+ tests), P6.5a-d done (bridge message types 0xB0-0xB3, RPC types, 6 RPC methods with validation, and indexer bridge parsing with 63+ total bridge tests), P6.6 done (moderation message types 0xD0/0xD1 Trust/Report, RPC types, 5 RPC methods with validation, and indexer moderation module with 50+ tests), P6.7 done (price oracle with miner nonce signaling, median aggregation, dynamic fee calculation, and 12 oracle tests).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -308,6 +308,22 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `BlockBridgeStats` for per-block bridge statistics with platform breakdown
 - 20 comprehensive tests covering parsing, validation, statistics, and edge cases
 - Total: 63+ bridge tests across zebra-chain (18) and zebra-rpc (45)
+
+**P6.7 Implementation Details (Price Oracle / Dynamic Fees):**
+- Created `zebra-chain/src/parameters/oracle.rs` module for decentralized price oracle
+- Added `PriceSignal` struct with miner nonce encoding (BCPR magic + 4-byte price + 24-byte PoW nonce)
+- Price encoded in nano-USD (1e-9 USD) for precision across wide price ranges
+- Added scaling mechanism for prices > $4.29 (uses high bit flag to scale by 1000x)
+- Added `OraclePrice` struct for aggregated price data with signal count and height
+- Added `calculate_median()` utility for median calculation with even/odd count handling
+- Added `filter_outliers()` with configurable deviation threshold (default 50%)
+- Added `aggregate_prices()` with minimum signal requirement (51 of 100 blocks)
+- Added `OracleParams::calculate_fee_for_price()` for dynamic fee: `fee = $0.00001 / price`
+- Fee bounds: MIN_FEE_ZATOSHIS (1,000 = 0.00001 BCASH), MAX_FEE_ZATOSHIS (1,000,000 = 0.01 BCASH)
+- Added `OracleParams::rate_limit_fee()` for 10% daily maximum fee adjustment
+- Constants: PRICE_AGGREGATION_BLOCKS (100), MIN_VALID_PRICE_SIGNALS (51), MAX_PRICE_DEVIATION_PERCENT (50%)
+- Governance bounds module with validation functions for all adjustable parameters
+- 12 comprehensive tests covering signal roundtrip, median calculation, outlier filtering, fee calculation, rate limiting, and bounds validation
 
 ---
 
@@ -1611,12 +1627,12 @@ cd zashi-android && ./gradlew test
 
 ### 6.2 Governance System (specs/governance.md)
 
-#### 6.2.1 Price Oracle (Dynamic Fees)
-- [ ] Miner price signaling in block headers
-- [ ] Median price aggregation (last 100 blocks)
-- [ ] Dynamic fee calculation: `fee = $0.00001 / bcash_price`
-- [ ] Fee bounds (min: 0.00001, max: 0.01 BCASH)
-- [ ] Required Tests: Price aggregation accuracy, fee calculation
+#### 6.2.1 Price Oracle (Dynamic Fees) ✅
+- [x] Miner price signaling in block nonces (PRICE_SIGNAL_MAGIC "BCPR", 8 bytes + 24 bytes PoW)
+- [x] Median price aggregation (last 100 blocks, 51 minimum, 50% outlier filtering)
+- [x] Dynamic fee calculation: `fee = $0.00001 / bcash_price` with TARGET_FEE_NANO_USD
+- [x] Fee bounds (min: 0.00001, max: 0.01 BCASH) with rate limiting (10%/day max)
+- [x] Required Tests: 12 tests covering price aggregation accuracy, fee calculation, bounds, rate limiting
 
 #### 6.2.2 On-Chain Voting
 - [ ] Proposal transaction type (0xE1)
