@@ -1,0 +1,2 @@
+[console_scripts]
+botcash-telegram = botcash_telegram.main:main
