@@ -936,6 +936,278 @@ pub struct BatchClearResponse {
     success: bool,
 }
 
+// ==================== Channel Types (Layer-2 Social Channels) ====================
+
+/// Default channel timeout in blocks (~1 day at 60s blocks).
+pub const DEFAULT_CHANNEL_TIMEOUT_BLOCKS: u32 = 1440;
+
+/// Maximum number of parties in a channel.
+pub const MAX_CHANNEL_PARTIES: usize = 10;
+
+/// Minimum deposit required for a channel (in zatoshis).
+pub const MIN_CHANNEL_DEPOSIT: u64 = 100_000; // 0.001 BCASH
+
+/// Request for opening a new Layer-2 social channel.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChannelOpenRequest {
+    /// The initiator's address (unified or shielded).
+    pub from: String,
+
+    /// The list of party addresses for the channel.
+    pub parties: Vec<String>,
+
+    /// The deposit amount in zatoshis.
+    /// This is the total deposit for the channel, split among parties.
+    pub deposit: u64,
+
+    /// Timeout in blocks before unilateral settlement is allowed.
+    /// Default is 1440 (~1 day at 60s blocks).
+    #[serde(rename = "timeoutBlocks", default = "default_channel_timeout")]
+    pub timeout_blocks: u32,
+}
+
+fn default_channel_timeout() -> u32 {
+    DEFAULT_CHANNEL_TIMEOUT_BLOCKS
+}
+
+/// Response for opening a channel.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelOpenResponse {
+    /// The unique channel ID (32 bytes hex-encoded).
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The transaction ID that opened the channel.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The block height at which the channel was opened.
+    #[serde(rename = "openedAtBlock")]
+    #[getter(copy)]
+    opened_at_block: u32,
+
+    /// The block height at which unilateral settlement becomes available.
+    #[serde(rename = "timeoutBlock")]
+    #[getter(copy)]
+    timeout_block: u32,
+}
+
+/// Request for closing a channel cooperatively.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChannelCloseRequest {
+    /// The closer's address (must be a party to the channel).
+    pub from: String,
+
+    /// The channel ID to close (32 bytes hex-encoded).
+    #[serde(rename = "channelId")]
+    pub channel_id: String,
+
+    /// The final sequence number of the last off-chain message.
+    #[serde(rename = "finalSeq")]
+    pub final_seq: u32,
+}
+
+/// Response for closing a channel.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelCloseResponse {
+    /// The transaction ID of the close transaction.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The channel ID that was closed.
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The final sequence number.
+    #[serde(rename = "finalSeq")]
+    #[getter(copy)]
+    final_seq: u32,
+
+    /// Whether all parties have agreed to the close.
+    #[serde(rename = "cooperative")]
+    #[getter(copy)]
+    cooperative: bool,
+}
+
+/// Request for settling a channel (may be unilateral).
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChannelSettleRequest {
+    /// The settler's address (must be a party to the channel).
+    pub from: String,
+
+    /// The channel ID to settle (32 bytes hex-encoded).
+    #[serde(rename = "channelId")]
+    pub channel_id: String,
+
+    /// The final sequence number of off-chain messages.
+    #[serde(rename = "finalSeq")]
+    pub final_seq: u32,
+
+    /// Merkle root hash of all off-chain messages (32 bytes hex-encoded).
+    /// Used for dispute resolution.
+    #[serde(rename = "messageHash")]
+    pub message_hash: String,
+}
+
+/// Response for settling a channel.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelSettleResponse {
+    /// The transaction ID of the settlement.
+    #[serde(rename = "txid")]
+    txid: String,
+
+    /// The channel ID that was settled.
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The final sequence number.
+    #[serde(rename = "finalSeq")]
+    #[getter(copy)]
+    final_seq: u32,
+
+    /// The final balance distribution (address -> amount in zatoshis).
+    /// In the simplest case, the original deposit is returned to parties.
+    #[serde(rename = "finalBalances")]
+    final_balances: std::collections::HashMap<String, u64>,
+}
+
+/// The state of a channel.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChannelState {
+    /// Channel is open and active.
+    Open,
+    /// Channel close has been initiated but not finalized.
+    Closing,
+    /// Channel has been settled.
+    Settled,
+    /// Channel settlement is disputed.
+    Disputed,
+}
+
+impl Default for ChannelState {
+    fn default() -> Self {
+        Self::Open
+    }
+}
+
+impl std::fmt::Display for ChannelState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Open => write!(f, "open"),
+            Self::Closing => write!(f, "closing"),
+            Self::Settled => write!(f, "settled"),
+            Self::Disputed => write!(f, "disputed"),
+        }
+    }
+}
+
+/// Request for getting the status of a channel.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChannelStatusRequest {
+    /// The channel ID to query (32 bytes hex-encoded).
+    #[serde(rename = "channelId")]
+    pub channel_id: String,
+}
+
+/// Response for channel status.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelStatusResponse {
+    /// The channel ID.
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The current state of the channel.
+    state: ChannelState,
+
+    /// The parties in the channel.
+    parties: Vec<String>,
+
+    /// The total deposit in the channel (zatoshis).
+    #[getter(copy)]
+    deposit: u64,
+
+    /// The current sequence number of off-chain messages.
+    #[serde(rename = "currentSeq")]
+    #[getter(copy)]
+    current_seq: u32,
+
+    /// Block height when the channel was opened.
+    #[serde(rename = "openedAtBlock")]
+    #[getter(copy)]
+    opened_at_block: u32,
+
+    /// Block height when unilateral settlement becomes available.
+    #[serde(rename = "timeoutBlock")]
+    #[getter(copy)]
+    timeout_block: u32,
+
+    /// Latest message hash (if any off-chain messages exist).
+    #[serde(rename = "latestMessageHash", skip_serializing_if = "Option::is_none")]
+    latest_message_hash: Option<String>,
+}
+
+/// Request for listing channels for an address.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ChannelListRequest {
+    /// The address to list channels for.
+    pub address: String,
+
+    /// Filter by channel state (optional).
+    #[serde(default)]
+    pub state: Option<ChannelState>,
+
+    /// Maximum number of channels to return.
+    #[serde(default = "default_channel_list_limit")]
+    pub limit: u32,
+}
+
+fn default_channel_list_limit() -> u32 {
+    50
+}
+
+/// Summary of a channel for listing.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelSummary {
+    /// The channel ID.
+    #[serde(rename = "channelId")]
+    channel_id: String,
+
+    /// The current state.
+    state: ChannelState,
+
+    /// Number of parties in the channel.
+    #[serde(rename = "partyCount")]
+    #[getter(copy)]
+    party_count: usize,
+
+    /// Total deposit in zatoshis.
+    #[getter(copy)]
+    deposit: u64,
+
+    /// Current sequence number.
+    #[serde(rename = "currentSeq")]
+    #[getter(copy)]
+    current_seq: u32,
+
+    /// Block height when opened.
+    #[serde(rename = "openedAtBlock")]
+    #[getter(copy)]
+    opened_at_block: u32,
+}
+
+/// Response for listing channels.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Getters, new)]
+pub struct ChannelListResponse {
+    /// The channels matching the query.
+    channels: Vec<ChannelSummary>,
+
+    /// Total number of channels matching the filter.
+    #[serde(rename = "totalCount")]
+    #[getter(copy)]
+    total_count: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1672,5 +1944,253 @@ mod tests {
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"proposals\":["));
         assert!(json.contains("\"totalCount\":1"));
+    }
+
+    // ==================== Channel Tests ====================
+
+    #[test]
+    fn channel_open_request_deserialize() {
+        let json = r#"{
+            "from": "bs1initiator",
+            "parties": ["bs1alice", "bs1bob"],
+            "deposit": 100000000,
+            "timeoutBlocks": 2880
+        }"#;
+        let req: ChannelOpenRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1initiator");
+        assert_eq!(req.parties, vec!["bs1alice", "bs1bob"]);
+        assert_eq!(req.deposit, 100_000_000);
+        assert_eq!(req.timeout_blocks, 2880);
+    }
+
+    #[test]
+    fn channel_open_request_defaults() {
+        let json = r#"{"from":"bs1sender","parties":["bs1alice"],"deposit":1000000}"#;
+        let req: ChannelOpenRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.timeout_blocks, DEFAULT_CHANNEL_TIMEOUT_BLOCKS); // default 1440
+    }
+
+    #[test]
+    fn channel_open_response_serialize() {
+        let resp = ChannelOpenResponse::new(
+            "ch123abc".repeat(4), // 32-byte hex
+            "txid456".to_string(),
+            1000,
+            1000 + 1440,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"channelId\""));
+        assert!(json.contains("\"txid\":\"txid456\""));
+        assert!(json.contains("\"openedAtBlock\":1000"));
+        assert!(json.contains("\"timeoutBlock\":2440"));
+    }
+
+    #[test]
+    fn channel_close_request_deserialize() {
+        let json = r#"{"from":"bs1alice","channelId":"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234","finalSeq":42}"#;
+        let req: ChannelCloseRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1alice");
+        assert_eq!(req.channel_id.len(), 64); // 32 bytes hex
+        assert_eq!(req.final_seq, 42);
+    }
+
+    #[test]
+    fn channel_close_response_serialize() {
+        let resp = ChannelCloseResponse::new(
+            "txid789".to_string(),
+            "ch123".to_string(),
+            50,
+            true,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid789\""));
+        assert!(json.contains("\"channelId\":\"ch123\""));
+        assert!(json.contains("\"finalSeq\":50"));
+        assert!(json.contains("\"cooperative\":true"));
+    }
+
+    #[test]
+    fn channel_settle_request_deserialize() {
+        let json = r#"{
+            "from": "bs1alice",
+            "channelId": "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
+            "finalSeq": 100,
+            "messageHash": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        }"#;
+        let req: ChannelSettleRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.from, "bs1alice");
+        assert_eq!(req.channel_id.len(), 64);
+        assert_eq!(req.final_seq, 100);
+        assert_eq!(req.message_hash.len(), 64);
+    }
+
+    #[test]
+    fn channel_settle_response_serialize() {
+        let mut balances = std::collections::HashMap::new();
+        balances.insert("bs1alice".to_string(), 50_000_000u64);
+        balances.insert("bs1bob".to_string(), 50_000_000u64);
+
+        let resp = ChannelSettleResponse::new(
+            "txid000".to_string(),
+            "ch456".to_string(),
+            200,
+            balances,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"txid\":\"txid000\""));
+        assert!(json.contains("\"channelId\":\"ch456\""));
+        assert!(json.contains("\"finalSeq\":200"));
+        assert!(json.contains("\"finalBalances\""));
+    }
+
+    #[test]
+    fn channel_state_serialize() {
+        let state = ChannelState::Open;
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(json, "\"open\"");
+
+        let state = ChannelState::Closing;
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(json, "\"closing\"");
+
+        let state = ChannelState::Settled;
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(json, "\"settled\"");
+
+        let state = ChannelState::Disputed;
+        let json = serde_json::to_string(&state).unwrap();
+        assert_eq!(json, "\"disputed\"");
+    }
+
+    #[test]
+    fn channel_state_deserialize() {
+        let state: ChannelState = serde_json::from_str("\"open\"").unwrap();
+        assert_eq!(state, ChannelState::Open);
+
+        let state: ChannelState = serde_json::from_str("\"closing\"").unwrap();
+        assert_eq!(state, ChannelState::Closing);
+
+        let state: ChannelState = serde_json::from_str("\"settled\"").unwrap();
+        assert_eq!(state, ChannelState::Settled);
+
+        let state: ChannelState = serde_json::from_str("\"disputed\"").unwrap();
+        assert_eq!(state, ChannelState::Disputed);
+    }
+
+    #[test]
+    fn channel_state_default() {
+        let state = ChannelState::default();
+        assert_eq!(state, ChannelState::Open);
+    }
+
+    #[test]
+    fn channel_state_display() {
+        assert_eq!(format!("{}", ChannelState::Open), "open");
+        assert_eq!(format!("{}", ChannelState::Closing), "closing");
+        assert_eq!(format!("{}", ChannelState::Settled), "settled");
+        assert_eq!(format!("{}", ChannelState::Disputed), "disputed");
+    }
+
+    #[test]
+    fn channel_status_request_deserialize() {
+        let json = r#"{"channelId":"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"}"#;
+        let req: ChannelStatusRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.channel_id.len(), 64);
+    }
+
+    #[test]
+    fn channel_status_response_serialize() {
+        let resp = ChannelStatusResponse::new(
+            "ch789".to_string(),
+            ChannelState::Open,
+            vec!["bs1alice".to_string(), "bs1bob".to_string()],
+            100_000_000,
+            50,
+            1000,
+            2440,
+            Some("hash123".to_string()),
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"channelId\":\"ch789\""));
+        assert!(json.contains("\"state\":\"open\""));
+        assert!(json.contains("\"parties\":[\"bs1alice\",\"bs1bob\"]"));
+        assert!(json.contains("\"deposit\":100000000"));
+        assert!(json.contains("\"currentSeq\":50"));
+        assert!(json.contains("\"latestMessageHash\":\"hash123\""));
+    }
+
+    #[test]
+    fn channel_status_response_no_message_hash() {
+        let resp = ChannelStatusResponse::new(
+            "ch789".to_string(),
+            ChannelState::Open,
+            vec!["bs1alice".to_string()],
+            100_000_000,
+            0,
+            1000,
+            2440,
+            None,
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        // latestMessageHash should be skipped when None
+        assert!(!json.contains("latestMessageHash"));
+    }
+
+    #[test]
+    fn channel_list_request_deserialize() {
+        let json = r#"{"address":"bs1alice","state":"open","limit":10}"#;
+        let req: ChannelListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.address, "bs1alice");
+        assert_eq!(req.state, Some(ChannelState::Open));
+        assert_eq!(req.limit, 10);
+    }
+
+    #[test]
+    fn channel_list_request_defaults() {
+        let json = r#"{"address":"bs1alice"}"#;
+        let req: ChannelListRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.state, None);
+        assert_eq!(req.limit, 50); // default
+    }
+
+    #[test]
+    fn channel_summary_serialize() {
+        let summary = ChannelSummary::new(
+            "ch001".to_string(),
+            ChannelState::Open,
+            2,
+            50_000_000,
+            25,
+            1000,
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"channelId\":\"ch001\""));
+        assert!(json.contains("\"state\":\"open\""));
+        assert!(json.contains("\"partyCount\":2"));
+        assert!(json.contains("\"deposit\":50000000"));
+        assert!(json.contains("\"currentSeq\":25"));
+    }
+
+    #[test]
+    fn channel_list_response_serialize() {
+        let summary = ChannelSummary::new(
+            "ch001".to_string(),
+            ChannelState::Open,
+            2,
+            100_000_000,
+            10,
+            500,
+        );
+        let resp = ChannelListResponse::new(vec![summary], 1);
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"channels\":["));
+        assert!(json.contains("\"totalCount\":1"));
+    }
+
+    #[test]
+    fn channel_constants() {
+        assert_eq!(DEFAULT_CHANNEL_TIMEOUT_BLOCKS, 1440);
+        assert_eq!(MAX_CHANNEL_PARTIES, 10);
+        assert_eq!(MIN_CHANNEL_DEPOSIT, 100_000);
     }
 }

@@ -27,6 +27,7 @@
 //! - **Media (0x60)**: Media attachments
 //! - **Polls (0x70-0x71)**: Poll creation and voting
 //! - **Governance (0xE0-0xE1)**: On-chain voting and proposals
+//! - **Channels (0xC0-0xC2)**: Layer-2 social channels for high-frequency messaging
 
 use std::fmt;
 
@@ -63,6 +64,7 @@ pub const BATCH_ACTION_LENGTH_SIZE: usize = 2;
 /// - `0x6_`: Media
 /// - `0x7_`: Polls
 /// - `0x8_`: Batching
+/// - `0xC_`: Channels (layer-2 social channels)
 /// - `0xE_`: Governance (voting, proposals)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SocialMessageType {
@@ -153,6 +155,25 @@ pub enum SocialMessageType {
     /// Format: [0x80][version][count][action1_len(2)][action1]...[actionN_len(2)][actionN]
     Batch = 0x80,
 
+    /// Channel open (0xC0).
+    ///
+    /// Opens a new Layer-2 social channel between parties for high-frequency
+    /// off-chain messaging (chat, group DM, thread replies).
+    /// Format: [parties_count(1)][party1_addr_len(1)][party1_addr]...[deposit(8)][timeout_blocks(4)]
+    ChannelOpen = 0xC0,
+
+    /// Channel close (0xC1).
+    ///
+    /// Closes an existing channel cooperatively. All parties must agree.
+    /// Format: [channel_id(32)][final_seq(4)]
+    ChannelClose = 0xC1,
+
+    /// Channel settlement (0xC2).
+    ///
+    /// Settles a channel with final state. Can be unilateral after timeout.
+    /// Format: [channel_id(32)][final_seq(4)][message_hash(32)]
+    ChannelSettle = 0xC2,
+
     /// Governance vote on a proposal (0xE0).
     ///
     /// Cast a vote (yes/no/abstain) on an existing governance proposal.
@@ -196,6 +217,9 @@ impl SocialMessageType {
             Self::Poll => "Poll",
             Self::Vote => "Vote",
             Self::Batch => "Batch",
+            Self::ChannelOpen => "ChannelOpen",
+            Self::ChannelClose => "ChannelClose",
+            Self::ChannelSettle => "ChannelSettle",
             Self::GovernanceVote => "GovernanceVote",
             Self::GovernanceProposal => "GovernanceProposal",
         }
@@ -204,6 +228,14 @@ impl SocialMessageType {
     /// Returns true if this is a batch message type.
     pub const fn is_batch(&self) -> bool {
         matches!(self, Self::Batch)
+    }
+
+    /// Returns true if this is a channel message type.
+    ///
+    /// Channel messages are used for Layer-2 social channels that enable
+    /// high-frequency off-chain messaging (chat, group DM, thread replies).
+    pub const fn is_channel(&self) -> bool {
+        matches!(self, Self::ChannelOpen | Self::ChannelClose | Self::ChannelSettle)
     }
 
     /// Returns true if this message type involves value transfer.
@@ -255,6 +287,9 @@ impl TryFrom<u8> for SocialMessageType {
             0x70 => Ok(Self::Poll),
             0x71 => Ok(Self::Vote),
             0x80 => Ok(Self::Batch),
+            0xC0 => Ok(Self::ChannelOpen),
+            0xC1 => Ok(Self::ChannelClose),
+            0xC2 => Ok(Self::ChannelSettle),
             0xE0 => Ok(Self::GovernanceVote),
             0xE1 => Ok(Self::GovernanceProposal),
             _ => Err(SocialParseError::UnknownMessageType(value)),
@@ -862,6 +897,10 @@ mod tests {
             SocialMessageType::Media,
             SocialMessageType::Poll,
             SocialMessageType::Vote,
+            SocialMessageType::Batch,
+            SocialMessageType::ChannelOpen,
+            SocialMessageType::ChannelClose,
+            SocialMessageType::ChannelSettle,
             SocialMessageType::GovernanceVote,
             SocialMessageType::GovernanceProposal,
         ];
@@ -1093,10 +1132,10 @@ mod tests {
     }
 
     #[test]
-    fn all_19_message_types_exist() {
+    fn all_22_message_types_exist() {
         let _init_guard = zebra_test::init();
 
-        // Verify we have exactly 19 message types (16 core + 1 batch + 2 governance)
+        // Verify we have exactly 22 message types (16 core + 1 batch + 3 channels + 2 governance)
         let all_types = [
             SocialMessageType::Profile,
             SocialMessageType::Post,
@@ -1115,11 +1154,14 @@ mod tests {
             SocialMessageType::Poll,
             SocialMessageType::Vote,
             SocialMessageType::Batch,
+            SocialMessageType::ChannelOpen,
+            SocialMessageType::ChannelClose,
+            SocialMessageType::ChannelSettle,
             SocialMessageType::GovernanceVote,
             SocialMessageType::GovernanceProposal,
         ];
 
-        assert_eq!(all_types.len(), 19, "Should have exactly 19 message types");
+        assert_eq!(all_types.len(), 22, "Should have exactly 22 message types");
 
         // Verify each has a unique byte value
         let mut seen_bytes = std::collections::HashSet::new();
@@ -1611,5 +1653,258 @@ mod tests {
             format!("{}", SocialMessageType::GovernanceProposal),
             "GovernanceProposal"
         );
+    }
+
+    // ========================================================================
+    // Channel Message Tests (Required for P6.2 Layer-2 Social Channels)
+    // ========================================================================
+
+    #[test]
+    fn channel_message_type_values() {
+        let _init_guard = zebra_test::init();
+
+        // Verify channel type byte values match spec
+        assert_eq!(SocialMessageType::ChannelOpen.as_u8(), 0xC0);
+        assert_eq!(SocialMessageType::ChannelClose.as_u8(), 0xC1);
+        assert_eq!(SocialMessageType::ChannelSettle.as_u8(), 0xC2);
+
+        // Verify names
+        assert_eq!(SocialMessageType::ChannelOpen.name(), "ChannelOpen");
+        assert_eq!(SocialMessageType::ChannelClose.name(), "ChannelClose");
+        assert_eq!(SocialMessageType::ChannelSettle.name(), "ChannelSettle");
+    }
+
+    #[test]
+    fn channel_open_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // ChannelOpen format: [parties_count(1)][party1_addr_len(1)][party1_addr]...[deposit(8)][timeout_blocks(4)]
+        let mut payload = Vec::new();
+        payload.push(2); // 2 parties
+
+        let alice = b"bs1alice...";
+        payload.push(alice.len() as u8);
+        payload.extend_from_slice(alice);
+
+        let bob = b"bs1bob...";
+        payload.push(bob.len() as u8);
+        payload.extend_from_slice(bob);
+
+        // Use values that don't have trailing zeros to avoid memo trimming issues
+        let deposit: u64 = 0x0102030405060708; // Non-zero in all bytes
+        payload.extend_from_slice(&deposit.to_le_bytes());
+
+        let timeout_blocks: u32 = 0x01020304; // Non-zero in all bytes
+        payload.extend_from_slice(&timeout_blocks.to_le_bytes());
+
+        let msg = SocialMessage::new(
+            SocialMessageType::ChannelOpen,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xC0); // ChannelOpen type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::ChannelOpen);
+        assert!(decoded.msg_type().is_channel());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn channel_close_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // ChannelClose format: [channel_id(32)][final_seq(4)]
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&[0xAB; 32]); // channel_id (32 bytes)
+
+        // Use a value that doesn't have trailing zeros to avoid memo trimming issues
+        let final_seq: u32 = 0x01020304;
+        payload.extend_from_slice(&final_seq.to_le_bytes());
+
+        let msg = SocialMessage::new(
+            SocialMessageType::ChannelClose,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xC1); // ChannelClose type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::ChannelClose);
+        assert!(decoded.msg_type().is_channel());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn channel_settle_message_roundtrip() {
+        let _init_guard = zebra_test::init();
+
+        // ChannelSettle format: [channel_id(32)][final_seq(4)][message_hash(32)]
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&[0xCD; 32]); // channel_id
+
+        let final_seq: u32 = 100;
+        payload.extend_from_slice(&final_seq.to_le_bytes());
+
+        payload.extend_from_slice(&[0xEF; 32]); // merkle root of messages
+
+        let msg = SocialMessage::new(
+            SocialMessageType::ChannelSettle,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        assert_eq!(encoded[0], 0xC2); // ChannelSettle type
+        assert_eq!(encoded[1], SOCIAL_PROTOCOL_VERSION);
+
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::ChannelSettle);
+        assert!(decoded.msg_type().is_channel());
+        assert_eq!(decoded.payload(), payload.as_slice());
+    }
+
+    #[test]
+    fn channel_types_in_batch() {
+        let _init_guard = zebra_test::init();
+
+        // Channel messages can be batched with other actions
+        let actions = vec![
+            SocialMessage::new(
+                SocialMessageType::ChannelOpen,
+                SOCIAL_PROTOCOL_VERSION,
+                {
+                    let mut payload = vec![2u8]; // 2 parties
+                    payload.push(10);
+                    payload.extend_from_slice(b"bs1alice..");
+                    payload.push(8);
+                    payload.extend_from_slice(b"bs1bob..");
+                    payload.extend_from_slice(&100u64.to_le_bytes());
+                    payload.extend_from_slice(&1440u32.to_le_bytes());
+                    payload
+                },
+            ),
+            SocialMessage::new(
+                SocialMessageType::Post,
+                SOCIAL_PROTOCOL_VERSION,
+                b"Opened a new chat channel!".to_vec(),
+            ),
+        ];
+
+        let batch = BatchMessage::new(actions).expect("valid batch");
+        let encoded = batch.encode();
+        let memo = create_memo(&encoded);
+        let decoded = BatchMessage::try_from_memo(&memo).expect("should decode");
+
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded.actions()[0].msg_type(), SocialMessageType::ChannelOpen);
+        assert!(decoded.actions()[0].msg_type().is_channel());
+        assert_eq!(decoded.actions()[1].msg_type(), SocialMessageType::Post);
+    }
+
+    #[test]
+    fn channel_types_not_value_transfer() {
+        let _init_guard = zebra_test::init();
+
+        // Channel types are not value transfers (deposits are handled separately)
+        assert!(!SocialMessageType::ChannelOpen.is_value_transfer());
+        assert!(!SocialMessageType::ChannelClose.is_value_transfer());
+        assert!(!SocialMessageType::ChannelSettle.is_value_transfer());
+
+        // Channel types are not attention market
+        assert!(!SocialMessageType::ChannelOpen.is_attention_market());
+        assert!(!SocialMessageType::ChannelClose.is_attention_market());
+        assert!(!SocialMessageType::ChannelSettle.is_attention_market());
+
+        // Channel types are not governance
+        assert!(!SocialMessageType::ChannelOpen.is_governance());
+        assert!(!SocialMessageType::ChannelClose.is_governance());
+        assert!(!SocialMessageType::ChannelSettle.is_governance());
+
+        // Channel types are not batch
+        assert!(!SocialMessageType::ChannelOpen.is_batch());
+        assert!(!SocialMessageType::ChannelClose.is_batch());
+        assert!(!SocialMessageType::ChannelSettle.is_batch());
+    }
+
+    #[test]
+    fn channel_is_channel_helper() {
+        let _init_guard = zebra_test::init();
+
+        // Channel types should return true
+        assert!(SocialMessageType::ChannelOpen.is_channel());
+        assert!(SocialMessageType::ChannelClose.is_channel());
+        assert!(SocialMessageType::ChannelSettle.is_channel());
+
+        // Non-channel types should return false
+        assert!(!SocialMessageType::Post.is_channel());
+        assert!(!SocialMessageType::Dm.is_channel());
+        assert!(!SocialMessageType::Batch.is_channel());
+        assert!(!SocialMessageType::GovernanceVote.is_channel());
+    }
+
+    #[test]
+    fn channel_type_display() {
+        let _init_guard = zebra_test::init();
+
+        assert_eq!(format!("{}", SocialMessageType::ChannelOpen), "ChannelOpen");
+        assert_eq!(format!("{}", SocialMessageType::ChannelClose), "ChannelClose");
+        assert_eq!(format!("{}", SocialMessageType::ChannelSettle), "ChannelSettle");
+    }
+
+    #[test]
+    fn channel_open_with_group() {
+        let _init_guard = zebra_test::init();
+
+        // Test channel with multiple parties (group chat scenario)
+        let mut payload = Vec::new();
+        payload.push(5); // 5 parties
+
+        let parties = [
+            b"bs1alice....".as_slice(),
+            b"bs1bob......",
+            b"bs1charlie..",
+            b"bs1dave.....",
+            b"bs1eve......",
+        ];
+
+        for party in parties {
+            payload.push(party.len() as u8);
+            payload.extend_from_slice(party);
+        }
+
+        let deposit: u64 = 500_000_000; // 5 BCASH total deposit
+        payload.extend_from_slice(&deposit.to_le_bytes());
+
+        let timeout_blocks: u32 = 10080; // ~7 days
+        payload.extend_from_slice(&timeout_blocks.to_le_bytes());
+
+        let msg = SocialMessage::new(
+            SocialMessageType::ChannelOpen,
+            SOCIAL_PROTOCOL_VERSION,
+            payload.clone(),
+        );
+
+        let encoded = msg.encode();
+        let memo = create_memo(&encoded);
+        let decoded = SocialMessage::try_from(&memo).expect("should decode");
+
+        assert_eq!(decoded.msg_type(), SocialMessageType::ChannelOpen);
+        assert!(decoded.msg_type().is_channel());
+
+        // Verify first byte is party count
+        assert_eq!(decoded.payload()[0], 5);
     }
 }

@@ -1085,6 +1085,178 @@ pub trait Rpc {
         &self,
         request: types::social::GovernanceListRequest,
     ) -> Result<types::social::GovernanceListResponse>;
+
+    // ==================== Channel RPC Methods (Layer-2 Social Channels) ====================
+
+    /// Opens a new Layer-2 social channel between parties.
+    ///
+    /// Channels enable high-frequency off-chain messaging (chat, group DM, thread
+    /// replies) while maintaining the security of on-chain settlement. The initiator
+    /// must provide a deposit that is locked until the channel is settled.
+    ///
+    /// # method: post
+    /// # tags: channel
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The channel open request containing:
+    ///   - `from`: (string) The initiator's unified or shielded address
+    ///   - `parties`: (array) List of party addresses for the channel
+    ///   - `deposit`: (u64) Total deposit in zatoshis
+    ///   - `timeoutBlocks`: (u32, optional) Timeout before unilateral settlement (default: 1440)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `channelId`: (string) Unique channel identifier (32 bytes hex-encoded)
+    /// - `txid`: (string) Transaction ID that opened the channel
+    /// - `openedAtBlock`: (u32) Block height when the channel was opened
+    /// - `timeoutBlock`: (u32) Block height when unilateral settlement becomes available
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet support for transaction creation and signing.
+    #[method(name = "z_channelopen")]
+    async fn z_channel_open(
+        &self,
+        request: types::social::ChannelOpenRequest,
+    ) -> Result<types::social::ChannelOpenResponse>;
+
+    /// Closes a channel cooperatively with agreement from all parties.
+    ///
+    /// A cooperative close immediately returns deposits to parties. All parties
+    /// must have signed the final state. If any party is unresponsive, use
+    /// `z_channelsettle` after the timeout period.
+    ///
+    /// # method: post
+    /// # tags: channel
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The channel close request containing:
+    ///   - `from`: (string) The closer's address (must be a channel party)
+    ///   - `channelId`: (string) Channel ID to close (32 bytes hex-encoded)
+    ///   - `finalSeq`: (u32) Final sequence number of off-chain messages
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) Transaction ID of the close
+    /// - `channelId`: (string) The closed channel ID
+    /// - `finalSeq`: (u32) The final sequence number
+    /// - `cooperative`: (bool) True if all parties agreed
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet support for transaction creation and signing.
+    #[method(name = "z_channelclose")]
+    async fn z_channel_close(
+        &self,
+        request: types::social::ChannelCloseRequest,
+    ) -> Result<types::social::ChannelCloseResponse>;
+
+    /// Settles a channel with final state and message hash.
+    ///
+    /// Settlement can be cooperative (immediate) or unilateral (after timeout).
+    /// The message hash is a Merkle root of all off-chain messages, enabling
+    /// dispute resolution if needed.
+    ///
+    /// # method: post
+    /// # tags: channel
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The settlement request containing:
+    ///   - `from`: (string) The settler's address (must be a channel party)
+    ///   - `channelId`: (string) Channel ID to settle (32 bytes hex-encoded)
+    ///   - `finalSeq`: (u32) Final sequence number
+    ///   - `messageHash`: (string) Merkle root of messages (32 bytes hex-encoded)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `txid`: (string) Transaction ID of the settlement
+    /// - `channelId`: (string) The settled channel ID
+    /// - `finalSeq`: (u32) The final sequence number
+    /// - `finalBalances`: (object) Map of address to final balance in zatoshis
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires wallet support for transaction creation and signing.
+    #[method(name = "z_channelsettle")]
+    async fn z_channel_settle(
+        &self,
+        request: types::social::ChannelSettleRequest,
+    ) -> Result<types::social::ChannelSettleResponse>;
+
+    /// Gets the current status of a channel.
+    ///
+    /// Returns detailed information about a channel including its state,
+    /// parties, deposit amount, and message count.
+    ///
+    /// # method: post
+    /// # tags: channel
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The status request containing:
+    ///   - `channelId`: (string) Channel ID to query (32 bytes hex-encoded)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `channelId`: (string) The channel ID
+    /// - `state`: (string) Current state: "open", "closing", "settled", "disputed"
+    /// - `parties`: (array) List of party addresses
+    /// - `deposit`: (u64) Total deposit in zatoshis
+    /// - `currentSeq`: (u32) Current sequence number
+    /// - `openedAtBlock`: (u32) Block when opened
+    /// - `timeoutBlock`: (u32) Block when unilateral settlement allowed
+    /// - `latestMessageHash`: (string, optional) Latest message Merkle root
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track channel state.
+    #[method(name = "z_channelstatus")]
+    async fn z_channel_status(
+        &self,
+        request: types::social::ChannelStatusRequest,
+    ) -> Result<types::social::ChannelStatusResponse>;
+
+    /// Lists channels for an address.
+    ///
+    /// Returns a paginated list of channels where the given address is a party.
+    /// Can be filtered by channel state.
+    ///
+    /// # method: post
+    /// # tags: channel
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: (object, required) The list request containing:
+    ///   - `address`: (string) Address to list channels for
+    ///   - `state`: (string, optional) Filter by state: "open", "closing", "settled", "disputed"
+    ///   - `limit`: (u32, optional) Maximum channels to return (default: 50)
+    ///
+    /// # Returns
+    ///
+    /// An object containing:
+    /// - `channels`: (array) List of channel summaries
+    /// - `totalCount`: (u32) Total matching channels
+    ///
+    /// # Notes
+    ///
+    /// This is a Botcash-specific extension. Not available in zcashd.
+    /// Requires an indexer to track channel state.
+    #[method(name = "z_channellist")]
+    async fn z_channel_list(
+        &self,
+        request: types::social::ChannelListRequest,
+    ) -> Result<types::social::ChannelListResponse>;
 }
 
 /// RPC method implementations.
@@ -4179,6 +4351,346 @@ where
         // For now, return an empty list (no indexer = no proposals visible).
         Ok(types::social::GovernanceListResponse::new(
             vec![], // proposals
+            0,      // total_count
+        ))
+    }
+
+    // ==================== Channel RPC Method Implementations ====================
+
+    async fn z_channel_open(
+        &self,
+        request: types::social::ChannelOpenRequest,
+    ) -> Result<types::social::ChannelOpenResponse> {
+        // Validate the initiator address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate parties list
+        if request.parties.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "at least one party is required",
+                None::<()>,
+            ));
+        }
+
+        if request.parties.len() > types::social::MAX_CHANNEL_PARTIES {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "too many parties: {} (maximum is {})",
+                    request.parties.len(),
+                    types::social::MAX_CHANNEL_PARTIES
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Check for empty party addresses
+        for (i, party) in request.parties.iter().enumerate() {
+            if party.is_empty() {
+                return Err(ErrorObject::owned(
+                    ErrorCode::InvalidParams.code(),
+                    format!("party {} address is empty", i),
+                    None::<()>,
+                ));
+            }
+        }
+
+        // Validate deposit amount
+        if request.deposit < types::social::MIN_CHANNEL_DEPOSIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "deposit {} is below minimum {} zatoshis",
+                    request.deposit,
+                    types::social::MIN_CHANNEL_DEPOSIT
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Validate timeout
+        if request.timeout_blocks == 0 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "timeoutBlocks must be greater than 0",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Create a ChannelOpen (0xC0) memo message
+        // - Lock the deposit in a channel-specific address
+        // - Sign and broadcast the transaction
+        // - Generate a unique channel ID
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_channelopen requires wallet support which is not yet implemented in Zebra. \
+                Would open channel with {} parties and {} zatoshi deposit",
+                request.parties.len(),
+                request.deposit
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_channel_close(
+        &self,
+        request: types::social::ChannelCloseRequest,
+    ) -> Result<types::social::ChannelCloseResponse> {
+        // Validate the closer address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate channel ID (should be 64 hex chars = 32 bytes)
+        if request.channel_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.channel_id.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "channelId must be 64 hex characters (32 bytes), got {}",
+                    request.channel_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .channel_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Create a ChannelClose (0xC1) memo message
+        // - Verify the from address is a party to the channel
+        // - Get signatures from all parties for cooperative close
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_channelclose requires wallet support which is not yet implemented in Zebra. \
+                Would close channel {} at sequence {}",
+                request.channel_id, request.final_seq
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_channel_settle(
+        &self,
+        request: types::social::ChannelSettleRequest,
+    ) -> Result<types::social::ChannelSettleResponse> {
+        // Validate the settler address
+        if request.from.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "from address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate channel ID (should be 64 hex chars = 32 bytes)
+        if request.channel_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.channel_id.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "channelId must be 64 hex characters (32 bytes), got {}",
+                    request.channel_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .channel_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Validate message hash (should be 64 hex chars = 32 bytes)
+        if request.message_hash.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "messageHash is required",
+                None::<()>,
+            ));
+        }
+
+        if request.message_hash.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "messageHash must be 64 hex characters (32 bytes), got {}",
+                    request.message_hash.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .message_hash
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "messageHash must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires wallet support to:
+        // - Create a ChannelSettle (0xC2) memo message
+        // - Verify the from address is a party to the channel
+        // - Verify the timeout has passed (for unilateral settlement)
+        // - Calculate final balance distribution
+        // - Sign and broadcast the transaction
+        //
+        // For now, return an error indicating wallet support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_channelsettle requires wallet support which is not yet implemented in Zebra. \
+                Would settle channel {} at sequence {} with message hash {}",
+                request.channel_id, request.final_seq, request.message_hash
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_channel_status(
+        &self,
+        request: types::social::ChannelStatusRequest,
+    ) -> Result<types::social::ChannelStatusResponse> {
+        // Validate channel ID (should be 64 hex chars = 32 bytes)
+        if request.channel_id.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId is required",
+                None::<()>,
+            ));
+        }
+
+        if request.channel_id.len() != 64 {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "channelId must be 64 hex characters (32 bytes), got {}",
+                    request.channel_id.len()
+                ),
+                None::<()>,
+            ));
+        }
+
+        if !request
+            .channel_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit())
+        {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "channelId must contain only hexadecimal characters",
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Look up the channel by ID
+        // - Get the current state and parties
+        // - Track off-chain message count
+        // - Return channel status
+        //
+        // For now, return an error indicating indexer support is needed.
+        Err(ErrorObject::owned(
+            ErrorCode::InternalError.code(),
+            format!(
+                "z_channelstatus requires indexer support which is not yet implemented. \
+                Would query status for channel {}",
+                request.channel_id
+            ),
+            None::<()>,
+        ))
+    }
+
+    async fn z_channel_list(
+        &self,
+        request: types::social::ChannelListRequest,
+    ) -> Result<types::social::ChannelListResponse> {
+        // Validate address
+        if request.address.is_empty() {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                "address is required",
+                None::<()>,
+            ));
+        }
+
+        // Validate limit (reasonable bounds)
+        const MAX_LIST_LIMIT: u32 = 1000;
+        if request.limit > MAX_LIST_LIMIT {
+            return Err(ErrorObject::owned(
+                ErrorCode::InvalidParams.code(),
+                format!(
+                    "limit exceeds maximum of {} (got {})",
+                    MAX_LIST_LIMIT, request.limit
+                ),
+                None::<()>,
+            ));
+        }
+
+        // Note: Full implementation requires an indexer to:
+        // - Query all channels for the address
+        // - Filter by state if specified
+        // - Apply pagination (limit)
+        // - Return channel summaries
+        //
+        // For now, return an empty list (no indexer = no channels visible).
+        Ok(types::social::ChannelListResponse::new(
+            vec![], // channels
             0,      // total_count
         ))
     }

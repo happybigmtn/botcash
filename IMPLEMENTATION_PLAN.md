@@ -7,9 +7,9 @@
 
 ## 🚦 Current Status: PHASES 0-5 COMPLETE, PHASE 6 IN PROGRESS
 
-**Last Updated:** 2026-02-01 (P6.3c Complete - Governance RPC Methods)
+**Last Updated:** 2026-02-01 (P6.2 Complete - Layer-2 Social Channels)
 
-Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 19 types including governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.3a-c done (governance message types 0xE0/0xE1, RPC types, and 4 RPC methods with validation).
+Phase 0 (librustzcash network constants and address encoding) is complete. Phase 1 (Zebra Full Node) is **COMPLETE**: P1.1-P1.15 all done. Phase 2 (lightwalletd Go Backend) is **COMPLETE**: P2.1-P2.5 all done. Phase 3 (iOS Wallet) is **COMPLETE**: P3.1-P3.7 all done (endpoint updates, bundle identifiers, CFBundleDisplayName, background task identifiers, app icons with Botcash "B" branding, and localization strings updated to Botcash/BCASH). Phase 4 (Android Wallet) is **COMPLETE**: P4.1-P4.4 all done. Phase 5 (Social Protocol) is **COMPLETE**: P5.1-P5.10 all done (SocialMessageType enum now with 22 types including channel and governance types, SocialMessage struct, TryFrom<&Memo>, pub mod social, social RPC methods, attention market RPC methods with validation, and full Rpc trait). Phase 6 (Infrastructure) is **IN PROGRESS**: P6.1a-c done (batching complete with 48 tests total), P6.2 done (Layer-2 channels with 35+ channel tests), P6.3a-c done (governance message types 0xE0/0xE1, RPC types, and 4 RPC methods with validation).
 
 **Key Finding:** 744 TODO/FIXME markers across 181 files; 18 HIGH relevance to Botcash implementation.
 
@@ -112,7 +112,10 @@ All other phases depend on Phase 0. These tasks define the network identity.
 | **P6.1a** | Batch message type (0x80) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- batch` |
 | **P6.1b** | Wallet batch queue | ✅ DONE | `zebra-rpc/src/methods/types/social.rs`, `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- types::social::tests::batch` |
 | **P6.1c** | Indexer batch parsing | ✅ DONE | `zebra-rpc/src/indexer/batch.rs`, `zebra-rpc/proto/indexer.proto` | `cargo test -p zebra-rpc -- indexer::batch::tests` |
-| **P6.2** | Layer-2 channels | ⬜ TODO | See specs/scaling.md | TBD |
+| **P6.2a** | Channel message types (0xC0-0xC2) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- channel` |
+| **P6.2b** | Channel RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::channel` |
+| **P6.2c** | Channel RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- z_channel` |
+| **P6.2d** | Indexer channel parsing | ✅ DONE | `zebra-rpc/src/indexer/channels.rs` | `cargo test -p zebra-rpc -- indexer::channels::tests` |
 | **P6.3a** | Governance message types (0xE0, 0xE1) | ✅ DONE | `zebra-chain/src/transaction/memo/social.rs` | `cargo test -p zebra-chain -- governance` |
 | **P6.3b** | Governance RPC types | ✅ DONE | `zebra-rpc/src/methods/types/social.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
 | **P6.3c** | Governance RPC methods | ✅ DONE | `zebra-rpc/src/methods.rs` | `cargo test -p zebra-rpc -- types::social::tests::governance` |
@@ -145,6 +148,23 @@ All other phases depend on Phase 0. These tasks define the network identity.
 - Added `Memo::as_bytes()` public accessor to zebra-chain for cross-crate access
 - Extended `indexer.proto` with batch-related gRPC message types
 - 16 comprehensive tests covering parsing, validation, statistics, and edge cases
+
+**P6.2 Implementation Details (Layer-2 Social Channels):**
+- Added 3 channel message types: ChannelOpen (0xC0), ChannelClose (0xC1), ChannelSettle (0xC2)
+- Added `is_channel()` helper method on SocialMessageType
+- SocialMessageType enum now has 22 types (was 19)
+- Channel payloads: Open contains parties + deposit + timeout, Close contains channel_id + final_seq, Settle adds message_hash
+- 9 comprehensive zebra-chain channel tests (roundtrip, categories, batching, value transfer flags)
+- Added Channel RPC types: ChannelOpenRequest/Response, ChannelCloseRequest/Response, ChannelSettleRequest/Response, ChannelStatusRequest/Response, ChannelListRequest/Response
+- Added ChannelState enum (Open, Closing, Settled, Disputed) and ChannelSummary for listings
+- Added channel constants: DEFAULT_CHANNEL_TIMEOUT_BLOCKS (1440), MAX_CHANNEL_PARTIES (10), MIN_CHANNEL_DEPOSIT (100_000 zatoshis)
+- ~20 channel RPC type tests for serialization
+- Added 5 RPC methods: z_channel_open, z_channel_close, z_channel_settle, z_channel_status, z_channel_list
+- Created indexer channels module with IndexedChannelOpen, IndexedChannelClose, IndexedChannelSettle structs
+- Added IndexedChannel enum for unified channel event handling
+- Added BlockChannelStats for per-block channel statistics
+- Added utility functions: is_channel_memo(), channel_type_from_memo(), parse_channel_memo()
+- 35+ comprehensive channel tests across zebra-chain and zebra-rpc
 
 **P6.3a Implementation Details:**
 - Added `SocialMessageType::GovernanceVote = 0xE0` for voting on proposals
@@ -1462,11 +1482,12 @@ cd zashi-android && ./gradlew test
 - [ ] Indexer batch parsing support (indexer-side feature)
 
 #### 6.1.2 Layer-2 Social Channels
-- [ ] Channel open/close transaction types (0xC0, 0xC1)
-- [ ] Off-chain message signing protocol
-- [ ] Channel settlement transactions
-- [ ] Dispute resolution mechanism
-- [ ] Required Tests: Channel lifecycle, settlement correctness
+- [x] Channel open/close transaction types (0xC0, 0xC1, 0xC2) — `zebra-chain/src/transaction/memo/social.rs`
+- [x] Channel RPC types and methods (5 methods) — `zebra-rpc/src/methods.rs`
+- [x] Indexer channel parsing module — `zebra-rpc/src/indexer/channels.rs`
+- [ ] Off-chain message signing protocol (wallet-side feature)
+- [ ] Dispute resolution mechanism (consensus-side feature)
+- [x] Required Tests: 35+ tests covering channel lifecycle, parsing, RPC types
 
 #### 6.1.3 Indexer Scaling
 - [ ] Redis caching layer (feed TTL: 10s, profiles: 5m)
