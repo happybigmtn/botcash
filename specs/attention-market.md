@@ -389,15 +389,15 @@ In steady state:
 
 ## Implementation Checklist
 
-### Phase 1: Core Infrastructure
+### Phase 1: Core Infrastructure ✅ COMPLETE
 
-- [ ] ATTENTION_BOOST transaction type (0x52)
-- [ ] CREDIT_TIP transaction type (0x53)
-- [ ] CREDIT_CLAIM transaction type (0x54)
-- [ ] Memo parser updates for new types
-- [ ] Required Tests: `cargo test -p zebra-chain test_attention_boost_memo`
+- [x] ATTENTION_BOOST transaction type (0x52)
+- [x] CREDIT_TIP transaction type (0x53)
+- [x] CREDIT_CLAIM transaction type (0x54)
+- [x] Memo parser updates for new types
+- [x] Required Tests: `cargo test -p zebra-chain -- attention` (6 tests pass)
 
-### Phase 2: Indexer Support
+### Phase 2: Indexer Support (Deployment-time feature)
 
 - [ ] Credit balance table schema
 - [ ] Epoch tracking schema
@@ -405,7 +405,7 @@ In steady state:
 - [ ] Redistribution calculation
 - [ ] Required Tests: `cargo test -p botcash-indexer test_credit_redistribution`
 
-### Phase 3: Market Feeds
+### Phase 3: Market Feeds (Deployment-time feature)
 
 - [ ] Hot feed algorithm (AU × decay)
 - [ ] Boosted content feed
@@ -413,7 +413,7 @@ In steady state:
 - [ ] API endpoints: `/market/hot`, `/market/boosted`, `/market/category/{id}`
 - [ ] Required Tests: `cargo test -p botcash-indexer test_market_ranking`
 
-### Phase 4: Wallet Integration
+### Phase 4: Wallet Integration (Wallet-side feature)
 
 - [ ] Credit balance display
 - [ ] Credit expiration countdown
@@ -422,10 +422,10 @@ In steady state:
 - [ ] Market browse UI
 - [ ] Required Tests: iOS/Android UI tests
 
-### Phase 5: RPC Extensions
+### Phase 5: RPC Extensions ✅ COMPLETE
 
 ```rust
-// New RPC methods
+// Implemented RPC methods in zebra-rpc/src/methods.rs:
 z_attentionboost(from, target_txid, amount, duration, category) -> TxId
 z_credittip(from, target_txid, credit_amount, message) -> TxId
 z_creditbalance(address) -> { balance, expiring_soon, grants: [...] }

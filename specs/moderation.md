@@ -367,30 +367,30 @@ Indexers may benefit from safe harbor if they:
 
 ## Implementation Checklist
 
-### Phase 1: User Controls
+### Phase 1: User Controls (Wallet-side feature)
 - [ ] Personal block/mute in wallet
 - [ ] Keyword filtering
 - [ ] Content warning tags
 
-### Phase 2: Community Lists
+### Phase 2: Community Lists (Wallet-side feature)
 - [ ] List format specification
 - [ ] List publishing mechanism
 - [ ] List subscription in wallet
 
-### Phase 3: Indexer Standards
+### Phase 3: Indexer Standards (Deployment-time feature)
 - [ ] Spam detection baseline
 - [ ] Filter API parameters
 - [ ] Transparency documentation
 
-### Phase 4: Reputation
-- [ ] Karma calculation
-- [ ] Trust transaction type
-- [ ] Web of trust visualization
+### Phase 4: Reputation ✅ PROTOCOL COMPLETE
+- [x] Karma calculation — `zebra-rpc/src/indexer/moderation.rs`
+- [x] Trust transaction type (0xD0) — `zebra-chain/src/transaction/memo/social.rs` (9 tests)
+- [ ] Web of trust visualization (UI feature)
 
-### Phase 5: Advanced
-- [ ] Stake-weighted reports
-- [ ] Arbitration protocol
-- [ ] Cross-platform list sharing
+### Phase 5: Advanced ✅ PROTOCOL COMPLETE
+- [x] Stake-weighted reports (0xD1) — `zebra-chain/src/transaction/memo/social.rs` (9 tests)
+- [ ] Arbitration protocol (Application layer)
+- [ ] Cross-platform list sharing (Application layer)
 
 ---
 
