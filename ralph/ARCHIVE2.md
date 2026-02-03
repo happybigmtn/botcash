@@ -6,3 +6,5 @@
 
 - [x] Batch message type (0x80) with MAX_BATCH_ACTIONS = 5 — `zebra-chain/src/transaction/memo/social.rs`
 
+- [x] BatchMessage struct with encode/decode roundtrip
+
