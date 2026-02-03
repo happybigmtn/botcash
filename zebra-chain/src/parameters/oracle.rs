@@ -337,18 +337,26 @@ pub fn filter_outliers(prices: &[u64], max_deviation_percent: u8) -> Vec<u64> {
 /// Aggregates price signals from multiple blocks into an oracle price.
 ///
 /// # Arguments
-/// * `signals` - Price signals from recent blocks (newest first)
+/// * `signals` - Price signals from recent blocks (newest first). Only the most
+///   recent `PRICE_AGGREGATION_BLOCKS` signals are used.
 /// * `as_of_height` - Height of the most recent block
 ///
 /// # Returns
 /// Some(OraclePrice) if enough valid signals, None otherwise.
 pub fn aggregate_prices(signals: &[PriceSignal], as_of_height: u32) -> Option<OraclePrice> {
-    if signals.len() < MIN_VALID_PRICE_SIGNALS as usize {
+    let window_len = PRICE_AGGREGATION_BLOCKS as usize;
+    let window = if signals.len() > window_len {
+        &signals[..window_len]
+    } else {
+        signals
+    };
+
+    if window.len() < MIN_VALID_PRICE_SIGNALS as usize {
         return None;
     }
 
     // Extract prices
-    let prices: Vec<u64> = signals.iter().map(|s| s.price_nano_usd).collect();
+    let prices: Vec<u64> = window.iter().map(|s| s.price_nano_usd).collect();
 
     // Filter outliers
     let filtered = filter_outliers(&prices, MAX_PRICE_DEVIATION_PERCENT);
@@ -694,6 +702,17 @@ mod tests {
         // Median should be around middle of range
         let median_usd = oracle.to_usd();
         assert!(median_usd > 0.10 && median_usd < 0.16, "Median should be reasonable");
+
+        // Only use the most recent aggregation window
+        let signals: Vec<PriceSignal> = (0..120)
+            .map(|i| PriceSignal::from_usd(0.10 + i as f64 * 0.001))
+            .collect();
+        let oracle = aggregate_prices(&signals, 200).expect("Should aggregate latest window");
+        assert_eq!(
+            oracle.signal_count, PRICE_AGGREGATION_BLOCKS,
+            "Should cap to aggregation window"
+        );
+        assert_eq!(oracle.as_of_height, 200);
     }
 
     /// Tests dynamic fee calculation.
