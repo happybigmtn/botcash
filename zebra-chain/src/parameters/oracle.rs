@@ -95,6 +95,12 @@ pub const PRICE_SIGNAL_SIZE: usize = 8;
 /// Remaining nonce space for PoW after price signal.
 pub const POW_NONCE_SIZE: usize = 24;
 
+/// High bit in the price bytes used as the scaling flag.
+const PRICE_SIGNAL_SCALE_FLAG: u8 = 0x80;
+
+/// Maximum unscaled price (31 bits; high bit reserved for scaling flag).
+const PRICE_SIGNAL_MAX_UNSCALED: u64 = 0x7FFF_FFFF;
+
 /// A price signal embedded in a block nonce by a miner.
 ///
 /// Miners voluntarily include BCASH/USD price signals to contribute to the
@@ -134,16 +140,21 @@ impl PriceSignal {
     ///
     /// Format: [PRICE_SIGNAL_MAGIC (4 bytes)][price_nano_usd as u32 (4 bytes)]
     ///
-    /// Note: We use u32 for the wire format to save space, limiting max price
-    /// to ~$4.29 at nano-USD precision. For higher prices, we scale down.
+    /// Note: We use u32 for the wire format, reserving the high bit as a
+    /// scaling flag. This limits unscaled prices to ~$2.147 at nano-USD
+    /// precision. For higher prices, we divide by 1000 and set the flag,
+    /// extending the range to ~$2,147 with micro-USD precision.
     pub fn encode(&self) -> [u8; PRICE_SIGNAL_SIZE] {
         let mut result = [0u8; PRICE_SIGNAL_SIZE];
         result[0..4].copy_from_slice(&PRICE_SIGNAL_MAGIC);
 
         // Scale price to fit in u32 if needed
-        // If price > u32::MAX nano-USD (~$4.29), divide by 1000 and set high bit
-        let (scaled_price, is_scaled) = if self.price_nano_usd > u32::MAX as u64 {
-            ((self.price_nano_usd / 1000) as u32, true)
+        // If price exceeds the 31-bit limit, divide by 1000 and set high bit
+        let (scaled_price, is_scaled) = if self.price_nano_usd > PRICE_SIGNAL_MAX_UNSCALED {
+            (
+                ((self.price_nano_usd / 1000).min(PRICE_SIGNAL_MAX_UNSCALED)) as u32,
+                true,
+            )
         } else {
             (self.price_nano_usd as u32, false)
         };
@@ -154,7 +165,7 @@ impl PriceSignal {
 
         // Set scaling flag in high bit of last byte if needed
         if is_scaled {
-            result[7] |= 0x80;
+            result[7] |= PRICE_SIGNAL_SCALE_FLAG;
         }
 
         result
@@ -178,8 +189,8 @@ impl PriceSignal {
         price_bytes.copy_from_slice(&nonce[4..8]);
 
         // Check scaling flag
-        let is_scaled = (price_bytes[3] & 0x80) != 0;
-        price_bytes[3] &= 0x7F; // Clear flag for decoding
+        let is_scaled = (price_bytes[3] & PRICE_SIGNAL_SCALE_FLAG) != 0;
+        price_bytes[3] &= !PRICE_SIGNAL_SCALE_FLAG; // Clear flag for decoding
 
         let scaled_price = u32::from_le_bytes(price_bytes) as u64;
 
@@ -562,6 +573,7 @@ mod tests {
             0.10,    // 10 cents
             0.50,    // 50 cents
             1.00,    // $1
+            3.25,    // $3.25 (exercises scaling flag boundary)
             10.00,   // $10
             100.00,  // $100 (tests scaling)
         ];
