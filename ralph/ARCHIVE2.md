@@ -10,3 +10,6 @@
 
 - [x] Required Tests: 14 tests covering batch parsing roundtrip, max actions, mixed types, nested prevention
 
+- [x] Wallet batch queue RPC types — `zebra-rpc/src/methods/types/social.rs` BatchQueueRequest/Response
+  - Note: `cargo test -p zebra-rpc batch_queue_` failed due to librocksdb-sys C++ build errors (missing `<cstdint>`).
+
