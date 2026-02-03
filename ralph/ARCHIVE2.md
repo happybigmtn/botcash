@@ -21,3 +21,5 @@
 
 - [x] Indexer channel parsing module — `zebra-rpc/src/indexer/channels.rs`
 
+- [x] Dispute resolution mechanism (consensus-side feature) — ChannelDispute 0xC3, z_channel_dispute/z_dispute_status RPC
+
