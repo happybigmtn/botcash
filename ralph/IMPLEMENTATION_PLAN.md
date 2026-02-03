@@ -1655,7 +1655,6 @@ cd zashi-android && ./gradlew test
 - [ ] Wallet batch queue client integration (wallet-side feature - out of scope for protocol)
 
 #### 6.1.2 Layer-2 Social Channels
-- [x] Channel RPC types and methods (5 methods) — `zebra-rpc/src/methods.rs`
 - [x] Indexer channel parsing module — `zebra-rpc/src/indexer/channels.rs`
 - [ ] Off-chain message signing protocol (wallet-side feature)
 - [x] Dispute resolution mechanism (consensus-side feature) — ChannelDispute 0xC3, z_channel_dispute/z_dispute_status RPC

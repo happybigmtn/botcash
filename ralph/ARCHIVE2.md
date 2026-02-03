@@ -17,3 +17,5 @@
 
 - [x] Channel open/close transaction types (0xC0, 0xC1, 0xC2) — `zebra-chain/src/transaction/memo/social.rs`
 
+- [x] Channel RPC types and methods (5 methods) — `zebra-rpc/src/methods.rs`
+
