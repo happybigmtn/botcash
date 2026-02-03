@@ -27,3 +27,5 @@
 
 #### 6.1.3 Indexer Scaling
 
+- [x] Miner price signaling in block nonces (PRICE_SIGNAL_MAGIC "BCPR", 8 bytes + 24 bytes PoW)
+

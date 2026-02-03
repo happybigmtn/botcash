@@ -1666,7 +1666,6 @@ cd zashi-android && ./gradlew test
 ### 6.2 Governance System (specs/governance.md)
 
 #### 6.2.1 Price Oracle (Dynamic Fees) ✅
-- [x] Miner price signaling in block nonces (PRICE_SIGNAL_MAGIC "BCPR", 8 bytes + 24 bytes PoW)
 - [x] Median price aggregation (last 100 blocks, 51 minimum, 50% outlier filtering)
 - [x] Dynamic fee calculation: `fee = $0.00001 / bcash_price` with TARGET_FEE_NANO_USD
 - [x] Fee bounds (min: 0.00001, max: 0.01 BCASH) with rate limiting (10%/day max)
