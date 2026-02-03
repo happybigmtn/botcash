@@ -15,3 +15,5 @@
 
 - [x] Indexer batch parsing support — `zebra-rpc/src/indexer/batch.rs` with 16 tests
 
+- [x] Channel open/close transaction types (0xC0, 0xC1, 0xC2) — `zebra-chain/src/transaction/memo/social.rs`
+
