@@ -19,3 +19,5 @@
 
 - [x] Channel RPC types and methods (5 methods) — `zebra-rpc/src/methods.rs`
 
+- [x] Indexer channel parsing module — `zebra-rpc/src/indexer/channels.rs`
+
