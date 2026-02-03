@@ -1302,7 +1302,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_channel_dispute_signature_count_validation() {
         let _init_guard = zebra_test::init();
 
