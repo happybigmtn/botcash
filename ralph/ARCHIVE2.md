@@ -4,3 +4,5 @@
 
 - [x] Binary memo encoding (70-80% size reduction) — Already implemented in social.rs
 
+- [x] Batch message type (0x80) with MAX_BATCH_ACTIONS = 5 — `zebra-chain/src/transaction/memo/social.rs`
+
