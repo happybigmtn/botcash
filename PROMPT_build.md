@@ -6,12 +6,18 @@
 
 2. Each task has "Required Tests:" — implement these. Tests are NOT optional. Task complete ONLY when required tests exist AND pass.
 
-3. TARGETED TESTING (critical for performance):
+3. TARGETED TESTING (CRITICAL - violating this wastes hours):
    - Run ONLY the specific tests listed in "Required Tests:" for your task
-   - `cargo check` - Fast syntax/type check (always safe)
-   - `cargo test specific_test_name` - Run ONLY that test
-   - `cargo test -p crate_name` - Run tests for ONE crate only
-   - Do NOT run `cargo test` without filters (runs entire suite)
+   - NEVER run workspace-level commands:
+     ✗ `cargo test` (runs all Rust tests across entire workspace)
+     ✗ `cargo test --all` (same problem)
+     ✗ `cargo test --workspace` (same problem)
+   - ALWAYS use filters to scope to YOUR task:
+     ✓ `cargo check` - Fast syntax/type check (always safe)
+     ✓ `cargo test specific_test_name` - Run ONLY that test
+     ✓ `cargo test -p botcash-chain test_name` - Run ONE test in ONE crate
+     ✓ `cargo test -p botcash-consensus -- --test-threads=1 test_verify` - Single test
+   - IGNORE unrelated test failures — document them as new tasks, don't fix them
 
 4. When tests pass, update @IMPLEMENTATION_PLAN.md (mark complete), `git add -A`, `git commit`.
 

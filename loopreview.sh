@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
 # Ralph review loop - review completed tasks, apply fixes, archive, commit
-# Adapted for botcash repo (script in root, uses claude instead of codex)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR"
-PLAN_FILE="$SCRIPT_DIR/IMPLEMENTATION_PLAN.md"
-ARCHIVE_FILE="$SCRIPT_DIR/ARCHIVE.md"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ARCHIVE_FILE="$SCRIPT_DIR/ARCHIVE2.md"
+
+# Find IMPLEMENTATION_PLAN.md - check repo root first, then ralph/ (matches loopclaude.sh)
+if [[ -f "$REPO_ROOT/IMPLEMENTATION_PLAN.md" ]]; then
+    PLAN_FILE="$REPO_ROOT/IMPLEMENTATION_PLAN.md"
+elif [[ -f "$SCRIPT_DIR/IMPLEMENTATION_PLAN.md" ]]; then
+    PLAN_FILE="$SCRIPT_DIR/IMPLEMENTATION_PLAN.md"
+else
+    echo "Error: IMPLEMENTATION_PLAN.md not found"
+    echo "  Checked: $REPO_ROOT/IMPLEMENTATION_PLAN.md"
+    echo "  Checked: $SCRIPT_DIR/IMPLEMENTATION_PLAN.md"
+    exit 1
+fi
 LOG_DIR="$SCRIPT_DIR/logs"
+
+# Codex configuration (model name based on codex CLI docs/help in this environment)
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.2-codex}"
+CODEX_REASONING="${CODEX_REASONING:-xhigh}"
 
 mkdir -p "$LOG_DIR"
 
 # Capture associated specs from the current plan before modifications
 mapfile -t ASSOCIATED_SPECS < <(grep -oE 'specs/[^` )]+' "$PLAN_FILE" | sort -u || true)
 
-if [[ ! -f "$PLAN_FILE" ]]; then
-	echo "Error: $PLAN_FILE not found"
-	exit 1
-fi
+echo "Using plan file: $PLAN_FILE"
 
 if [[ ! -f "$ARCHIVE_FILE" ]]; then
 	cat <<'EOF' >"$ARCHIVE_FILE"
@@ -25,23 +36,12 @@ if [[ ! -f "$ARCHIVE_FILE" ]]; then
 EOF
 fi
 
-# Support both checkbox format (- [x]) and table format (✅ DONE)
-mapfile -t COMPLETED_CHECKBOX < <(grep '^- \[x\]' "$PLAN_FILE" || true)
-mapfile -t COMPLETED_TABLE < <(grep '✅ DONE' "$PLAN_FILE" | grep -E '^\|' || true)
-
-# Combine both arrays
-COMPLETED_ITEMS=("${COMPLETED_CHECKBOX[@]}" "${COMPLETED_TABLE[@]}")
-
-# Filter out empty elements
-COMPLETED_ITEMS=("${COMPLETED_ITEMS[@]//[[:space:]]/}")
-COMPLETED_ITEMS=($(printf '%s\n' "${COMPLETED_ITEMS[@]}" | grep -v '^$' || true))
+mapfile -t COMPLETED_ITEMS < <(grep '^- \[x\]' "$PLAN_FILE" || true)
 
 if [[ "${#COMPLETED_ITEMS[@]}" -eq 0 ]]; then
 	echo "No completed tasks found in $PLAN_FILE"
 	exit 0
 fi
-
-echo "Found ${#COMPLETED_ITEMS[@]} completed items to review"
 
 ARCHIVE_HEADER_ADDED=0
 ARCHIVE_SECTION="## Review Signoff ($(date +%Y-%m-%d)) - SIGNED OFF"
@@ -66,7 +66,7 @@ get_item_block() {
         next;
       }
       if (found) {
-        if ($0 ~ /^- \[/ || $0 ~ /^## / || $0 ~ /^# / || $0 ~ /^\|/) {
+        if ($0 ~ /^- \[/ || $0 ~ /^## / || $0 ~ /^# /) {
           exit;
         }
         print $0;
@@ -85,7 +85,7 @@ remove_item_from_plan() {
         next;
       }
       if (in_block) {
-        if ($0 ~ /^- \[/ || $0 ~ /^## / || $0 ~ /^# / || $0 ~ /^\|/) {
+        if ($0 ~ /^- \[/ || $0 ~ /^## / || $0 ~ /^# /) {
           in_block=0;
           print $0;
         }
@@ -97,44 +97,72 @@ remove_item_from_plan() {
 }
 
 for item in "${COMPLETED_ITEMS[@]}"; do
-	[[ -z "$item" ]] && continue
-
 	timestamp=$(date +%Y%m%d-%H%M%S)
 	log_file="$LOG_DIR/review-${timestamp}.log"
 
+	# Get the full task block for context (includes acceptance criteria, tests, etc.)
+	task_block="$(get_item_block "$item")"
+
 	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	echo "Reviewing item: $item"
+	echo "Plan file: $PLAN_FILE"
 	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-	prompt="You are reviewing a completed task from @IMPLEMENTATION_PLAN.md.
+	cat <<EOF_PROMPT | codex exec \
+		--dangerously-bypass-approvals-and-sandbox \
+		-m "$CODEX_MODEL" \
+		-c "reasoning=$CODEX_REASONING" \
+		-C "$REPO_ROOT" \
+		- 2>&1 | tee "$log_file"
+You are reviewing a completed task from IMPLEMENTATION_PLAN.md.
 
 Task line:
 $item
 
+Full task context (includes acceptance criteria, required tests, etc.):
+$task_block
+
+CRITICAL - Large File Handling:
+- NEVER read entire files over 1000 lines. Use Grep to search for specific patterns.
+- For verification, use Grep to find function names, test names, or key identifiers.
+- If you must read a large file, use offset and limit parameters (e.g., offset=100, limit=200).
+- Prefer: Grep for "fn test_" or "struct BatchMessage" over reading the whole file.
+- Use Glob to find files, then Grep to verify content exists.
+
+CRITICAL - Targeted Testing (violating this wastes hours):
+- Run ONLY tests relevant to THIS specific task — nothing else
+- NEVER run workspace-level commands:
+  ✗ npm test (runs all 2000+ web tests)
+  ✗ pnpm test (runs all workspace tests)
+  ✗ cargo test (runs all Rust tests)
+  ✗ cargo test-sbf (runs all on-chain tests)
+- ALWAYS use filters to scope to task-relevant files:
+  ✓ cd web && npm test -- --testPathPattern="lp-withdrawal"
+  ✓ cd mobile && npm test -- useRebate
+  ✓ cd game && cargo test test_queue_activation
+  ✓ cd scripts && npm test -- exposure-utils
+- If the task mentions specific test files/names, run ONLY those
+- IGNORE unrelated test failures — they are not your concern
+
 Instructions:
-1) Review code, tests, and docs relevant to the task. Identify any missing fixes or regressions.
-2) Make necessary changes, run relevant tests, and ensure the task is truly complete.
-3) Update @IMPLEMENTATION_PLAN.md if you find issues or need follow-ups.
-4) If the task is fully correct, mark it as signed off. Do NOT leave stubs.
-5) Do NOT add new tasks unless strictly necessary.
-6) Do not archive the task yourself; the outer loop will archive after your review.
-7) Commit changes with a clear message ONLY when the task is signed off.
+1) Review code, tests, and docs relevant to the task using Grep searches, not full file reads.
+2) Verify tests exist by grepping for test function names, not by reading entire test files.
+3) Run ONLY the task-specific tests (use filters, never workspace-level commands).
+4) Make necessary changes and ensure the task is truly complete.
+5) Update IMPLEMENTATION_PLAN.md if you find issues or need follow-ups.
+6) If the task is fully correct, mark it as signed off. Do NOT leave stubs.
+7) Do NOT add new tasks unless strictly necessary.
+8) Do not archive the task yourself; the outer loop will archive after your review.
+9) Commit changes with a clear message ONLY when the task is signed off.
 
-Output only \"SIGNED_OFF\" when complete, otherwise output \"NEEDS_WORK\"."
-
-	pushd "$REPO_ROOT" > /dev/null
-	claude --dangerously-skip-permissions -p "$prompt" 2>&1 | tee "$log_file"
-	popd > /dev/null
+Output only "SIGNED_OFF" when complete, otherwise output "NEEDS_WORK".
+EOF_PROMPT
 
 	if grep -q "SIGNED_OFF" "$log_file"; then
 		if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
 			echo "Changes detected; committing review update."
 			git -C "$REPO_ROOT" add -A
-			# Extract task description for commit message
-			task_desc="${item#- [x] }"
-			task_desc="${task_desc#*| }"  # Handle table format
-			task_desc="${task_desc%% |*}"  # Remove trailing table parts
-			git -C "$REPO_ROOT" commit -m "review: $task_desc" || true
+			git -C "$REPO_ROOT" commit -m "review: ${item#- [x] }" || true
 		fi
 
 		if grep -Fqx -- "$item" "$PLAN_FILE"; then
@@ -150,29 +178,15 @@ Output only \"SIGNED_OFF\" when complete, otherwise output \"NEEDS_WORK\"."
 		fi
 
 		git -C "$REPO_ROOT" add "$PLAN_FILE" "$ARCHIVE_FILE"
-		git -C "$REPO_ROOT" commit -m "archive: ${task_desc:-task}" || true
+		git -C "$REPO_ROOT" commit -m "archive: ${item#- [x] }" || true
 	else
 		echo "Item not signed off; leaving in plan: $item"
 	fi
 done
 
-# Count remaining tasks (both formats)
-count_remaining() {
-	local checkbox_count table_count
-	checkbox_count=$(grep -c '^- \[ \]' "$PLAN_FILE" 2>/dev/null) || checkbox_count=0
-	table_count=$(grep -c '⬜ TODO' "$PLAN_FILE" 2>/dev/null) || table_count=0
-	echo $((checkbox_count + table_count))
-}
-
-count_completed() {
-	local checkbox_count table_count
-	checkbox_count=$(grep -c '^- \[x\]' "$PLAN_FILE" 2>/dev/null) || checkbox_count=0
-	table_count=$(grep -c '✅ DONE' "$PLAN_FILE" 2>/dev/null) || table_count=0
-	echo $((checkbox_count + table_count))
-}
-
-remaining=$(count_remaining)
-completed_left=$(count_completed)
+# If no remaining tasks, archive associated specs captured at start
+remaining=$(grep '^- \[ \]' "$PLAN_FILE" | wc -l || true)
+completed_left=$(grep '^- \[x\]' "$PLAN_FILE" | wc -l || true)
 
 if [[ "$remaining" -eq 0 && "$completed_left" -eq 0 ]]; then
 	for spec in "${ASSOCIATED_SPECS[@]}"; do
