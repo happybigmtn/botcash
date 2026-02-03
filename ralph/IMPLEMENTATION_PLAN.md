@@ -1652,7 +1652,6 @@ cd zashi-android && ./gradlew test
 ### 6.1 Scaling Infrastructure (specs/scaling.md)
 
 #### 6.1.1 Transaction Batching ✅ DONE (P6.1a-c)
-- [x] Indexer batch parsing support — `zebra-rpc/src/indexer/batch.rs` with 16 tests
 - [ ] Wallet batch queue client integration (wallet-side feature - out of scope for protocol)
 
 #### 6.1.2 Layer-2 Social Channels

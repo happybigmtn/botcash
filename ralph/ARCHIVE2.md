@@ -13,3 +13,5 @@
 - [x] Wallet batch queue RPC types — `zebra-rpc/src/methods/types/social.rs` BatchQueueRequest/Response
   - Note: `cargo test -p zebra-rpc batch_queue_` failed due to librocksdb-sys C++ build errors (missing `<cstdint>`).
 
+- [x] Indexer batch parsing support — `zebra-rpc/src/indexer/batch.rs` with 16 tests
+
