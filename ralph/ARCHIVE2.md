@@ -8,3 +8,5 @@
 
 - [x] BatchMessage struct with encode/decode roundtrip
 
+- [x] Required Tests: 14 tests covering batch parsing roundtrip, max actions, mixed types, nested prevention
+
