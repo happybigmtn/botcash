@@ -1656,9 +1656,6 @@ cd zashi-android && ./gradlew test
 
 #### 6.1.2 Layer-2 Social Channels
 - [ ] Off-chain message signing protocol (wallet-side feature)
-- [x] Required Tests: 45+ tests covering channel lifecycle, parsing, RPC types, dispute resolution
-
-#### 6.1.3 Indexer Scaling
 - [ ] Redis caching layer (feed TTL: 10s, profiles: 5m)
 - [ ] Geographic distribution (US, EU, Asia)
 - [ ] Read replica architecture

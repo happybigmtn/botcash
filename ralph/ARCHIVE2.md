@@ -23,3 +23,7 @@
 
 - [x] Dispute resolution mechanism (consensus-side feature) — ChannelDispute 0xC3, z_channel_dispute/z_dispute_status RPC
 
+- [x] Required Tests: 45+ tests covering channel lifecycle, parsing, RPC types, dispute resolution
+
+#### 6.1.3 Indexer Scaling
+
