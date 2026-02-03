@@ -1652,7 +1652,6 @@ cd zashi-android && ./gradlew test
 ### 6.1 Scaling Infrastructure (specs/scaling.md)
 
 #### 6.1.1 Transaction Batching ✅ DONE (P6.1a-c)
-- [x] Binary memo encoding (70-80% size reduction) — Already implemented in social.rs
 - [x] Batch message type (0x80) with MAX_BATCH_ACTIONS = 5 — `zebra-chain/src/transaction/memo/social.rs`
 - [x] BatchMessage struct with encode/decode roundtrip
 - [x] Required Tests: 14 tests covering batch parsing roundtrip, max actions, mixed types, nested prevention
