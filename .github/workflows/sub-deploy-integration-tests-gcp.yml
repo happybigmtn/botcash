@@ -139,11 +139,11 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6.0.2
         with:
           persist-credentials: false
           fetch-depth: '2'
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
@@ -157,7 +157,7 @@ jobs:
 
       # Install our SSH secret
       - name: Install private SSH key
-        uses: shimataro/ssh-key-action@v2.7.0
+        uses: shimataro/ssh-key-action@v2.8.1
         with:
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
           name: google_compute_engine
@@ -171,13 +171,13 @@ jobs:
       # Setup gcloud CLI
       - name: Authenticate to Google Cloud
         id: auth
-        uses: google-github-actions/auth@v2.1.10
+        uses: google-github-actions/auth@v3.0.0
         with:
           workload_identity_provider: '${{ vars.GCP_WIF }}'
           service_account: '${{ vars.GCP_DEPLOYMENTS_SA }}'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2.1.4
+        uses: google-github-actions/setup-gcloud@v3.0.1
 
       # Disk Mounting Logic Explanation:
       #
@@ -398,11 +398,11 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6.0.2
         with:
           persist-credentials: false
           fetch-depth: '2'
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
@@ -428,7 +428,7 @@ jobs:
 
       # Install our SSH secret
       - name: Install private SSH key
-        uses: shimataro/ssh-key-action@v2.7.0
+        uses: shimataro/ssh-key-action@v2.8.1
         with:
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
           name: google_compute_engine
@@ -442,13 +442,13 @@ jobs:
       # Setup gcloud CLI
       - name: Authenticate to Google Cloud
         id: auth
-        uses: google-github-actions/auth@v2.1.10
+        uses: google-github-actions/auth@v3.0.0
         with:
           workload_identity_provider: '${{ vars.GCP_WIF }}'
           service_account: '${{ vars.GCP_DEPLOYMENTS_SA }}'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2.1.4
+        uses: google-github-actions/setup-gcloud@v3.0.1
 
       # Sets the $UPDATE_SUFFIX env var to "-u" if updating a previous cached state,
       # and the empty string otherwise.
@@ -729,11 +729,11 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6.0.2
         with:
           persist-credentials: false
           fetch-depth: '2'
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
@@ -743,13 +743,13 @@ jobs:
       # Setup gcloud CLI
       - name: Authenticate to Google Cloud
         id: auth
-        uses: google-github-actions/auth@v2.1.10
+        uses: google-github-actions/auth@v3.0.0
         with:
           workload_identity_provider: '${{ vars.GCP_WIF }}'
           service_account: '${{ vars.GCP_DEPLOYMENTS_SA }}'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2.1.4
+        uses: google-github-actions/setup-gcloud@v3.0.1
 
       # Deletes the instances that has been recently deployed in the actual commit after all
       # previous jobs have run, no matter the outcome of the job.

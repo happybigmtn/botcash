@@ -79,7 +79,7 @@ jobs:
             grep_patterns: '-e "miner_address = \\\"u1cymdny2u2vllkx7t5jnelp0kde0dgnwu0jzmggzguxvxj6fe7gpuqehywejndlrjwgk9snr6g69azs8jfet78s9zy60uepx6tltk7ee57jlax49dezkhkgvjy2puuue6dvaevt53nah7t2cc2k4p0h0jxmlu9sx58m2xdm5f9sy2n89jdf8llflvtml2ll43e334avu2fwytuna404a\\\""'
 
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6.0.2
         with:
           persist-credentials: false
 
@@ -88,7 +88,7 @@ jobs:
         with:
           short-length: 7
 
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Run ${{ matrix.name }} test
         # Only run if this isn't a skipped custom-conf test

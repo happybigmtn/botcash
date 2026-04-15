@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 180
     runs-on: ${{ github.repository_owner == 'ZcashFoundation' && 'ubuntu-latest-xl' || 'ubuntu-latest' }}
     steps:
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
@@ -76,7 +76,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
@@ -104,7 +104,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
@@ -132,7 +132,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: r7kamura/rust-problem-matchers@v1.5.0
+      - uses: r7kamura/rust-problem-matchers@v1.5.1
 
       - name: Inject slug/short variables
         uses: rlespinasse/github-slug-action@v5
